@@ -1,0 +1,63 @@
+rules_version = '2';
+
+// ============================================================================================================
+// Règles Firebase Storage de Studio Prism — médiathèque du CMS
+// ============================================================================================================
+//
+// Un seul dossier est utilisé : media/{identifiant du média}/{fichier}   (les métadonnées sont dans Firestore : collection « media »)
+//
+//   - ÉCRITURE (envoi, suppression) : administrateur actif uniquement — role == 'admin' ET status == 'active' dans users/{uid},
+//     lu dans Firestore à chaque requête (firestore.get). Jamais un champ envoyé par le navigateur.
+//   - Types acceptés : images JPEG, PNG, WebP, GIF (8 Mo au plus) ; vidéos MP4, WebM (50 Mo au plus). Rien d'autre : ni SVG, ni PDF,
+//     ni HTML, ni exécutable. Le nom du fichier est limité à des lettres, chiffres, point, tiret et tiret bas.
+//   - Un fichier envoyé n'est jamais écrasé : remplacer un média = envoyer un nouveau fichier puis mettre à jour ses métadonnées.
+//   - LECTURE par le SDK : administrateur uniquement. Les visiteurs voient les images grâce à l'adresse de téléchargement
+//     (jeton secret et non devinable) enregistrée dans les métadonnées d'un média marqué public ; le dossier lui-même n'est
+//     pas listable. Ne téléversez donc jamais de document confidentiel dans la médiathèque.
+//   - Tout le reste du bucket est refusé.
+//
+// PRÉREQUIS : Storage activé dans la console Firebase (Build → Storage). Lors du premier déploiement de ces règles, la CLI propose
+// d'accorder à Storage le droit de lire Firestore (rôle « Firebase Rules Firestore Service Agent ») : répondre OUI, c'est ce qui permet
+// à firestore.get() ci-dessous de fonctionner.
+// DÉPLOIEMENT : firebase deploy --only storage   (ou Console Firebase > Storage > Règles > Publier).
+// ============================================================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Administrateur actif : un seul accès à Firestore par requête.
+    function isAdmin() {
+      let profile = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return request.auth != null
+        && profile.get('role', '') == 'admin'
+        && profile.get('status', '') == 'active';
+    }
+
+    function okImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
+        && request.resource.size > 0
+        && request.resource.size <= 8388608;
+    }
+
+    function okVideo() {
+      return request.resource.contentType.matches('video/(mp4|webm)')
+        && request.resource.size > 0
+        && request.resource.size <= 52428800;
+    }
+
+    match /media/{mediaId}/{file} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+                    && mediaId.matches('[A-Za-z0-9]{10,40}')
+                    && file.matches('[A-Za-z0-9._-]{1,120}')
+                    && (okImage() || okVideo());
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // Tout le reste : refusé.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

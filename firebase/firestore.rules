@@ -1,0 +1,610 @@
+rules_version = '2';
+
+// ============================================================================================================
+// Règles Firestore de Studio Prism
+// ============================================================================================================
+//
+// COLLECTIONS RÉELLEMENT UTILISÉES PAR LE SITE (js/ et functions/) — et rien d'autre :
+//   users          profil du compte (auth.js, admin.js, platform.js)
+//   companies      entreprise d'un compte Entreprise (créée à l'inscription, synchronisée par l'administration)
+//   products       catalogue central : produits Prism App / Prism Game / Prism 3D (data.js, catalog.js, platform.js)
+//   subscriptions  FORMULES (plans) d'un produit : gratuit, achat unique, abonnement, sur devis ; droits et fonctionnalités.
+//                  Chaque produit peut en avoir 0, 1 ou plusieurs. Les anciens documents « une offre = un prix » restent valides.
+//   prices         PRIX et périodes de facturation d'une formule : document « {planId}_{période} » (unique, mensuel, annuel…)
+//   licenses       licence d'UN utilisateur pour UN produit : document « {userId}_{productId} » (data.js, platform.js)
+//   settings       réglage public « catalogue » (le catalogue intégré au site a-t-il été importé dans Firestore ?)
+//   pages          CMS : version PUBLIÉE d'une page (textes modifiés, sections masquées / ordonnées / ajoutées). Lecture publique des
+//                  seules pages publiées ; une page archivée ou jamais publiée n'est lisible que d'un administrateur.
+//   pageDrafts     CMS : copie de travail (brouillon) d'une page. ADMINISTRATEUR SEUL (lecture comprise) : le public n'y accède jamais.
+//   projects       CMS : projets / réalisations (brouillon, publié, archivé). Lecture publique des seuls projets publiés.
+//   media          CMS : médiathèque (métadonnées ; les fichiers sont dans Firebase Storage, voir storage.rules). Un média se lit
+//                  par son identifiant s'il est public ; aucune liste pour le public.
+//
+// PRINCIPES
+//   1. Tout est refusé par défaut (dernière règle du fichier). Aucune règle « if true », aucune règle « connecté = tout ».
+//   2. Administrateur = users/{uid}.role == 'admin' ET users/{uid}.status == 'active', lu dans Firestore à chaque requête
+//      (jamais dans un jeton ni dans un champ envoyé par le navigateur). Un seul get() par requête.
+//   3. Un utilisateur ne peut JAMAIS changer son rôle, son abonnement ni son statut, ni créer / modifier une licence,
+//      ni toucher au catalogue ou aux offres. Un administrateur ne change ni son propre rôle ni son propre statut : le dernier
+//      administrateur actif ne peut donc pas se désactiver lui-même, et personne d'autre ne peut le faire (seul un administrateur
+//      ACTIF peut modifier un compte). Seul cas non couvert : deux administrateurs qui se désactivent l'un l'autre au même instant.
+//   4. Produits, formules et prix : lisibles par tout le monde SI publiés / actifs (les requêtes du site filtrent sur status).
+//      Un brouillon, une formule ou un prix inactif n'est visible que d'un administrateur, qui est aussi seul à pouvoir écrire.
+//      Aucun produit n'a besoin d'une formule ni d'un prix pour exister ou être publié.
+//   5. Licences : un utilisateur ACTIF lit uniquement les siennes (requête where userId == uid). Écriture : administrateur seul ;
+//      seule exception, la suppression par un particulier de SES licences dans le même lot que celle de son profil (point 8).
+//   6. Entreprise : lisible par son responsable et par les comptes rattachés (users/{uid}.companyId) s'ils sont ACTIFS, et par
+//      un administrateur.
+//   7. CMS : tout contenu éditorial suit le même cycle brouillon → publié → archivé. Un brouillon ou un contenu archivé n'est
+//      JAMAIS lisible du public : c'est ici, côté serveurs Google, que c'est imposé (pas seulement par un masquage à l'écran).
+//      Seul un administrateur actif crée, modifie, publie, archive ou supprime pages, projets et médias.
+//   8. Aucune suppression de compte ni d'entreprise depuis le navigateur : c'est le rôle des Cloud Functions (functions/),
+//      qui utilisent l'Admin SDK côté serveur et ignorent ces règles (déploiement : forfait Blaze requis). SEULE EXCEPTION : un
+//      particulier (accountKind individual, role user, status active) supprime SON profil et SES licences, dans un même lot, juste
+//      avant de fermer son compte de connexion avec le SDK Firebase (js/data.js, deleteMyAccount). Jamais le compte d'un autre.
+//   9. DÉSACTIVATION (users/{uid}.status == 'suspended') : le compte ne peut plus lire ses licences ni son entreprise, ne peut plus
+//      rien modifier et n'a plus aucun droit d'administration. Son profil reste lisible par lui seul (le site doit pouvoir lui dire
+//      que le compte est désactivé). Les données sont conservées ; un administrateur peut réactiver le compte. C'est une
+//      désactivation LOGIQUE, imposée ici : le compte de connexion Firebase Authentication, lui, existe toujours (README_ADMIN.md).
+//
+// LIMITES DE FIRESTORE PRISES EN COMPTE
+//   - 10 accès get()/exists() par opération, 20 par lot (batch). Chaque écriture administrateur coûte 1 accès (isAdmin),
+//     2 pour une création de formule, de prix ou de licence. Le site écrit donc par lots de 10 documents au plus (js/data.js).
+//   - exists() / get() voient l'état AVANT le lot, getAfter() l'état APRÈS : un prix est donc créé dans le même lot que sa
+//     formule (vérifiée par getAfter), alors qu'une formule exige que son produit existe déjà (lot précédent).
+//
+// PREMIER ADMINISTRATEUR : à définir à la main dans la console Firebase (role = "admin", status = "active" dans users/{uid}).
+// DÉPLOIEMENT : firebase deploy --only firestore:rules   (ou copier-coller dans Console Firebase > Firestore > Règles > Publier).
+// ============================================================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ utilitaires
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Administrateur actif : un seul get() du document users/{uid} de l'appelant.
+    function isActiveAdminProfile(profile) {
+      return profile.get('role', '') == 'admin' && profile.get('status', '') == 'active';
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && isActiveAdminProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
+    }
+
+    // Compte actif (ni désactivé, ni sans profil) : un seul get() du document users/{uid} de l'appelant.
+    function isActiveUser() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') == 'active';
+    }
+
+    function isString(v, min, max) {
+      return v is string && v.size() >= min && v.size() <= max;
+    }
+
+    function isEmail(v) {
+      return isString(v, 3, 160) && v.matches('.+@.+[.].+');
+    }
+
+    // Identifiant de produit / d'offre : lettres minuscules, chiffres, tirets ; réutilisé comme « slug ».
+    function isId(v) {
+      return v is string && v.matches('[a-z0-9][a-z0-9_-]{1,59}');
+    }
+
+    // Lien : https://..., #/... (page du site) ou assets/... (fichier du site) ; jamais javascript: ni data:. Vide autorisé.
+    function isSafeUrl(v) {
+      return v is string && v.size() <= 300
+        && (v == '' || v.matches('https://[!#-:=?-~]+') || v.matches('#/[!#-:=?-~]*') || v.matches('assets/[!#-:=?-~]+'));
+    }
+
+    // Référence à un média de la médiathèque : « media:{identifiant} » (résolue en adresse de fichier à l'affichage ; remplacer le
+    // fichier du média ne casse donc aucune référence).
+    function isMediaRef(v) {
+      return v is string && v.matches('media:[A-Za-z0-9]{10,40}');
+    }
+
+    // Tranches « nombre de comptes nécessaires » (identiques à SUBSCRIPTION_CONFIG dans js/app.js).
+    function tierOk(range, lim) {
+      return (range == '1'      && lim == 1)
+          || (range == '2-10'   && lim == 10)
+          || (range == '11-25'  && lim == 25)
+          || (range == '26-50'  && lim == 50)
+          || (range == '51-100' && lim == 100)
+          || (range == '100+'   && lim == null);
+    }
+
+    // ------------------------------------------------------------ users/{uid}
+
+    // Création du profil : uniquement SON document, avec des valeurs non privilégiées imposées
+    // (inscription, ou première connexion d'un compte Authentication qui n'a pas encore de profil).
+    function validIndividualProfile(d) {
+      return d.accountKind == 'individual'
+        && d.keys().hasOnly(['firstName', 'lastName', 'email', 'accountKind', 'subscription', 'role', 'status',
+                             'createdAt', 'updatedAt', 'lastLogin', 'termsAcceptedAt']);
+    }
+
+    function validCompanyProfile(d) {
+      return d.accountKind == 'company'
+        && d.keys().hasAll(['companyId', 'companyName', 'companyEmail', 'companyUserRange', 'companyUserLimit'])
+        && d.keys().hasOnly(['firstName', 'lastName', 'email', 'accountKind', 'subscription', 'role', 'status',
+                             'createdAt', 'updatedAt', 'lastLogin', 'termsAcceptedAt',
+                             'companyId', 'companyName', 'companyEmail', 'companyUserRange', 'companyUserLimit', 'jobTitle'])
+        && isString(d.companyId, 1, 40)
+        && isString(d.companyName, 1, 120)
+        && isEmail(d.companyEmail)
+        && tierOk(d.companyUserRange, d.companyUserLimit)
+        && isString(d.get('jobTitle', ''), 0, 80);
+    }
+
+    function validNewUser() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['firstName', 'lastName', 'email', 'accountKind', 'subscription', 'role', 'status',
+                              'createdAt', 'updatedAt', 'lastLogin'])
+        && isString(d.firstName, 1, 80)
+        && isString(d.lastName, 0, 80)
+        && isEmail(d.email)
+        && d.email.lower() == request.auth.token.email.lower()
+        && d.subscription == 'free'
+        && d.role == 'user'
+        && d.status == 'active'
+        && d.createdAt == request.time
+        && d.updatedAt == request.time
+        && d.lastLogin == request.time
+        && d.get('termsAcceptedAt', request.time) == request.time   // facultatif : absent d'un profil créé à la première connexion
+        && (validIndividualProfile(d) || validCompanyProfile(d));
+    }
+
+    // Mise à jour par le propriétaire : SES informations personnelles uniquement (+ dates). Jamais role, subscription,
+    // status, email, accountKind, ni les champs entreprise (ils dépendent du document companies/).
+    function ownerUpdateOk() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return resource.data.status == 'active'
+        && changed.hasOnly(['firstName', 'lastName', 'jobTitle', 'lastLogin', 'updatedAt'])
+        && (!changed.hasAny(['lastLogin']) || d.lastLogin == request.time)
+        && (!changed.hasAny(['updatedAt']) || d.updatedAt == request.time)
+        && (!changed.hasAny(['firstName', 'lastName', 'jobTitle']) || changed.hasAny(['updatedAt']))   // toute modification du profil date updatedAt
+        && (!changed.hasAny(['firstName']) || isString(d.firstName, 1, 80))
+        && (!changed.hasAny(['lastName']) || isString(d.lastName, 0, 80))
+        && (!changed.hasAny(['jobTitle']) || (resource.data.accountKind == 'company' && isString(d.jobTitle, 0, 80)));
+    }
+
+    // Mise à jour par un administrateur actif : subscription / role / status (+ updatedAt), valeurs dans des listes fermées.
+    // Sur SON propre compte : seul l'abonnement peut changer (pas d'auto-promotion, pas d'auto-verrouillage).
+    function adminUpdateOk(uid) {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt'])
+        && d.updatedAt == request.time
+        && d.subscription in ['free', 'pro', 'pro_entreprise']
+        && d.role in ['user', 'admin']
+        && d.status in ['active', 'suspended']
+        && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
+    }
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();                               // inclut les requêtes de comptage (count)
+      allow create: if isSignedIn() && request.auth.uid == uid && validNewUser();
+      allow update: if isSignedIn() && (
+                         (request.auth.uid == uid && ownerUpdateOk())
+                         || (isAdmin() && adminUpdateOk(uid))
+                       );
+      // Suppression : uniquement un PARTICULIER ACTIF, de son PROPRE profil (suppression de son compte, js/data.js). Jamais un
+      // administrateur, un compte entreprise ni un compte désactivé (sinon la désactivation serait contournée : un profil absent
+      // est recréé « actif » à la connexion suivante). Tout autre compte : Cloud Functions (Admin SDK) uniquement.
+      allow delete: if isSignedIn() && request.auth.uid == uid
+                    && resource.data.get('role', '') == 'user'
+                    && resource.data.get('status', '') == 'active'
+                    && resource.data.get('accountKind', 'individual') == 'individual';
+    }
+
+    // ------------------------------------------------------------ companies/{companyId}
+
+    // Création : uniquement pendant l'inscription (le profil écrit dans le même lot doit référencer cette entreprise).
+    function validNewCompany(companyId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'email', 'ownerUid', 'userRange', 'userLimit', 'subscription', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'email', 'ownerUid', 'userRange', 'userLimit', 'subscription', 'createdAt', 'updatedAt',
+                             'phone', 'website'])
+        && isString(d.name, 1, 120)
+        && isEmail(d.email)
+        && d.ownerUid == request.auth.uid
+        && tierOk(d.userRange, d.userLimit)
+        && d.subscription == 'free'
+        && d.createdAt == request.time
+        && d.updatedAt == request.time
+        && isString(d.get('phone', ''), 0, 40)
+        && isString(d.get('website', ''), 0, 200)
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('companyId', '') == companyId;
+    }
+
+    // Administrateur : abonnement + coordonnées de l'entreprise (valeurs validées), jamais le responsable ni la date de création.
+    function adminCompanyUpdateOk() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['name', 'email', 'userRange', 'userLimit', 'subscription', 'phone', 'website', 'updatedAt'])
+        && d.updatedAt == request.time
+        && d.subscription in ['free', 'pro', 'pro_entreprise']
+        && isString(d.name, 1, 120)
+        && isEmail(d.email)
+        && tierOk(d.userRange, d.userLimit)
+        && isString(d.get('phone', ''), 0, 40)
+        && isString(d.get('website', ''), 0, 200);
+    }
+
+    match /companies/{companyId} {
+      // Responsable de l'entreprise ou compte rattaché à cette entreprise (tous deux ACTIFS : un compte désactivé n'y accède plus),
+      // ou administrateur. Aucune liste pour un utilisateur.
+      allow get: if isSignedIn() && (
+                      isAdmin()
+                      || (isActiveUser() && (
+                            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('companyId', '') == companyId
+                            || resource.data.ownerUid == request.auth.uid))
+                    );
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && validNewCompany(companyId);
+      allow update: if isAdmin() && adminCompanyUpdateOk();
+      allow delete: if false;                                 // suppression : Cloud Functions (Admin SDK) uniquement
+    }
+
+    // ------------------------------------------------------------ catalogue : products/{productId}
+
+    // Un produit n'a besoin d'aucune formule : il peut être créé, publié ou indisponible sans abonnement ni prix.
+    // Champs d'origine (obligatoires) + champs du catalogue central (facultatifs, pour rester compatible avec les anciens documents).
+    //   status : published / draft / unavailable / archived (nouveau) ; active / hidden (anciens documents, toujours lus et acceptés)
+//            archived = dépublié sans être effacé : jamais lisible du public, comme un brouillon.
+    //   pole   : app / game / p3d (pôle responsable) ; category : type du produit, choisi indépendamment du pôle
+    function validProduct(pid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'slug', 'category', 'description', 'logo', 'image', 'url', 'status', 'featured',
+                              'displayOrder', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'slug', 'category', 'tagline', 'description', 'logo', 'image', 'url', 'status', 'featured',
+                             'displayOrder', 'createdAt', 'updatedAt', 'pole', 'stage', 'availability', 'info', 'platforms'])
+        && isId(pid)
+        && d.slug == pid
+        && isString(d.name, 1, 80)
+        && isString(d.get('tagline', ''), 0, 80)
+        && d.category in ['application', 'game', '3d', 'service', 'other']
+        && d.get('pole', 'app') in ['app', 'game', 'p3d']
+        && d.get('stage', 'concept') in ['concept', 'conception', 'prototype', 'beta', 'released']
+        && isString(d.get('availability', ''), 0, 120)
+        && isString(d.get('info', ''), 0, 1000)
+        && d.get('platforms', []) is list && d.get('platforms', []).size() <= 8
+        && isString(d.description, 0, 1000)
+        && (isSafeUrl(d.logo) || isMediaRef(d.logo)) && (isSafeUrl(d.image) || isMediaRef(d.image)) && isSafeUrl(d.url)
+        && d.status in ['published', 'draft', 'unavailable', 'archived', 'active', 'hidden']
+        && d.featured is bool
+        && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999
+        && d.updatedAt == request.time;
+    }
+
+    match /products/{pid} {
+      // Public : produits publiés ou indisponibles (visibles mais non commandables) ; « active » = ancien nom de « published ».
+      // Les requêtes du site filtrent where('status', '==', …) pour chacune de ces valeurs. Brouillons : administrateur seul.
+      allow get, list: if isAdmin()
+                       || resource.data.status == 'published'
+                       || resource.data.status == 'unavailable'
+                       || resource.data.status == 'active';
+      allow create: if isAdmin() && validProduct(pid) && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && validProduct(pid) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ formules : subscriptions/{planId}
+
+    // FORMULE (nouveau format) : ce qu'on obtient (droits, fonctionnalités, type de licence), PAS le prix (voir « prices »).
+    //   mode : free (gratuit) / one_time (achat unique) / subscription (abonnement) / quote (sur devis)
+    function validPlan(sid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['productId', 'productName', 'name', 'slug', 'description', 'mode', 'features', 'licenseType',
+                              'status', 'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['productId', 'productName', 'name', 'slug', 'description', 'mode', 'features', 'licenseType',
+                             'status', 'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && isId(sid)
+        && d.slug == sid
+        && isId(d.productId)
+        && isString(d.productName, 1, 80)
+        && isString(d.name, 1, 80)
+        && isString(d.description, 0, 500)
+        && d.mode in ['free', 'one_time', 'subscription', 'quote']
+        && d.features is list && d.features.size() <= 40
+        && d.licenseType.matches('[a-z][a-z0-9_]{1,39}')
+        && d.status in ['active', 'inactive']
+        && d.featured is bool
+        && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999
+        && d.updatedAt == request.time;
+    }
+
+    // ANCIEN format « une offre = un prix » (documents déjà en base) : toujours lisible et modifiable (activer / désactiver…),
+    // mais plus créé par le site. Le prix doit rester cohérent avec la périodicité : Gratuit = 0, Sur devis = null, mensuel / annuel > 0.
+    function validLegacyOffer(sid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['productId', 'productName', 'name', 'slug', 'description', 'price', 'currency', 'billingPeriod',
+                              'features', 'licenseType', 'status', 'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['productId', 'productName', 'name', 'slug', 'description', 'price', 'currency', 'billingPeriod',
+                             'features', 'licenseType', 'status', 'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && isId(sid)
+        && d.slug == sid
+        && isId(d.productId)
+        && isString(d.productName, 1, 80)
+        && isString(d.name, 1, 80)
+        && isString(d.description, 0, 500)
+        && d.currency.matches('[A-Z]{3}')
+        && ((d.billingPeriod == 'free' && d.price == 0)
+            || (d.billingPeriod == 'quote' && d.price == null)
+            || (d.billingPeriod in ['monthly', 'yearly'] && d.price is number && d.price > 0 && d.price < 1000000))
+        && d.features is list && d.features.size() <= 40
+        && d.licenseType.matches('[a-z][a-z0-9_]{1,39}')
+        && d.status in ['active', 'inactive']
+        && d.featured is bool
+        && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999
+        && d.updatedAt == request.time;
+    }
+
+    match /subscriptions/{sid} {
+      allow get, list: if isAdmin() || resource.data.status == 'active';
+      // À la création, le produit doit exister (lot précédent) et son nom doit correspondre (un get() qui échoue = refus).
+      allow create: if isAdmin() && validPlan(sid) && request.resource.data.createdAt == request.time
+                    && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
+                       == request.resource.data.productName;
+      allow update: if isAdmin() && (validPlan(sid) || validLegacyOffer(sid))
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.productId == resource.data.productId;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ prix : prices/{planId_période}
+
+    // Un prix = une formule + une période de facturation. Plusieurs prix par formule (mensuel ET annuel, par exemple), aucun si la
+    // formule est gratuite ou sur devis. Identifiant imposé « {planId}_{period} » : un seul prix par formule et par période.
+    //   period : once (achat unique) / monthly / quarterly / yearly ; legacyId = identifiant de l'ancienne offre reprise.
+    function validPrice(prid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['planId', 'productId', 'period', 'amount', 'currency', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['planId', 'productId', 'period', 'amount', 'currency', 'status', 'legacyId', 'createdAt', 'updatedAt'])
+        && isId(d.planId)
+        && isId(d.productId)
+        && d.period in ['once', 'monthly', 'quarterly', 'yearly']
+        && prid == d.planId + '_' + d.period
+        && d.amount is number && d.amount > 0 && d.amount < 1000000
+        && d.currency.matches('[A-Z]{3}')
+        && d.status in ['active', 'inactive']
+        && isString(d.get('legacyId', ''), 0, 60)
+        && d.updatedAt == request.time;
+    }
+
+    // La formule (créée dans le même lot, d'où getAfter) appartient au même produit et accepte cette période :
+    // achat unique ⇒ « once » ; abonnement ⇒ « monthly » / « quarterly » / « yearly » ; gratuit et sur devis : aucun prix.
+    function priceFitsPlan() {
+      let d = request.resource.data;
+      let plan = getAfter(/databases/$(database)/documents/subscriptions/$(d.planId)).data;
+      return plan.get('productId', '') == d.productId
+        && ((plan.get('mode', '') == 'one_time' && d.period == 'once')
+            || (plan.get('mode', '') == 'subscription' && d.period in ['monthly', 'quarterly', 'yearly']));
+    }
+
+    match /prices/{prid} {
+      allow get, list: if isAdmin() || resource.data.status == 'active';
+      allow create: if isAdmin() && validPrice(prid) && request.resource.data.createdAt == request.time && priceFitsPlan();
+      allow update: if isAdmin() && validPrice(prid) && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.planId == resource.data.planId
+                    && request.resource.data.productId == resource.data.productId
+                    && request.resource.data.period == resource.data.period;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ réglage public : settings/catalogue
+
+    // builtinImported = true : le catalogue intégré au site (ArchiVision, concepts Prism Game et Prism 3D) a été copié dans
+    // Firestore ; le site cesse alors de l'afficher depuis le code et ne montre plus que les produits publiés (pas de doublon).
+    match /settings/{sid} {
+      allow get: if sid == 'catalogue';                       // lecture publique d'un seul document, aucune liste
+      allow create, update: if isAdmin() && sid == 'catalogue'
+                            && request.resource.data.keys().hasAll(['builtinImported', 'updatedAt'])
+                            && request.resource.data.keys().hasOnly(['builtinImported', 'updatedAt'])
+                            && request.resource.data.builtinImported is bool
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------ licences : licenses/{userId_productId}
+
+    function validLicenseFields() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['userId', 'productId', 'productName', 'licenseType', 'status', 'activatedAt', 'expiresAt',
+                              'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['userId', 'productId', 'productName', 'licenseType', 'status', 'activatedAt', 'expiresAt',
+                             'createdAt', 'updatedAt'])
+        && d.userId is string && d.userId.matches('[A-Za-z0-9_-]{1,128}')
+        && isId(d.productId)
+        && isString(d.productName, 1, 80)
+        && d.licenseType.matches('[a-z][a-z0-9_]{1,39}')
+        && d.status in ['active', 'suspended', 'expired']
+        && d.activatedAt is timestamp
+        && (d.expiresAt == null || (d.expiresAt is timestamp && d.expiresAt > d.activatedAt))
+        && d.updatedAt == request.time;
+    }
+
+    match /licenses/{lid} {
+      // Un utilisateur ACTIF ne lit QUE ses licences (requête : where('userId', '==', uid)) ; un compte désactivé n'y accède plus ;
+      // un administrateur lit tout.
+      allow get, list: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid && isActiveUser()));
+      // Création / attribution : administrateur seul. L'identifiant du document est « userId_productId » (une licence par
+      // utilisateur et par produit), l'utilisateur et le produit doivent exister, le nom du produit doit correspondre.
+      allow create: if isAdmin() && validLicenseFields() && request.resource.data.createdAt == request.time
+                    && lid == request.resource.data.userId + '_' + request.resource.data.productId
+                    && exists(/databases/$(database)/documents/users/$(request.resource.data.userId))
+                    && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
+                       == request.resource.data.productName;
+      // Modification / suspension / réactivation : administrateur seul ; l'utilisateur, le produit et la date de création sont figés.
+      allow update: if isAdmin() && validLicenseFields() && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.productId == resource.data.productId;
+      // Administrateur ; ou le propriétaire, UNIQUEMENT si son profil est supprimé dans le même lot (suppression de son compte).
+      // Sinon refusé : un utilisateur ne supprime jamais une licence isolée. Le profil n'étant supprimable que par un particulier
+      // actif, un compte désactivé ne peut pas non plus effacer ses licences. Coût : 2 accès (exists, existsAfter) par licence.
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid
+                        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                        && !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)))
+                    || isAdmin();
+    }
+
+    // ============================================================ CMS : pages, projets, médias
+
+    // Contenu d'une page (structure seulement : textes modifiés, liens / images modifiés, ordre et visibilité des sections,
+    // sections ajoutées). Seul un administrateur écrit ; l'affichage public n'interprète JAMAIS ces données comme du HTML ou du
+    // JavaScript (textes insérés comme texte, adresses vérifiées avant usage) : la structure suffit donc à borner les documents.
+    function validContent(c) {
+      return c is map
+        && c.keys().hasOnly(['v', 'seo', 'texts', 'attrs', 'layout', 'hidden', 'extra'])
+        && c.keys().hasAll(['v'])
+        && c.v == 1
+        && (!('seo' in c) || c.seo is map)
+        && (!('texts' in c) || (c.texts is map && c.texts.size() <= 800))
+        && (!('attrs' in c) || (c.attrs is map && c.attrs.size() <= 400))
+        && (!('layout' in c) || (c.layout is list && c.layout.size() <= 120))
+        && (!('hidden' in c) || (c.hidden is list && c.hidden.size() <= 120))
+        && (!('extra' in c) || (c.extra is list && c.extra.size() <= 40));
+    }
+
+    // Identifiant d'une page : lettres minuscules, chiffres, tirets. Page personnalisée = « c-{adresse} » ; page du site = son nom.
+    function isPageId(v) {
+      return v is string && v.matches('[a-z0-9][a-z0-9-]{0,58}');
+    }
+
+    function pageFieldsOk(pid) {
+      let d = request.resource.data;
+      return isPageId(pid)
+        && d.kind in ['builtin', 'custom']
+        && (d.kind == 'custom') == pid.matches('c-[a-z0-9-]{1,56}')
+        && isString(d.title, 0, 120)
+        && d.slug is string && (d.kind == 'custom' ? pid == 'c-' + d.slug : pid == d.slug)
+        && d.footer is bool
+        && validContent(d.content)
+        && d.mediaIds is list && d.mediaIds.size() <= 80
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid;
+    }
+
+    // Version PUBLIÉE : lecture publique tant que status == 'published' ; archivée (dépubliée) = administrateur seul.
+    function validPage(pid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['kind', 'title', 'slug', 'status', 'footer', 'content', 'mediaIds', 'revision', 'publishedAt', 'updatedAt', 'updatedBy'])
+        && d.keys().hasOnly(['kind', 'title', 'slug', 'status', 'footer', 'content', 'mediaIds', 'revision', 'publishedAt', 'updatedAt', 'updatedBy'])
+        && pageFieldsOk(pid)
+        && d.status in ['published', 'archived']
+        && d.revision is int && d.revision >= 1 && d.revision <= 100000;
+    }
+
+    match /pages/{pid} {
+      allow get, list: if isAdmin() || resource.data.status == 'published';
+      allow create: if isAdmin() && validPage(pid) && request.resource.data.status == 'published'
+                    && request.resource.data.revision == 1 && request.resource.data.publishedAt == request.time;
+      allow update: if isAdmin() && validPage(pid)
+                    && request.resource.data.kind == resource.data.kind
+                    && request.resource.data.revision >= resource.data.revision
+                    && (request.resource.data.publishedAt == request.time || request.resource.data.publishedAt == resource.data.publishedAt);
+      allow delete: if isAdmin();
+    }
+
+    // Brouillon (copie de travail) : jamais lisible ni modifiable par le public, même publié par ailleurs.
+    function validPageDraft(pid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['kind', 'title', 'slug', 'footer', 'content', 'mediaIds', 'baseRevision', 'updatedAt', 'updatedBy'])
+        && d.keys().hasOnly(['kind', 'title', 'slug', 'footer', 'content', 'mediaIds', 'baseRevision', 'updatedAt', 'updatedBy'])
+        && pageFieldsOk(pid)
+        && d.baseRevision is int && d.baseRevision >= 0 && d.baseRevision <= 100000;
+    }
+
+    match /pageDrafts/{pid} {
+      allow get, list: if isAdmin();
+      allow create, update: if isAdmin() && validPageDraft(pid);
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ projets / réalisations : projects/{projectId}
+
+    function validProject(pid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['title', 'slug', 'summary', 'description', 'image', 'link', 'productId', 'tags', 'year', 'status',
+                              'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['title', 'slug', 'summary', 'description', 'image', 'link', 'productId', 'tags', 'year', 'status',
+                             'featured', 'displayOrder', 'createdAt', 'updatedAt'])
+        && isId(pid)
+        && d.slug == pid
+        && isString(d.title, 1, 120)
+        && isString(d.summary, 0, 300)
+        && isString(d.description, 0, 3000)
+        && (isSafeUrl(d.image) || isMediaRef(d.image))
+        && isSafeUrl(d.link)
+        && (d.productId == '' || isId(d.productId))
+        && d.tags is list && d.tags.size() <= 8
+        && isString(d.year, 0, 10)
+        && d.status in ['published', 'draft', 'archived']
+        && d.featured is bool
+        && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999
+        && d.updatedAt == request.time;
+    }
+
+    match /projects/{pid} {
+      // Public : projets publiés SEULEMENT (les requêtes du site filtrent where('status', '==', 'published')).
+      allow get, list: if isAdmin() || resource.data.status == 'published';
+      allow create: if isAdmin() && validProject(pid) && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && validProject(pid) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ médiathèque : media/{mediaId}
+
+    // Métadonnées d'un média. Le fichier est dans Firebase Storage (media/{mediaId}/…, voir storage.rules) ou, pour un média
+    // « lien », sur un site externe (source == 'link'). Lecture publique d'UN média par son identifiant s'il est marqué public ;
+    // aucune liste pour le public (la médiathèque ne peut pas être énumérée).
+    function validMedia(mid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'folder', 'alt', 'title', 'kind', 'mime', 'size', 'source', 'url', 'path', 'public',
+                              'createdAt', 'updatedAt', 'createdBy'])
+        && d.keys().hasOnly(['name', 'folder', 'alt', 'title', 'kind', 'mime', 'size', 'source', 'url', 'path', 'public', 'width',
+                             'height', 'createdAt', 'updatedAt', 'createdBy', 'replacedAt'])
+        && mid.matches('[A-Za-z0-9]{10,40}')
+        && isString(d.name, 1, 120)
+        && isString(d.folder, 0, 60)
+        && isString(d.alt, 0, 250)
+        && isString(d.title, 0, 120)
+        && d.kind in ['image', 'video']
+        && d.mime in ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm']
+        && (d.kind == 'image') == d.mime.matches('image/.*')
+        && d.size is int && d.size >= 0 && d.size <= 52428800
+        && d.source in ['upload', 'link']
+        && d.url is string && d.url.size() <= 1500 && d.url.matches('https://[!#-:=?-~]+')
+        && d.path is string && d.path.size() <= 300
+        && (d.source == 'upload' ? d.path.matches('media/' + mid + '/[A-Za-z0-9._-]{1,120}') : d.path == '')
+        && d.public is bool
+        && (!('width' in d) || (d.width is int && d.width >= 0 && d.width <= 20000))
+        && (!('height' in d) || (d.height is int && d.height >= 0 && d.height <= 20000))
+        && d.updatedAt == request.time
+        && d.createdBy is string && d.createdBy.size() <= 128;
+    }
+
+    match /media/{mid} {
+      allow get: if isAdmin() || resource.data.public == true;
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validMedia(mid) && request.resource.data.createdAt == request.time
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() && validMedia(mid) && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.createdBy == resource.data.createdBy
+                    && request.resource.data.source == resource.data.source;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ tout le reste : refusé
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
