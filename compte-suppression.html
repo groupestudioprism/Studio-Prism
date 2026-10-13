@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Supprimer mon compte — Studio Prism</title>
+<link rel="icon" type="image/png" href="assets/img/studio-prism.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--nuit:#071B55;--cyan:#1F89C5;--turq:#169999;--bg:#F2F7FA;--card:#FFFFFF;--ink:#111827;--mut:#4B5563;--line:#DCE7EF;--danger:#B3261E;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font:16px/1.6 Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#fff;border-bottom:1px solid var(--line)}
+header a{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--nuit)}
+header img{width:30px;height:auto}
+header b{font-size:16px}
+header small{display:block;font-size:11px;color:var(--mut);letter-spacing:.04em}
+main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:40px 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 26px;width:100%;max-width:560px;box-shadow:0 10px 30px rgb(7 27 85 / .06)}
+h1{font-size:23px;line-height:1.25;margin:0 0 10px;color:var(--nuit)}
+p{margin:0 0 14px}
+.mut{color:var(--mut);font-size:14.5px}
+ul{margin:0 0 18px;padding-left:20px}
+li{margin:4px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 22px;border-radius:10px;font:600 14.5px Inter,system-ui,sans-serif;border:2px solid transparent;cursor:pointer;text-decoration:none;transition:background-color .2s,border-color .2s}
+.b1{background:var(--cyan);color:#fff}.b1:hover{background:#1874a8}
+.b4{border-color:var(--cyan);color:var(--nuit);background:#fff}.b4:hover{background:#eef6fb}
+.bd{background:var(--danger);color:#fff}.bd:hover{background:#8c1d18}
+.btn[disabled]{opacity:.55;cursor:progress}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.note{border-left:3px solid var(--turq);background:#F2F7FA;padding:12px 14px;border-radius:0 10px 10px 0;font-size:14.5px;margin:0 0 18px}
+.note.warn{border-left-color:#E0A526;background:#FFFBF0}
+.note.err{border-left-color:var(--danger);background:#FDF2F1}
+.note.ok{border-left-color:#1E8E5A;background:#F1FAF5}
+label{display:block;font-weight:600;font-size:14px;margin:0 0 6px}
+input{width:100%;height:48px;border:1px solid #CBD6DF;border-radius:10px;padding:0 14px;font:16px Inter,system-ui,sans-serif;color:var(--ink);background:#fff}
+input:focus{outline:2px solid var(--cyan);outline-offset:1px}
+.pin{letter-spacing:.6em;text-align:center;font-size:24px;font-weight:600;max-width:260px}
+.fe{color:var(--danger);font-size:14px;min-height:20px;margin:8px 0}
+.steps{display:flex;gap:8px;margin:0 0 18px;padding:0;list-style:none;font-size:12.5px;color:var(--mut)}
+.steps li{display:flex;align-items:center;gap:6px;margin:0}
+.steps i{width:22px;height:22px;border-radius:11px;border:1.5px solid var(--line);display:grid;place-items:center;font-style:normal;font-weight:700;font-size:11px}
+.steps .cur{color:var(--nuit);font-weight:600}.steps .cur i{border-color:var(--cyan);color:var(--cyan)}
+.steps .done i{background:var(--turq);border-color:var(--turq);color:#fff}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--cyan);border-radius:50%;animation:sp 0.8s linear infinite;margin:10px auto 14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.center{text-align:center}
+footer{text-align:center;font-size:12.5px;color:var(--mut);padding:16px}
+footer a{color:var(--mut)}
+@media (max-width:520px){ .card{padding:22px 18px} h1{font-size:20px} .row .btn{width:100%} main{padding:20px 12px} }
+</style>
+</head>
+<body>
+<header><a href="./"><img src="assets/img/studio-prism.png" alt="" width="128" height="144"><span><b>Studio Prism</b><small>Creative &amp; Technical Solutions</small></span></a></header>
+<main><div class="card" id="box" aria-live="polite"><div class="center"><div class="spin" aria-hidden="true"></div><p class="mut">Chargement…</p></div></div></main>
+<footer>Un seul compte pour le site Studio Prism, ARCHIPLAN et Archi Vision. · <a href="./">Retour au site</a></footer>
+<script type="module" src="js/compte-suppression.js"></script>
+</body>
+</html>

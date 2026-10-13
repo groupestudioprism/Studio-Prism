@@ -232,6 +232,8 @@
         `<p class="mut" style="margin:8px 0">Contactez Studio Prism pour demander la suppression de votre compte.</p>`);
       return;
     }
+    // Parcours commun au site, à ARCHIPLAN et à Archi Vision : lien de confirmation par email puis code PIN (compte-suppression.html).
+    if (!d.ACCOUNT_SERVER) { location.href = 'compte-suppression.html?from=site'; return; }
     pmodal(`<h3>Supprimer mon compte</h3><p><b>Supprimer définitivement votre compte Studio Prism ? Cette action est irréversible.</b></p>` +
       `<p class="mut" style="margin:8px 0">${d.ACCOUNT_SERVER ? 'Seront supprimés : votre compte de connexion, votre profil, vos licences et vos données personnelles. Votre entreprise n’est supprimée que si aucun autre utilisateur ne lui est rattaché.' : 'Seront supprimés : votre compte de connexion, votre profil et vos licences.'}</p>` +
       `<form data-f="acc-del" novalidate><label for="del-pw">Mot de passe (confirmation)</label><input id="del-pw" type="password" autocomplete="current-password">` +

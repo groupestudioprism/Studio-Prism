@@ -18,6 +18,7 @@ rules_version = '2';
 //   pageDrafts     CMS : copie de travail (brouillon) d'une page. ADMINISTRATEUR SEUL (lecture comprise) : le public n'y accède jamais.
 //   projects       CMS : projets / réalisations (brouillon, publié, archivé). Lecture publique des seuls projets publiés.
 //   clientProfiles ARCHIPLAN : fiche client d'un compte (téléphone, profil, société, adresse) — voir en fin de fichier
+//   apProjects, apFolders, apShares, apGrants, userSecrets : cloud ARCHIPLAN (projets, dossiers, partage) et code PIN du compte — en fin de fichier
 //   media          CMS : médiathèque (métadonnées ; les fichiers sont dans Firebase Storage, voir storage.rules). Un média se lit
 //                  par son identifiant s'il est public ; aucune liste pour le public.
 //
@@ -629,6 +630,160 @@ service cloud.firestore {
                     && request.resource.data.createdAt == request.time;
       allow update: if isSignedIn() && request.auth.uid == uid && isActiveUser() && validClientProfile()
                     && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ------------------------------------------------------------ ARCHIPLAN : cloud des projets, partage, code PIN du compte
+    //
+    // apProjects/{id}          fiche d'un projet (propriétaire, nom, dossier, miniature, accès par lien). Contenu : apProjects/{id}/content/main.
+    // apFolders/{id}           dossiers personnels (le propriétaire seul).
+    // apShares/{id}__{email}   partage par email (créé par le propriétaire ; l'invité le lit et peut le retirer).
+    // apGrants/{id}__{uid}     accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey du projet.
+    // userSecrets/{uid}        code PIN du compte, HACHÉ (PBKDF2) : lisible par son seul titulaire, jamais par un administrateur.
+    // Enregistrer (créer, modifier) exige une licence ARCHIPLAN active ou le rôle administrateur, pour le propriétaire comme pour
+    // un invité « Modification » : un invité sans licence ne peut que consulter. Les invités doivent avoir un email vérifié.
+    function apEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function apVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function apLicensed() {
+      let lp = /databases/$(database)/documents/licenses/$(request.auth.uid + '_archiplan');
+      return isAdmin() || (exists(lp) && get(lp).data.status == 'active'
+        && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time));
+    }
+
+    function apShareRole(pid) {
+      let sp = /databases/$(database)/documents/apShares/$(pid + '__' + apEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function apGrantOk(pid, p) {
+      let gp = /databases/$(database)/documents/apGrants/$(pid + '__' + request.auth.uid);
+      return p.get('linkMode', 'off') in ['view', 'edit'] && p.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == p.linkKey;
+    }
+
+    function apCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid
+        || (apVerified() && (apShareRole(pid) in ['view', 'edit'] || apGrantOk(pid, p))));
+    }
+
+    function apCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && apLicensed() && (p.ownerUid == request.auth.uid
+        || (apVerified() && (apShareRole(pid) == 'edit' || (p.get('linkMode', 'off') == 'edit' && apGrantOk(pid, p)))));
+    }
+
+    function apValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'thumb', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && isString(d.name, 1, 120)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
+        && isString(d.get('thumb', ''), 0, 90000)
+        && (d.get('thumb', '') == '' || d.thumb.matches('data:image/(jpeg|png|webp);base64,.*'))
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /apProjects/{pid} {
+      allow get: if apCanRead(pid, resource.data);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isSignedIn() && isActiveUser() && apLicensed()
+                    && apValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && apValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser() && apLicensed())
+                        || (apCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])));
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && apCanRead(pid, get(/databases/$(database)/documents/apProjects/$(pid)).data);
+        allow create, update: if cid == 'main'
+                              && apCanEdit(pid, getAfter(/databases/$(database)/documents/apProjects/$(pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && get(/databases/$(database)/documents/apProjects/$(pid)).data.ownerUid == request.auth.uid;
+      }
+    }
+
+    function apValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.ownerUid == request.auth.uid
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && d.updatedAt == request.time;
+    }
+
+    match /apFolders/{fid} {
+      allow get, list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid
+                    && apValidFolder(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    function apValidShare(sid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['pid', 'email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['pid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && sid == d.pid + '__' + d.email
+        && isString(d.pid, 1, 60)
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && get(/databases/$(database)/documents/apProjects/$(d.pid)).data.ownerUid == request.auth.uid;
+    }
+
+    match /apShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail());
+      allow create: if isSignedIn() && isActiveUser() && apValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && apValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail());
+    }
+
+    match /apGrants/{gid} {
+      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create, update: if isSignedIn() && isActiveUser() && apVerified()
+                            && request.resource.data.keys().hasOnly(['pid', 'uid', 'key', 'createdAt'])
+                            && request.resource.data.uid == request.auth.uid
+                            && isString(request.resource.data.pid, 1, 60)
+                            && gid == request.resource.data.pid + '__' + request.auth.uid
+                            && isString(request.resource.data.key, 1, 128)
+                            && request.resource.data.createdAt == request.time
+                            && get(/databases/$(database)/documents/apProjects/$(request.resource.data.pid)).data.get('linkMode', 'off') in ['view', 'edit']
+                            && get(/databases/$(database)/documents/apProjects/$(request.resource.data.pid)).data.get('linkKey', '') == request.resource.data.key;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /userSecrets/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['pinHash', 'pinSalt', 'pinIter', 'updatedAt'])
+                            && isString(request.resource.data.pinHash, 20, 100)
+                            && isString(request.resource.data.pinSalt, 10, 60)
+                            && request.resource.data.pinIter is int
+                            && request.resource.data.pinIter >= 100000 && request.resource.data.pinIter <= 1000000
+                            && request.resource.data.updatedAt == request.time;
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
