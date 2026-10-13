@@ -18,7 +18,8 @@ rules_version = '2';
 //   pageDrafts     CMS : copie de travail (brouillon) d'une page. ADMINISTRATEUR SEUL (lecture comprise) : le public n'y accède jamais.
 //   projects       CMS : projets / réalisations (brouillon, publié, archivé). Lecture publique des seuls projets publiés.
 //   clientProfiles ARCHIPLAN : fiche client d'un compte (téléphone, profil, société, adresse) — voir en fin de fichier
-//   apProjects, apFolders, apShares, apGrants, userSecrets : cloud ARCHIPLAN (projets, dossiers, partage) et code PIN du compte — en fin de fichier
+//   apProjects, apFolders, apShares, apGrants, apUsage, apLibrary, userSecrets : cloud ARCHIPLAN (projets, dossiers partagés, quotas,
+//   bibliothèque personnelle) et code PIN du compte — en fin de fichier
 //   media          CMS : médiathèque (métadonnées ; les fichiers sont dans Firebase Storage, voir storage.rules). Un média se lit
 //                  par son identifiant s'il est public ; aucune liste pour le public.
 //
@@ -633,15 +634,20 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
-    // ------------------------------------------------------------ ARCHIPLAN : cloud des projets, partage, code PIN du compte
+    // ------------------------------------------------------------ ARCHIPLAN : cloud des projets, dossiers, partage, quotas, bibliothèque, code PIN
     //
-    // apProjects/{id}          fiche d'un projet (propriétaire, nom, dossier, miniature, accès par lien). Contenu : apProjects/{id}/content/main.
-    // apFolders/{id}           dossiers personnels (le propriétaire seul).
-    // apShares/{id}__{email}   partage par email (créé par le propriétaire ; l'invité le lit et peut le retirer).
-    // apGrants/{id}__{uid}     accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey du projet.
-    // userSecrets/{uid}        code PIN du compte, HACHÉ (PBKDF2) : lisible par son seul titulaire, jamais par un administrateur.
-    // Enregistrer (créer, modifier) exige une licence ARCHIPLAN active ou le rôle administrateur, pour le propriétaire comme pour
-    // un invité « Modification » : un invité sans licence ne peut que consulter. Les invités doivent avoir un email vérifié.
+    // apProjects/{id}            fiche d'un projet (propriétaire, nom, dossier, taille, miniature, accès par lien). Contenu : apProjects/{id}/content/main.
+    // apFolders/{id}             dossiers du propriétaire ; un dossier partagé liste ses projets (pids) et donne accès à chacun d'eux.
+    // apShares/{cible}__{email}  partage par email : cible = id du projet, ou « F_ » + id du dossier (kind 'folder', fid).
+    // apGrants/{cible}__{uid}    accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey de la cible.
+    // apUsage/{uid}              stockage utilisé par un compte (octets). Quota : 10 Mo (gratuit), 50 Mo (licence ARCHIPLAN), 1 Go (administrateur).
+    //                            Chaque écriture qui change la taille d'un projet met à jour ce compteur DANS LE MÊME LOT (increment + lastPid),
+    //                            et les règles vérifient la cohérence : le compteur ne peut ni être contourné ni dépasser le quota.
+    //                            Un invité qui modifie ou crée un projet dans un dossier partagé consomme le stockage du propriétaire.
+    // apLibrary/{uid}            bibliothèque personnelle (matériaux, compositions de parois, familles) : son seul titulaire.
+    // userSecrets/{uid}          code PIN du compte, HACHÉ (PBKDF2) : lisible par son seul titulaire, jamais par un administrateur.
+    // Le cloud est ouvert à tous les comptes actifs (offre gratuite comprise) ; les invités doivent avoir un email vérifié.
+    // Les plafonds de dossiers (5 privés, 3 partagés) sont appliqués par l'application.
     function apEmail() {
       return request.auth.token.email.lower();
     }
@@ -650,30 +656,70 @@ service cloud.firestore {
       return request.auth.token.email_verified == true;
     }
 
-    function apLicensed() {
-      let lp = /databases/$(database)/documents/licenses/$(request.auth.uid + '_archiplan');
-      return isAdmin() || (exists(lp) && get(lp).data.status == 'active'
-        && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time));
+    function apP(pid) {
+      return /databases/$(database)/documents/apProjects/$(pid);
     }
 
-    function apShareRole(pid) {
-      let sp = /databases/$(database)/documents/apShares/$(pid + '__' + apEmail());
+    function apF(fid) {
+      return /databases/$(database)/documents/apFolders/$(fid);
+    }
+
+    function apU(uid) {
+      return /databases/$(database)/documents/apUsage/$(uid);
+    }
+
+    // Quota du compte uid (le propriétaire du stockage, pas forcément l'auteur de l'écriture)
+    function apQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      let lp = /databases/$(database)/documents/licenses/$(uid + '_archiplan');
+      return isActiveAdminProfile(u) ? 1000000000
+        : (exists(lp) && get(lp).data.status == 'active'
+           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
+        : 10000000;
+    }
+
+    // Le compteur du propriétaire a bien été mis à jour dans ce lot, de la variation de taille du projet pid
+    function apUsageOk(owner, pid, delta) {
+      let before = exists(apU(owner)) ? get(apU(owner)).data.bytes : 0;
+      return delta == 0
+        || (existsAfter(apU(owner)) && getAfter(apU(owner)).data.lastPid == pid
+            && getAfter(apU(owner)).data.bytes == before + delta);
+    }
+
+    function apShareRole(key) {
+      let sp = /databases/$(database)/documents/apShares/$(key + '__' + apEmail());
       return exists(sp) ? get(sp).data.role : '';
     }
 
-    function apGrantOk(pid, p) {
-      let gp = /databases/$(database)/documents/apGrants/$(pid + '__' + request.auth.uid);
-      return p.get('linkMode', 'off') in ['view', 'edit'] && p.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == p.linkKey;
+    function apGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/apGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    // Droit d'un invité sur un dossier : 'edit', 'view' ou ''
+    function apFolderRole(fid) {
+      let f = get(apF(fid)).data;
+      let r = apShareRole('F_' + fid);
+      return !apVerified() ? '' : r != '' ? r : apGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    // Droit d'un invité sur un projet : directement, ou par le dossier (du même propriétaire) qui le contient
+    function apGuestRole(pid, p) {
+      let r = apShareRole(pid);
+      let viaLink = apGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(apF(p.folderId)) && get(apF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? apFolderRole(p.folderId) : '';
+      return !apVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
     }
 
     function apCanRead(pid, p) {
-      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid
-        || (apVerified() && (apShareRole(pid) in ['view', 'edit'] || apGrantOk(pid, p))));
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || apGuestRole(pid, p) in ['view', 'edit']);
     }
 
     function apCanEdit(pid, p) {
-      return isSignedIn() && isActiveUser() && apLicensed() && (p.ownerUid == request.auth.uid
-        || (apVerified() && (apShareRole(pid) == 'edit' || (p.get('linkMode', 'off') == 'edit' && apGrantOk(pid, p)))));
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || apGuestRole(pid, p) == 'edit');
     }
 
     function apValidProject(d) {
@@ -693,65 +739,128 @@ service cloud.firestore {
         && isString(d.get('linkKey', ''), 0, 128)
         && isString(d.get('linkToken', ''), 0, 64)
         && d.get('linkPw', false) is bool
-        && d.updatedAt == request.time;
+        && d.updatedAt == request.time
+        // un projet rangé dans un dossier : dossier du même propriétaire (un ancien dossier disparu ne donne aucun accès)
+        && (d.folderId == '' || !existsAfter(apF(d.folderId)) || getAfter(apF(d.folderId)).data.ownerUid == d.ownerUid);
     }
 
     match /apProjects/{pid} {
       allow get: if apCanRead(pid, resource.data);
       allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isSignedIn() && isActiveUser() && apLicensed()
+      // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
+      allow create: if isSignedIn() && isActiveUser()
                     && apValidProject(request.resource.data)
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.createdAt == request.time;
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && apFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(apF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && apUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
       allow update: if isSignedIn() && apValidProject(request.resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.createdAt == resource.data.createdAt
-                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser() && apLicensed())
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
                         || (apCanEdit(pid, resource.data)
-                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])));
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && apUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
       allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
 
       match /content/{cid} {
-        allow get: if cid == 'main' && apCanRead(pid, get(/databases/$(database)/documents/apProjects/$(pid)).data);
+        allow get: if cid == 'main' && apCanRead(pid, get(apP(pid)).data);
         allow create, update: if cid == 'main'
-                              && apCanEdit(pid, getAfter(/databases/$(database)/documents/apProjects/$(pid)).data)
+                              && apCanEdit(pid, getAfter(apP(pid)).data)
                               && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
                               && request.resource.data.data is string
                               && request.resource.data.data.size() <= 1000000
+                              // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
+                              && request.resource.data.data.size() <= getAfter(apP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
-        allow delete: if isSignedIn() && get(/databases/$(database)/documents/apProjects/$(pid)).data.ownerUid == request.auth.uid;
+        allow delete: if isSignedIn() && (!exists(apP(pid)) || get(apP(pid)).data.ownerUid == request.auth.uid);
       }
+    }
+
+    match /apUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // écrit avec la fiche d'un projet (lastPid) : cohérence vérifiée des deux côtés ; jamais au-delà du quota (une baisse reste permise)
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= apQuota(uid))
+                            && (
+                              // première création par le titulaire (somme de ses projets existants)
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              // sinon : la variation correspond exactement à la taille du projet lastPid écrit dans le même lot
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(apP(request.resource.data.lastPid))
+                                      ? (getAfter(apP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(apP(request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(apP(request.resource.data.lastPid)) ? get(apP(request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(apP(request.resource.data.lastPid))
+                                         && get(apP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(apP(request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      // supprimé seulement vide, ou avec le profil du compte (suppression du compte, même lot)
+      allow delete: if isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid)));
     }
 
     function apValidFolder(d) {
       return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
-        && d.ownerUid == request.auth.uid
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
         && isString(d.name, 1, 80)
         && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
         && d.updatedAt == request.time;
     }
 
     match /apFolders/{fid} {
-      allow get, list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data) && request.resource.data.createdAt == request.time;
-      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid
-                    && apValidFolder(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && apFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      // propriétaire : tout ; invité « Modification » : seulement la liste des projets (création d'un projet dans le dossier)
+      allow update: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (apFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
       allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     function apValidShare(sid) {
       let d = request.resource.data;
-      return d.keys().hasAll(['pid', 'email', 'role', 'ownerUid', 'createdAt'])
-        && d.keys().hasOnly(['pid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
-        && sid == d.pid + '__' + d.email
-        && isString(d.pid, 1, 60)
+      let folder = d.get('kind', 'project') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
         && isEmail(d.email) && d.email == d.email.lower()
         && d.role in ['view', 'edit']
         && d.ownerUid == request.auth.uid
         && isString(d.get('name', ''), 0, 120)
         && isString(d.get('ownerName', ''), 0, 160)
-        && get(/databases/$(database)/documents/apProjects/$(d.pid)).data.ownerUid == request.auth.uid;
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(apF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(apP(d.pid)).data.ownerUid == request.auth.uid));
     }
 
     match /apShares/{sid} {
@@ -761,18 +870,35 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail());
     }
 
+    function apValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      let t = folder ? get(apF(d.get('fid', '-'))).data : get(apP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
     match /apGrants/{gid} {
       allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
-      allow create, update: if isSignedIn() && isActiveUser() && apVerified()
-                            && request.resource.data.keys().hasOnly(['pid', 'uid', 'key', 'createdAt'])
-                            && request.resource.data.uid == request.auth.uid
-                            && isString(request.resource.data.pid, 1, 60)
-                            && gid == request.resource.data.pid + '__' + request.auth.uid
-                            && isString(request.resource.data.key, 1, 128)
-                            && request.resource.data.createdAt == request.time
-                            && get(/databases/$(database)/documents/apProjects/$(request.resource.data.pid)).data.get('linkMode', 'off') in ['view', 'edit']
-                            && get(/databases/$(database)/documents/apProjects/$(request.resource.data.pid)).data.get('linkKey', '') == request.resource.data.key;
+      allow create, update: if isSignedIn() && isActiveUser() && apVerified() && apValidGrant(gid);
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /apLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
     match /userSecrets/{uid} {

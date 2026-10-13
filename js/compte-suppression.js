@@ -3,8 +3,8 @@
  * Parcours : 1) l'utilisateur connecté demande la suppression → un lien de confirmation est envoyé à son adresse
  * (Firebase Authentication, « lien de connexion par e-mail ») ; 2) le lien rouvre cette page et reconnecte le compte
  * (connexion récente, exigée pour supprimer un compte) ; 3) le code PIN du compte est demandé (userSecrets/{uid}, haché) ;
- * 4) suppression : projets ARCHIPLAN (et leurs partages), dossiers, accès par lien, fiche client, code PIN, puis profil et
- * licences dans un seul lot (exigence des règles), puis le compte de connexion.
+ * 4) suppression : projets ARCHIPLAN (et leurs partages), dossiers et dossiers partagés, accès par lien, bibliothèque personnelle,
+ * fiche client, code PIN, puis profil, licences et compteur de stockage dans un seul lot (exigence des règles), puis le compte de connexion.
  * Sans serveur (forfait Spark) : réservé aux comptes Particulier actifs non administrateurs, comme « Mon compte » du site.
  * Aucune donnée n'est envoyée ailleurs que dans le projet Firebase de Studio Prism. */
 import {
@@ -179,12 +179,15 @@ async function doDelete(u) {
       ...(await q("apShares", where("email", "==", email))),
       ...(await q("apFolders", where("ownerUid", "==", uid))),
       ...(await q("apGrants", where("uid", "==", uid))),
-      doc(db, "userSecrets", uid), doc(db, "clientProfiles", uid)];
+      doc(db, "userSecrets", uid), doc(db, "clientProfiles", uid), doc(db, "apLibrary", uid)];
     const uniq = [...new Map(others.map((r) => [r.path, r])).values()];
     await commitChunks(uniq, 400);
     // Profil + licences dans un seul lot (les règles n'autorisent la suppression d'une licence que si le profil disparaît avec)
     const lics = await getDocs(query(collection(db, "licenses"), where("userId", "==", uid)));
-    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); b.delete(doc(db, "users", uid)); await b.commit();
+    // Compteur de stockage ARCHIPLAN : supprimé avec le profil (les règles l'exigent)
+    const usage = await getDoc(doc(db, "apUsage", uid)).catch(() => null);
+    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); if (usage && usage.exists()) b.delete(doc(db, "apUsage", uid));
+    b.delete(doc(db, "users", uid)); await b.commit();
     // Compte de connexion (connexion récente grâce au lien email)
     await deleteUser(u);
   } catch (e) {
