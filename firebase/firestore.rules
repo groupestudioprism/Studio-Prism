@@ -17,6 +17,7 @@ rules_version = '2';
 //                  seules pages publiées ; une page archivée ou jamais publiée n'est lisible que d'un administrateur.
 //   pageDrafts     CMS : copie de travail (brouillon) d'une page. ADMINISTRATEUR SEUL (lecture comprise) : le public n'y accède jamais.
 //   projects       CMS : projets / réalisations (brouillon, publié, archivé). Lecture publique des seuls projets publiés.
+//   clientProfiles ARCHIPLAN : fiche client d'un compte (téléphone, profil, société, adresse) — voir en fin de fichier
 //   media          CMS : médiathèque (métadonnées ; les fichiers sont dans Firebase Storage, voir storage.rules). Un média se lit
 //                  par son identifiant s'il est public ; aucune liste pour le public.
 //
@@ -599,6 +600,36 @@ service cloud.firestore {
                     && request.resource.data.createdBy == resource.data.createdBy
                     && request.resource.data.source == resource.data.source;
       allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ ARCHIPLAN : fiche client clientProfiles/{uid}
+    //
+    // Ajout pour ARCHIPLAN (Prism App), qui partage les comptes du site. Coordonnées complémentaires d'un compte :
+    // téléphone, type de profil, société, adresse. Un document par compte, identifiant = uid. Le propriétaire ACTIF lit et écrit
+    // le sien (un compte désactivé n'y accède plus) ; un administrateur actif lit tout. Champs bornés, aucun champ privilégié.
+    // Suppression autorisée au propriétaire (suppression de son compte, RGPD).
+    function validClientProfile() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['phone', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['phone', 'profile', 'company', 'address', 'postalCode', 'city', 'country', 'createdAt', 'updatedAt'])
+        && isString(d.phone, 6, 40)
+        && isString(d.get('profile', ''), 0, 120)
+        && isString(d.get('company', ''), 0, 120)
+        && isString(d.get('address', ''), 0, 200)
+        && isString(d.get('postalCode', ''), 0, 20)
+        && isString(d.get('city', ''), 0, 120)
+        && isString(d.get('country', ''), 0, 120)
+        && d.updatedAt == request.time;
+    }
+
+    match /clientProfiles/{uid} {
+      allow get: if isSignedIn() && ((request.auth.uid == uid && isActiveUser()) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == uid && isActiveUser() && validClientProfile()
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && request.auth.uid == uid && isActiveUser() && validClientProfile()
+                    && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
     // ------------------------------------------------------------ tout le reste : refusé
