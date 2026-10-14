@@ -209,7 +209,8 @@ service cloud.firestore {
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();                               // inclut les requêtes de comptage (count)
-      allow create: if isSignedIn() && request.auth.uid == uid && validNewUser();
+      allow create: if isSignedIn() && request.auth.uid == uid && validNewUser()
+                    && !exists(/databases/$(database)/documents/deletedAccounts/$(uid));   // compte supprimé par l'administration : jamais recréé
       allow update: if isSignedIn() && (
                          (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid)))
                          || (isAdmin() && adminUpdateOk(uid))
@@ -217,10 +218,25 @@ service cloud.firestore {
       // Suppression : uniquement un PARTICULIER ACTIF, de son PROPRE profil (suppression de son compte, js/data.js). Jamais un
       // administrateur, un compte entreprise ni un compte désactivé (sinon la désactivation serait contournée : un profil absent
       // est recréé « actif » à la connexion suivante). Tout autre compte : Cloud Functions (Admin SDK) uniquement.
-      allow delete: if isSignedIn() && request.auth.uid == uid
+      allow delete: if (isSignedIn() && request.auth.uid == uid
                     && resource.data.get('role', '') == 'user'
                     && resource.data.get('status', '') == 'active'
-                    && resource.data.get('accountKind', 'individual') == 'individual';
+                    && resource.data.get('accountKind', 'individual') == 'individual')
+                    // administrateur : jamais son propre compte ni un autre administrateur ; une trace deletedAccounts/{uid} est écrite dans le même lot
+                    || (isAdmin() && request.auth.uid != uid && resource.data.get('role', 'user') != 'admin'
+                        && existsAfter(/databases/$(database)/documents/deletedAccounts/$(uid)));
+    }
+
+    // Trace d'un compte supprimé par l'administration (empêche la recréation automatique du profil à la connexion suivante).
+    match /deletedAccounts/{uid} {
+      allow read, delete: if isAdmin();
+      allow get: if isSignedIn() && request.auth.uid == uid;   // la personne supprimée l'apprend à sa reconnexion
+      allow create, update: if isAdmin() && request.auth.uid != uid
+                            && request.resource.data.keys().hasOnly(['email', 'name', 'deletedAt', 'by'])
+                            && isString(request.resource.data.get('email', ''), 0, 160)
+                            && isString(request.resource.data.get('name', ''), 0, 200)
+                            && request.resource.data.deletedAt == request.time
+                            && request.resource.data.by == request.auth.uid;
     }
 
     // ------------------------------------------------------------ companies/{companyId}
@@ -269,7 +285,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && validNewCompany(companyId);
       allow update: if isAdmin() && adminCompanyUpdateOk();
-      allow delete: if false;                                 // suppression : Cloud Functions (Admin SDK) uniquement
+      allow delete: if isAdmin();                             // administration : avec la suppression du compte du responsable
     }
 
     // ------------------------------------------------------------ catalogue : products/{productId}
@@ -848,7 +864,7 @@ service cloud.firestore {
 
     match /apProjects/{pid} {
       allow get: if apCanRead(pid, resource.data);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
       allow create: if isSignedIn() && isActiveUser()
                     && apValidProject(request.resource.data)
@@ -865,7 +881,7 @@ service cloud.firestore {
                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
                     && apUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
       // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
-      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
       match /content/{cid} {
         allow get: if cid == 'main' && apCanRead(pid, get(apP(pid)).data);
@@ -877,7 +893,7 @@ service cloud.firestore {
                               // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
                               && request.resource.data.data.size() <= getAfter(apP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
-        allow delete: if isSignedIn() && (!exists(apP(pid)) || get(apP(pid)).data.ownerUid == request.auth.uid);
+        allow delete: if isSignedIn() && (!exists(apP(pid)) || get(apP(pid)).data.ownerUid == request.auth.uid || isAdmin());
       }
     }
 
@@ -909,8 +925,9 @@ service cloud.firestore {
                                             == -get(apP(request.resource.data.lastPid)).data.get('size', 0))))
                             );
       // supprimé seulement vide, ou avec le profil du compte (suppression du compte, même lot)
-      allow delete: if isSignedIn() && request.auth.uid == uid
-                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid)));
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
     }
 
     function apValidFolder(d) {
@@ -932,7 +949,7 @@ service cloud.firestore {
 
     match /apFolders/{fid} {
       allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && apFolderRole(fid) in ['view', 'edit']));
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.createdAt == request.time;
@@ -944,7 +961,7 @@ service cloud.firestore {
                         || (apFolderRole(fid) == 'edit'
                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
                             && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
-      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
 
     function apValidShare(sid) {
@@ -966,10 +983,10 @@ service cloud.firestore {
     }
 
     match /apShares/{sid} {
-      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail());
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail() || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && apValidShare(sid) && request.resource.data.createdAt == request.time;
       allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && apValidShare(sid);
-      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail());
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail() || isAdmin());
     }
 
     function apValidGrant(gid) {
@@ -988,9 +1005,9 @@ service cloud.firestore {
     }
 
     match /apGrants/{gid} {
-      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create, update: if isSignedIn() && isActiveUser() && apVerified() && apValidGrant(gid);
-      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
     match /apLibrary/{uid} {
@@ -1000,7 +1017,7 @@ service cloud.firestore {
                             && request.resource.data.data is string
                             && request.resource.data.data.size() <= 900000
                             && request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
     match /userSecrets/{uid} {
@@ -1012,7 +1029,7 @@ service cloud.firestore {
                             && request.resource.data.pinIter is int
                             && request.resource.data.pinIter >= 100000 && request.resource.data.pinIter <= 1000000
                             && request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
     // ------------------------------------------------------------ tout le reste : refusé

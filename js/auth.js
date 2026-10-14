@@ -140,6 +140,15 @@ async function readProfile(user) {
   }
   log(`Firestore exists: ${snap.exists()}`);
   if (!snap.exists()) {
+    // Compte supprimé depuis l'administration : la personne se reconnecte → son compte de connexion est supprimé à son tour
+    // (une connexion récente l'autorise), ce qui libère aussi l'adresse e-mail. La trace deletedAccounts/{uid} reste.
+    let gone = false;
+    try { gone = (await withTimeout(getDoc(doc(db, "deletedAccounts", user.uid)), FIRESTORE_TIMEOUT_MS, "app/firestore-timeout")).exists(); } catch (e) { gone = false; }
+    if (gone) {
+      log("Compte supprimé par l'administration → suppression du compte de connexion");
+      try { await user.delete(); } catch (e) { log(`auth delete: ${e.code || e}`); }
+      throw appError("app/account-deleted");
+    }
     // Compte Authentication sans profil Firestore (créé depuis la console, ou avant Firestore) : profil créé automatiquement.
     log("Firestore: profil absent → création automatique du profil par défaut (user / free / active)");
     try {
@@ -173,7 +182,7 @@ async function loadProfile(user) {
     log("profile state emitted");
   } catch (err) {
     if (mine !== seq) return;
-    if (err.code === "app/profile-missing" || err.code === "app/suspended") return forceOut(err.code);
+    if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted") return forceOut(err.code);
     console.error("[Studio Prism] Lecture du profil impossible :", err);
     emit({ status: "error", user: { uid: user.uid, email: user.email }, profile: null, notice: err.code || "unknown" });
   }
@@ -316,7 +325,7 @@ export async function signIn({ email, password, remember }) {
     log(`signIn failed: ${err.code || "unknown"}${err.step ? ` (étape ${err.step})` : ""}`);
     if (user) {
       // Authentification OK mais profil inutilisable : on referme la session Firebase.
-      if (err.code === "app/profile-missing" || err.code === "app/suspended") pendingNotice = err.code;
+      if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted") pendingNotice = err.code;
       await signOut(auth).catch(() => {});
     }
     throw err;

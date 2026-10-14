@@ -303,9 +303,9 @@
         : (u.status === 'active'
             ? `<button class="btn b4" data-a="adm-deact" data-uid="${esc(uid)}">Désactiver le compte</button>`
             : `<button class="btn b1" data-a="adm-react" data-uid="${esc(uid)}">Réactiver le compte</button>`) +
-          (K.serverOn()
-            ? `<button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(uid)}">Supprimer le compte</button>`
-            : `<span class="acc-h">Suppression définitive : indisponible sans serveur. <button type="button" class="lk" data-a="adm-spark-info">Pourquoi ?</button></span>`)) + `</div>`, true);
+          (u.role === 'admin'
+            ? `<span class="acc-h">Compte administrateur : passez-le d’abord en « Utilisateur » (Modifier le compte) pour pouvoir le supprimer.</span>`
+            : `<button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(uid)}">Supprimer le compte</button>`)) + `</div>`, true);
     try {
       const d = await D();
       if (!AD.products) AD.products = await d.adminListProducts();
@@ -475,21 +475,25 @@
   };
   const regUrl = () => location.href.split('#')[0] + '#/compte/inscription';
   A['adm-add-user'] = () => {
-    if (!K.serverOn()) {
+    if (false) {
       pmodal(`<h3>Ajouter un utilisateur</h3><p>Créer un compte à la place d’un utilisateur exige un accès privilégié (serveur), indisponible avec le forfait gratuit Firebase Spark. Le site n’en a pas besoin pour fonctionner.</p>` +
         `<p><b>Procédure gratuite :</b> envoyez à la personne l’adresse d’inscription ci-dessous. Une fois son compte créé, il apparaît dans cette liste (rechargez-la) et vous pouvez régler son abonnement, son rôle, son statut et ses licences.</p>` +
         `<p><input id="reg-url" readonly value="${esc(regUrl())}" aria-label="Adresse de la page d’inscription"></p><p><button type="button" class="btn b1" data-a="adm-copy-reg">Copier l’adresse</button></p>`);
       return;
     }
-    pmodal(`<h3>Ajouter un utilisateur</h3><p class="mut">Le compte est créé côté serveur. Aucun mot de passe n’est défini ici : l’utilisateur reçoit un e-mail pour choisir le sien.</p>` +
+    pmodal(`<h3>Ajouter un utilisateur</h3><p class="mut">Le compte est créé tout de suite. Aucun mot de passe n’est défini ni affiché ici : la personne reçoit un e-mail pour choisir le sien, puis se connecte normalement. Vous pouvez ensuite lui ajouter des licences depuis sa fiche.</p>` +
       `<form data-f="adm-newuser" novalidate><div class="row">${fld('nu-first', 'Prénom', inp('nu-first', 'text', '', 'maxlength="80" autocomplete="off"'))}${fld('nu-last', 'Nom', inp('nu-last', 'text', '', 'maxlength="80" autocomplete="off"'))}</div>` +
       fld('nu-email', 'Adresse e-mail', inp('nu-email', 'email', '', 'maxlength="160" autocomplete="off" inputmode="email"')) +
       `<div class="row">${fld('nu-kind', 'Type de compte', sel('nu-kind', [['individual', 'Particulier'], ['company', 'Entreprise']], 'individual'))}` +
       `${fld('nu-sub', 'Abonnement Studio Prism', sel('nu-sub', Object.keys(L.sub).map((k) => [k, L.sub[k]]), 'free'))}</div>` +
       `<div id="nu-co" hidden>${fld('nu-coname', 'Nom de l’entreprise', inp('nu-coname', 'text', '', 'maxlength="120" autocomplete="off"'))}` +
       `<div class="row">${fld('nu-tier', 'Nombre de comptes', sel('nu-tier', [['', 'Choisir…']].concat(TIERS.map((t) => [t.id, t.label])), ''))}${fld('nu-job', 'Fonction <span class="mut">(facultatif)</span>', inp('nu-job', 'text', '', 'maxlength="80" autocomplete="off"'))}</div></div>` +
+      `<div class="row">${fld('nu-org', 'Établissement <span class="mut">(facultatif)</span>', sel('nu-org', [['', 'Aucun']], ''))}${fld('nu-role', 'Profil', sel('nu-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], ''))}</div>` +
+      fld('nu-class', 'Classe <span class="mut">(facultatif)</span>', inp('nu-class', 'text', '', 'maxlength="60" autocomplete="off"')) +
       `<p class="fe" id="nu-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">Créer l’utilisateur</button></p></form>`, true);
+    import('./orgsdata.js').then((o) => o.adminListOrgs()).then((orgs) => { const s2 = document.getElementById('nu-org'); if (s2) orgs.forEach((o) => s2.add(new Option(o.name, o.id))); NU_ORGS = orgs; }).catch(() => {});
   };
+  let NU_ORGS = [];
 
   document.addEventListener('change', (e) => {
     if (e.target.id !== 'nu-kind') return;
@@ -513,9 +517,14 @@
       const d = await D();
       const payload = { firstName: g('nu-first'), lastName: g('nu-last'), email: em, accountKind: co ? 'company' : 'individual', subscription: g('nu-sub') };
       if (co) payload.company = { name: g('nu-coname'), userRange: g('nu-tier'), jobTitle: g('nu-job'), email: em };
-      await d.createUserByAdmin(payload);
-      let mailed = true;
-      try { await (await K.loadAuth()).resetPassword(em); } catch (e2) { mailed = false; console.warn('[Studio Prism] E-mail d’initialisation non envoyé :', e2); }
+      if (co) { const t = TIERS.find((x) => x.id === payload.company.userRange); payload.company.userLimit = t ? t.limit : 1; }
+      let mailed = true, uid = '';
+      if (K.serverOn()) {
+        const r = await d.createUserByAdmin(payload); uid = r && r.uid || '';
+        try { await (await K.loadAuth()).resetPassword(em); } catch (e2) { mailed = false; console.warn('[Studio Prism] E-mail d’initialisation non envoyé :', e2); }
+      } else { const r = await d.createUserNoServer(payload); uid = r.uid; mailed = r.mailed; }
+      const oid = fm.elements['nu-org'] ? fm.elements['nu-org'].value : '';
+      if (uid && oid) { try { const o = await import('./orgsdata.js'); await o.adminSetUserOrg(uid, NU_ORGS.find((x) => x.id === oid) || { id: oid, name: '' }, g('nu-role'), g('nu-class')); } catch (e3) { console.warn('[Studio Prism] Rattachement à l’établissement :', e3); } }
       A.x();
       toast(mailed ? 'Utilisateur créé. Un e-mail lui a été envoyé pour choisir son mot de passe.' : 'Utilisateur créé, mais l’e-mail n’a pas pu être envoyé : utilisez « Envoyer un e-mail de réinitialisation » depuis sa fiche.');
       A['adm-retry']();
@@ -578,8 +587,9 @@
     return `<h3>Gestion des comptes : état du service</h3><p class="mut">Studio Prism fonctionne <b>sans serveur</b>, avec le forfait gratuit Firebase Spark : aucune Cloud Function n’est utilisée et aucune facturation n’est possible de ce fait.</p>` +
       `<h4 class="acc-h3">Disponible</h4><ul class="svc-l">${li(true, 'Connexion, inscription, réinitialisation du mot de passe par e-mail.')}${li(true, 'Consultation et modification des comptes (abonnement, rôle).')}` +
       `${li(true, '<b>Désactivation</b> et réactivation d’un compte : les données sont conservées. Un compte désactivé ne peut plus se connecter ni accéder à ses licences et à son entreprise.')}` +
-      `${li(true, 'Licences, catalogue, offres, pages, projets et médiathèque.')}${li(true, 'Suppression de son propre compte par un particulier, depuis « Mon compte ».')}</ul>` +
-      `<h4 class="acc-h3">Indisponible : accès privilégié (serveur) requis</h4><ul class="svc-l">${li(false, '<b>Suppression définitive</b> du compte de connexion d’un autre utilisateur.')}${li(false, 'Création d’un compte à la place d’un utilisateur (il s’inscrit lui-même).')}</ul>` +
+      `${li(true, 'Licences, catalogue, offres, établissements et pages.')}${li(true, 'Suppression de son propre compte par un particulier, depuis « Mon compte ».')}</ul>` +
+      `${li(true, '<b>Ajout d’un utilisateur</b> par l’administration : la personne reçoit un e-mail pour choisir son mot de passe.')}${li(true, '<b>Suppression d’un compte</b> : profil, licences, projets ARCHIPLAN, partages ; la connexion devient impossible.')}</ul>` +
+      `<h4 class="acc-h3">Limite du forfait gratuit</h4><ul class="svc-l">${li(false, 'L’adresse e-mail d’un compte supprimé reste enregistrée dans Firebase Authentication (pour la libérer : console Firebase › Authentication).')}</ul>` +
       `<p class="mut"><b>Désactiver n’est pas supprimer</b> : le compte de connexion Firebase Authentication continue d’exister. Pour le supprimer vraiment, utilisez la console Firebase › Authentication (gratuit, manuel).</p>` +
       `<p><button type="button" class="btn b4" data-a="adm-svc-check">Vérifier si les fonctions serveur sont déployées (facultatif)</button></p>${DIAG_BOX}`;
   };
@@ -604,18 +614,19 @@
     if (r.authDeleted) bits.push('compte de connexion');
     if (r.profileDeleted) bits.push('profil');
     if (r.licensesDeleted) bits.push(r.licensesDeleted + (r.licensesDeleted > 1 ? ' licences' : ' licence'));
+    if (r.projectsDeleted) bits.push(r.projectsDeleted + (r.projectsDeleted > 1 ? ' projets ARCHIPLAN' : ' projet ARCHIPLAN'));
     if (r.companyDeleted) bits.push('entreprise (plus aucun membre)');
     return (bits.length ? 'Supprimé : ' + bits.join(', ') + '. ' : '') + (r.companyOwnerTransferred ? 'L’entreprise est conservée (d’autres comptes y sont rattachés) ; sa responsabilité a été transférée. ' : '');
   };
 
   A['adm-del-user'] = (btn) => {
-    if (!K.serverOn()) { A['adm-spark-info'](); return; }   // sans serveur : jamais d'appel de fonction, explication à la place
     const u = findUser(btn.dataset.uid);
     if (!u) return;
     if (st.auth.user && u.uid === st.auth.user.uid) { toast('Vous ne pouvez pas supprimer votre propre compte depuis l’administration.'); return; }
     const isAdm = u.role === 'admin';
     pmodal(`<h3>Supprimer le compte</h3><p><b>Supprimer définitivement le compte de ${esc(fullName(u))} (${esc(u.email)}) ?</b></p>` +
-      `<p class="mut" style="margin:8px 0">Son compte de connexion, son profil et ses licences seront supprimés. Son entreprise n’est supprimée que si plus aucun autre compte n’y est rattaché. Cette action est irréversible.</p>` +
+      (K.serverOn() ? `<p class="mut" style="margin:8px 0">Son compte de connexion, son profil et ses licences seront supprimés. Son entreprise n’est supprimée que si plus aucun autre compte n’y est rattaché. Cette action est irréversible.</p>`
+        : `<p class="mut" style="margin:8px 0">Seront supprimés : son profil, ses licences, ses projets et dossiers ARCHIPLAN, ses partages et son entreprise (si plus aucun autre compte n’y est rattaché). La personne ne pourra plus se connecter. Cette action est irréversible.</p><p class="mut" style="margin:8px 0">Seule son adresse e-mail reste enregistrée dans Firebase Authentication (forfait gratuit) : pour qu’elle puisse se réinscrire un jour avec la même adresse, supprimez-la aussi dans la console Firebase › Authentication.</p>`) +
       (isAdm ? `<p class="fe" style="margin:8px 0" role="note">⚠ Ce compte est <b>administrateur</b>. Pour confirmer, tapez SUPPRIMER :</p><p><input id="du-conf" autocomplete="off" aria-label="Tapez SUPPRIMER pour confirmer" placeholder="SUPPRIMER" maxlength="20"></p>` : '') +
       `<p class="fe" id="du-err" role="alert"></p><div id="du-help"></div><p style="margin-top:12px"><button class="btn btn-danger" data-a="adm-del-ok" data-uid="${esc(u.uid)}">Supprimer définitivement</button> <button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}">Annuler</button></p>`);
   };
@@ -632,7 +643,7 @@
     btn.disabled = true;
     btn.textContent = 'Suppression…';
     try {
-      const r = await (await D()).deleteUserByAdmin(uid, u.email);
+      const r = K.serverOn() ? await (await D()).deleteUserByAdmin(uid, u.email) : await (await D()).deleteUserNoServer(uid, u.email);
       if (!r || r.ok !== true) throw Object.assign(new Error('app/functions-unreachable'), { code: 'app/functions-unreachable' });   // jamais de succès sans confirmation explicite du serveur
       AD.users = AD.users.filter((x) => x.uid !== uid);
       delete AD.lic[uid];

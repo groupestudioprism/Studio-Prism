@@ -17,7 +17,8 @@
  */
 import {
   auth, db, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, query, where, limit,
-  serverTimestamp, Timestamp, reauthenticateWithCredential, EmailAuthProvider, updatePassword, deleteUser
+  serverTimestamp, Timestamp, reauthenticateWithCredential, EmailAuthProvider, updatePassword, deleteUser,
+  tempApp, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut
 } from "./firebase.js";
 
 const fail = (code, extra) => Object.assign(new Error(code), { code }, extra || {});
@@ -315,6 +316,72 @@ export const createUserByAdmin = (payload) => call("adminCreateUser", payload);
 /* Supprime le compte côté serveur (Authentication, profil, licences ; entreprise seulement si plus aucun membre). `email` = adresse
    affichée à l'administrateur : le serveur refuse si elle ne correspond plus au compte (liste périmée). Renvoie un résumé explicite. */
 export const deleteUserByAdmin = (uid, email) => call("adminDeleteUser", { uid, email: email || "" });
+/* ------------------------------------------------------------------ gestion des comptes SANS serveur (forfait gratuit Spark)
+ *
+ * CRÉER un compte pour quelqu'un : la création se fait sur une instance Firebase temporaire (session en mémoire) : l'administrateur
+ * reste connecté. Le nouveau compte écrit lui-même son profil (mêmes règles que l'inscription), un mot de passe aléatoire jamais
+ * affiché est utilisé, puis Firebase envoie à la personne l'e-mail « choisir mon mot de passe ». Personne ne connaît donc le mot
+ * de passe à part l'utilisateur.
+ *
+ * SUPPRIMER un compte : profil, licences, projets ARCHIPLAN (fiches, contenus, dossiers, partages, stockage), entreprise si plus
+ * aucun membre, et une trace deletedAccounts/{uid} qui empêche la recréation du profil. La connexion devient impossible (profil
+ * absent → déconnexion forcée sur le site et dans les applications). Seule l'adresse e-mail reste enregistrée dans Firebase
+ * Authentication : pour la libérer (réinscription), la supprimer dans la console Firebase › Authentication. */
+const randomPassword = () => { const a = crypto.getRandomValues(new Uint8Array(24)); return "Sp-" + Array.from(a, (x) => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[x % 56]).join("") + "!9"; };
+export async function createUserNoServer(p) {
+  const t = tempApp();
+  try {
+    const cred = await createUserWithEmailAndPassword(t.auth, p.email, randomPassword());
+    const uid = cred.user.uid, b = writeBatch(t.db);
+    const profile = { firstName: p.firstName, lastName: p.lastName || "", email: p.email, accountKind: p.accountKind || "individual", subscription: "free",
+      role: "user", status: "active", createdAt: serverTimestamp(), updatedAt: serverTimestamp(), lastLogin: serverTimestamp() };
+    if (profile.accountKind === "company" && p.company) {
+      const tier = p.company.userRange, cref = doc(collection(t.db, "companies"));
+      b.set(cref, { name: p.company.name, email: p.company.email || p.email, ownerUid: uid, userRange: tier, userLimit: p.company.userLimit, subscription: "free", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      Object.assign(profile, { companyId: cref.id, companyName: p.company.name, companyEmail: p.company.email || p.email, companyUserRange: tier, companyUserLimit: p.company.userLimit });
+      if (p.company.jobTitle) profile.jobTitle = p.company.jobTitle;
+    }
+    b.set(doc(t.db, "users", uid), profile);
+    await b.commit();
+    let mailed = true;
+    try { await sendPasswordResetEmail(t.auth, p.email); } catch (e) { mailed = false; }
+    await signOut(t.auth).catch(() => {});
+    if (p.subscription && p.subscription !== "free") await updateDoc(doc(db, "users", uid), { subscription: p.subscription, updatedAt: serverTimestamp() });
+    return { uid, mailed };
+  } catch (e) {
+    if (e && e.code === "auth/email-already-in-use") throw fail("app/email-taken");
+    throw e;
+  } finally { t.close(); }
+}
+export async function deleteUserNoServer(uid, email) {
+  if (auth.currentUser && auth.currentUser.uid === uid) throw fail("app/self-delete-admin");
+  const ps = await getDoc(doc(db, "users", uid));
+  if (!ps.exists()) throw fail("app/profile-missing");
+  const u = ps.data();
+  if (u.role === "admin") throw fail("app/delete-admin");
+  if (email && String(u.email || "").toLowerCase() !== String(email).toLowerCase()) throw fail("app/stale-list");
+  const q = (c, f) => getDocs(query(collection(db, c), where(f, "==", uid))).catch(() => ({ docs: [] }));
+  const [lics, projs, folds, shares, grants] = await Promise.all([q("licenses", "userId"), q("apProjects", "ownerUid"), q("apFolders", "ownerUid"), q("apShares", "ownerUid"), q("apGrants", "uid")]);
+  const run = async (refs, n = 8) => { for (let i = 0; i < refs.length; i += n) { const b = writeBatch(db); refs.slice(i, i + n).forEach((r) => b.delete(r)); await b.commit(); } };
+  // projets ARCHIPLAN : contenus puis fiches ; dossiers, partages, accès par lien ; bibliothèque, stockage et code PIN
+  for (const d of projs.docs) await deleteDoc(doc(db, "apProjects", d.id, "content", "main")).catch(() => {});
+  await run(projs.docs.map((d) => d.ref));
+  await run([...folds.docs, ...shares.docs, ...grants.docs].map((d) => d.ref));
+  await run(["apUsage", "apLibrary", "userSecrets"].map((c) => doc(db, c, uid)), 3);
+  await run(lics.docs.map((d) => d.ref));
+  // entreprise : supprimée seulement si plus aucun autre membre
+  let companyDeleted = false;
+  const b = writeBatch(db);
+  if (u.companyId) {
+    const mem = await getDocs(query(collection(db, "users"), where("companyId", "==", u.companyId))).catch(() => ({ docs: [] }));
+    if (!mem.docs.some((d) => d.id !== uid)) { b.delete(doc(db, "companies", u.companyId)); companyDeleted = true; }
+  }
+  b.set(doc(db, "deletedAccounts", uid), { email: String(u.email || "").toLowerCase(), name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), deletedAt: serverTimestamp(), by: auth.currentUser ? auth.currentUser.uid : "" });
+  b.delete(doc(db, "users", uid));
+  await b.commit();
+  return { ok: true, authDeleted: false, profileDeleted: true, licensesDeleted: lics.docs.length, projectsDeleted: projs.docs.length, companyDeleted };
+}
+
 /* Diagnostic du service : { reachable, ... } ; ne lève jamais d'erreur. */
 export async function checkAccountsService() {
   const t0 = Date.now();

@@ -8,8 +8,8 @@
  * - Firebase Analytics n'est volontairement PAS activé : il déposerait des identifiants de suivi sans recueil du
  *   consentement. `measurementId` reste dans la configuration pour pouvoir l'activer plus tard avec un bandeau de choix.
  */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, initializeAuth, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 export const firebaseConfig = {
@@ -27,6 +27,16 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export default app;
+
+/* Instance Firebase TEMPORAIRE et isolée (session en mémoire seulement) : permet à un administrateur de créer le compte de
+   quelqu'un d'autre sans être déconnecté (la création connecte le nouveau compte sur CETTE instance, pas sur la principale).
+   Toujours refermer avec close() : la session temporaire disparaît, rien n'est conservé dans le navigateur. */
+export function tempApp() {
+  const a = initializeApp(firebaseConfig, "sp-admin-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const t = { app: a, auth: initializeAuth(a, { persistence: inMemoryPersistence }), db: getFirestore(a) };
+  t.close = () => deleteApp(a).catch(() => {});
+  return t;
+}
 
 /* Fonctions du SDK réexportées : les autres modules n'importent que ./firebase.js. */
 export {

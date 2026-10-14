@@ -44,6 +44,7 @@
     'auth/operation-not-allowed': 'La connexion par e-mail et mot de passe n’est pas activée pour ce projet Firebase.',
     'app/suspended': 'Ce compte est désactivé. Contactez Studio Prism pour le réactiver.',
     'app/profile-missing': 'Votre profil Studio Prism est introuvable. Contactez Studio Prism.',
+    'app/account-deleted': 'Ce compte a été supprimé par Studio Prism. Vous pouvez créer un nouveau compte avec la même adresse e-mail.',
     'app/timeout': 'Le service met trop de temps à répondre. Réessayez.',
     'app/auth-timeout': 'Firebase Authentication ne répond pas (délai dépassé). Vérifiez votre connexion internet et les éventuels bloqueurs de contenus, puis réessayez.',
     'app/firestore-timeout': 'Authentification réussie, mais la lecture de votre profil (Firestore) ne répond pas : délai de 15 secondes dépassé. Vérifiez que la base Firestore est créée dans le projet Firebase et que le navigateur peut joindre firestore.googleapis.com (réseau, bloqueur de contenus).',
@@ -66,6 +67,10 @@
     'app/functions-unavailable': 'Le service de gestion des comptes (fonctions serveur) est indisponible ou n’est pas encore déployé. Réessayez plus tard ou contactez Studio Prism.',
     'not-found': 'Élément introuvable : il a peut-être été supprimé.',
     'unavailable': 'Service momentanément indisponible. Vérifiez votre connexion puis réessayez.',
+    'app/email-taken': 'Cette adresse e-mail a déjà un compte de connexion. Si ce compte a été supprimé depuis l’administration, supprimez aussi l’adresse dans la console Firebase › Authentication, puis recommencez.',
+    'app/delete-admin': 'Un compte administrateur ne peut pas être supprimé : passez-le d’abord en « Utilisateur ».',
+    'app/stale-list': 'La liste n’est plus à jour (adresse e-mail différente) : rechargez la page puis recommencez.',
+    'app/self-delete-admin': 'Vous ne pouvez pas supprimer votre propre compte depuis l’administration.',
     'app/server-disabled': 'Cette opération nécessite un service serveur (Cloud Functions) qui n’est pas activé sur ce site : le site fonctionne avec le forfait gratuit Firebase Spark. Vous pouvez désactiver le compte à la place ; la suppression définitive se fait dans la console Firebase.',
     'app/self-delete-unavailable': 'Ce compte ne peut pas être supprimé depuis le site. Contactez Studio Prism.',
     'app/self-delete-partial': 'Vos données (profil et licences) ont été supprimées, mais la fermeture de votre compte de connexion a échoué. Reconnectez-vous puis relancez « Supprimer mon compte » pour terminer.',
@@ -265,7 +270,7 @@
 <p class="aul">Applications · BIM / XR · Expériences interactives · Modélisation et impression 3D</p>
 <ul class="uxl acc-pts"><li>Un seul compte pour les services Studio Prism</li><li>ArchiVision vous identifie avec ce compte</li><li>Pour les particuliers comme pour les entreprises</li></ul>
 </aside>
-<div class="auf acc-main"><p class="crumb">${av ? '<a href="#/projets/archivision">ArchiVision</a> / Compte Studio Prism' : '<a href="#/">Studio Prism</a> / Compte'}</p>
+<div class="auf acc-main"><p class="crumb">${av ? '<a href="#/archivision">ArchiVision</a> / Compte Studio Prism' : '<a href="#/">Studio Prism</a> / Compte'}</p>
 <h1>${up ? 'Créer votre compte Studio Prism' : 'Se connecter à Studio Prism'}</h1>
 <p class="lead">${up ? 'Créez votre espace Studio Prism pour retrouver vos services, applications et projets au même endroit.' : 'Accédez à votre espace Studio Prism et retrouvez vos services et applications.'}</p>
 ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre compte Studio Prism vous y identifie, sans compte séparé.</p>' : ''}
@@ -371,7 +376,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const SUBCLS = { free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' };
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
-  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Établissements et clés', '#/admin/etablissements'], ['pages', 'Pages', '#/admin/pages'], ['projects', 'Projets', '#/admin/projets'], ['media', 'Médiathèque', '#/admin/medias']];
+  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Établissements et clés', '#/admin/etablissements'], ['pages', 'Pages', '#/admin/pages']];
   const adminShell = (inner, tab) => `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><div class="k">Comptes, produits, contenu du site et accès</div><h1>Administration Studio Prism</h1>` +
     `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>${inner}</div></section>`;
 
@@ -532,7 +537,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
       cell('Créé le', fdate(u.createdAt), 'adm-d') +
       cell('Dernière connexion', fdate(u.lastLogin, true), 'adm-d') +
       cell('Statut', badge(u.status === 'active' ? 'bd-ok' : 'bd-off', L.status[u.status] || u.status || '—')) +
-      `<td role="cell" class="adm-act"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}" aria-label="Ouvrir la fiche de ${esc(fullName(u))}">Fiche</button> <button class="btn b4" data-a="adm-edit" data-uid="${esc(u.uid)}" aria-label="Modifier le compte de ${esc(fullName(u))}">Modifier</button></td></tr>`;
+      `<td role="cell" class="adm-act"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}" aria-label="Ouvrir la fiche de ${esc(fullName(u))}">Fiche</button> <button class="btn b4" data-a="adm-edit" data-uid="${esc(u.uid)}" aria-label="Modifier le compte de ${esc(fullName(u))}">Modifier</button>${u.role !== 'admin' && !(st.auth.user && st.auth.user.uid === u.uid) ? ` <button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(u.uid)}" aria-label="Supprimer le compte de ${esc(fullName(u))}">Supprimer</button>` : ''}</td></tr>`;
   }
 
   function renderAdmin() {
