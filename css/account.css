@@ -319,3 +319,6 @@
 .svc-l{list-style:none;padding:0;margin:0 0 8px}.svc-l li{display:flex;gap:8px;padding:5px 0;font-size:14px;line-height:1.45}
 .svc-l li span{font-weight:700;flex:0 0 auto}.svc-ok span{color:var(--turq)}.svc-ko span{color:#b3261e}
 .svc-diag code{background:var(--card);padding:1px 6px;border-radius:3px;font-size:13px;word-break:break-all}
+/* établissements et clés de licence */
+.kcode{font:600 13px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;background:var(--bg,#F2F7FA);border:1px solid var(--line);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.org-t,.key-t{min-width:900px}

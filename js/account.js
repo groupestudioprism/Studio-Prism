@@ -99,12 +99,13 @@
 
   /* Le SDK n'est pas bloquant : chargé tout de suite sur les pages de compte, au repos sur les autres pages. */
   const guarded = (k) => k === 'compte' || /^admin(\/|$)/.test(k);
-  const live = (k) => guarded(k) || /^abonnements(\/|$)/.test(k) || /^produits\/./.test(k); // pages qui dépendent de l'état de connexion (boutons des offres)
+  const live = (k) => guarded(k) || k === 'activer' || /^abonnements(\/|$)/.test(k) || /^produits\/./.test(k); // pages qui dépendent de l'état de connexion (boutons des offres)
   if (AUTH_ROUTES.has(CUR) || live(CUR)) loadAuth().catch(() => {});
   else (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(() => loadAuth().catch(() => {}), { timeout: 3000 });
 
   /* Où envoyer l'utilisateur après connexion : l'administration pour un administrateur, « Mon compte » pour les autres. */
   function spHome(profile) {
+    try { if (sessionStorage.getItem('sp.pendingKey')) return '#/activer'; } catch (e) { /* stockage indisponible */ }   // clé saisie avant la connexion
     return profile.role === 'admin' ? '#/admin' : '#/compte';
   }
 
@@ -370,7 +371,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const SUBCLS = { free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' };
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
-  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['pages', 'Pages', '#/admin/pages'], ['projects', 'Projets', '#/admin/projets'], ['media', 'Médiathèque', '#/admin/medias']];
+  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Établissements et clés', '#/admin/etablissements'], ['pages', 'Pages', '#/admin/pages'], ['projects', 'Projets', '#/admin/projets'], ['media', 'Médiathèque', '#/admin/medias']];
   const adminShell = (inner, tab) => `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><div class="k">Comptes, produits, contenu du site et accès</div><h1>Administration Studio Prism</h1>` +
     `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>${inner}</div></section>`;
 
@@ -489,7 +490,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
     const q = AD.q.trim().toLowerCase();
     return AD.users.filter((u) => (!AD.kind || u.accountKind === AD.kind) && (!AD.sub || u.subscription === AD.sub) &&
       (!AD.role || u.role === AD.role) && (!AD.status || u.status === AD.status) && licenseMatch(u) &&
-      (!q || [u.firstName, u.lastName, u.firstName + ' ' + u.lastName, u.email, u.companyName].some((v) => String(v || '').toLowerCase().indexOf(q) >= 0)));
+      (!q || [u.firstName, u.lastName, u.firstName + ' ' + u.lastName, u.email, u.companyName, u.orgName].some((v) => String(v || '').toLowerCase().indexOf(q) >= 0)));
   }
 
   const typeLabel = (t) => L.sub[t] || String(t || '—').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
@@ -523,7 +524,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     return `<tr role="row">` +
       cell('Utilisateur', `<b>${esc(fullName(u))}</b><small class="adm-mail">${esc(u.email)}</small>`) +
-      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}`) +
+      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}</small>` : ''}`) +
       cell('Abonnement', badge(SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')) +
       cell('Rôle', badge(u.role === 'admin' ? 'bd-admin' : 'bd-user', L.role[u.role] || u.role || '—')) +
       cell('Applications / Licences', licCell(u), 'adm-l') +

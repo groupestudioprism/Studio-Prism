@@ -129,6 +129,7 @@
       `<section class="panel acc-sec" aria-labelledby="s-profil"><h2 id="s-profil" class="lh">Profil</h2>${spec([
         ['Prénom', esc(p.firstName || '—')], ['Nom', esc(p.lastName || '—')], ['E-mail', esc(p.email || '—')],
         ['Type de compte', esc(L.kind[p.accountKind] || '—')], ['Entreprise', esc((co && p.companyName) || '—')],
+        ...(p.orgName ? [['Établissement', esc(p.orgName)]] : []),
         ['Fonction', esc((co && p.jobTitle) || '—')], ['Compte créé le', esc(fdate(p.createdAt))], ['Dernière connexion', esc(fdate(p.lastLogin, true))]
       ])}</section>` +
       `<section class="panel acc-sec" aria-labelledby="s-abo"><h2 id="s-abo" class="lh">Mon abonnement</h2>${spec([
@@ -136,7 +137,7 @@
       ])}<p class="mt2" style="margin-top:10px">Votre abonnement est géré par Studio Prism : il ne peut pas être modifié depuis cette page.</p><div id="acc-sum" class="acc-sum" aria-live="polite"></div>` +
       `<p style="margin-top:14px"><a class="btn b4 ar" href="#/abonnements">Voir tous les abonnements</a></p></section></div>` +
       `<section class="acc-sec" aria-labelledby="s-apps"><h2 id="s-apps" class="lh">Mes applications</h2><div id="acc-apps" class="acc-apps" aria-live="polite"><p class="mut">Chargement de vos applications…</p></div></section>` +
-      `<section class="acc-sec" aria-labelledby="s-lic"><h2 id="s-lic" class="lh">Mes licences</h2><div id="acc-lics" aria-live="polite"><p class="mut">Chargement de vos licences…</p></div></section>` +
+      `<section class="acc-sec" aria-labelledby="s-lic"><div class="fiche-h"><h2 id="s-lic" class="lh">Mes licences</h2><a class="btn b4" href="#/activer">Activer une clé de licence</a></div><div id="acc-lics" aria-live="polite"><p class="mut">Chargement de vos licences…</p></div></section>` +
       securityHtml(p)));
     const key = CUR;
     Promise.all([loadMine(true), CATLG.load()]).then(([lics]) => { if (CUR === key) fillAccount(lics); })
@@ -284,7 +285,7 @@
     if (!u) return;
     const self = !!st.auth.user && u.uid === st.auth.user.uid, co = u.accountKind === 'company';
     const m = pmodal(`<h3>Fiche utilisateur</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>${spec([
-      ['Type de compte', esc(L.kind[u.accountKind] || '—')], ['Entreprise', esc((co && u.companyName) || '—')], ['Fonction', esc((co && u.jobTitle) || '—')],
+      ['Type de compte', esc(L.kind[u.accountKind] || '—')], ['Entreprise', esc((co && u.companyName) || '—')], ['Établissement', esc(u.orgName || '—')], ['Fonction', esc((co && u.jobTitle) || '—')],
       ['Abonnement Studio Prism', badge(K.SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')],
       ['Rôle', esc(L.role[u.role] || u.role || '—')], ['Statut', badge(u.status === 'active' ? 'bd-ok' : 'bd-off', L.status[u.status] || u.status || '—')],
       ['Compte créé le', esc(fdate(u.createdAt))], ['Dernière connexion', esc(fdate(u.lastLogin, true))]

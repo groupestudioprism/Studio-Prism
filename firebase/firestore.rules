@@ -181,12 +181,27 @@ service cloud.firestore {
     function adminUpdateOk(uid) {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
-      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt'])
+      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName'])
         && d.updatedAt == request.time
+        && isString(d.get('orgId', ''), 0, 40) && isString(d.get('orgName', ''), 0, 120)
+        && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
         && d.status in ['active', 'suspended']
         && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
+    }
+
+    // Rattachement à un établissement par l'utilisateur lui-même : uniquement en activant une clé de cet établissement dans le
+    // même lot (la clé passe « activée » à son nom ; l'établissement et son nom viennent de la clé).
+    function ownerOrgJoinOk(uid) {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      let k = getAfter(/databases/$(database)/documents/licenseKeys/$(d.orgKeyId)).data;
+      return resource.data.status == 'active'
+        && changed.hasOnly(['orgId', 'orgName', 'orgKeyId', 'updatedAt'])
+        && d.updatedAt == request.time
+        && k.redeemedBy == uid && k.status == 'redeemed' && k.redeemedAt == request.time
+        && k.orgId == d.orgId && k.orgName == d.orgName && d.orgId != '';
     }
 
     match /users/{uid} {
@@ -194,7 +209,7 @@ service cloud.firestore {
       allow list: if isAdmin();                               // inclut les requêtes de comptage (count)
       allow create: if isSignedIn() && request.auth.uid == uid && validNewUser();
       allow update: if isSignedIn() && (
-                         (request.auth.uid == uid && ownerUpdateOk())
+                         (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid)))
                          || (isAdmin() && adminUpdateOk(uid))
                        );
       // Suppression : uniquement un PARTICULIER ACTIF, de son PROPRE profil (suppression de son compte, js/data.js). Jamais un
@@ -422,7 +437,8 @@ service cloud.firestore {
       return d.keys().hasAll(['userId', 'productId', 'productName', 'licenseType', 'status', 'activatedAt', 'expiresAt',
                               'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['userId', 'productId', 'productName', 'licenseType', 'status', 'activatedAt', 'expiresAt',
-                             'createdAt', 'updatedAt'])
+                             'createdAt', 'updatedAt', 'keyId', 'orgId'])
+        && isString(d.get('keyId', ''), 0, 64) && isString(d.get('orgId', ''), 0, 40)
         && d.userId is string && d.userId.matches('[A-Za-z0-9_-]{1,128}')
         && isId(d.productId)
         && isString(d.productName, 1, 80)
@@ -433,19 +449,38 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // Licence obtenue par l'utilisateur en activant une clé (même lot : la clé passe « activée » à son nom). Produit, type,
+    // établissement et date de fin viennent de la clé (date de fin fixe, ou durée à partir de maintenant, à 10 minutes près).
+    function keyLicenseOk(lid) {
+      let d = request.resource.data;
+      let k = getAfter(/databases/$(database)/documents/licenseKeys/$(d.keyId)).data;
+      let end = k.get('durationDays', null) == null ? null : request.time + duration.value(k.durationDays, 'd');
+      return validLicenseFields()
+        && d.userId == request.auth.uid && lid == d.userId + '_' + d.productId
+        && k.redeemedBy == request.auth.uid && k.status == 'redeemed' && k.redeemedAt == request.time
+        && d.productId == k.productId && d.productName == k.productName && d.licenseType == k.licenseType
+        && d.status == 'active' && d.activatedAt == request.time && d.get('orgId', '') == k.get('orgId', '')
+        && (k.get('expiresAt', null) != null ? d.expiresAt == k.expiresAt
+            : end == null ? d.expiresAt == null
+            : (d.expiresAt is timestamp && d.expiresAt > end - duration.value(10, 'm') && d.expiresAt < end + duration.value(10, 'm')));
+    }
+
     match /licenses/{lid} {
       // Un utilisateur ACTIF ne lit QUE ses licences (requête : where('userId', '==', uid)) ; un compte désactivé n'y accède plus ;
       // un administrateur lit tout.
       allow get, list: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid && isActiveUser()));
       // Création / attribution : administrateur seul. L'identifiant du document est « userId_productId » (une licence par
       // utilisateur et par produit), l'utilisateur et le produit doivent exister, le nom du produit doit correspondre.
-      allow create: if isAdmin() && validLicenseFields() && request.resource.data.createdAt == request.time
+      allow create: if (isSignedIn() && isActiveUser() && keyLicenseOk(lid) && request.resource.data.createdAt == request.time)
+                    || isAdmin() && validLicenseFields() && request.resource.data.createdAt == request.time
                     && lid == request.resource.data.userId + '_' + request.resource.data.productId
                     && exists(/databases/$(database)/documents/users/$(request.resource.data.userId))
                     && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
                        == request.resource.data.productName;
       // Modification / suspension / réactivation : administrateur seul ; l'utilisateur, le produit et la date de création sont figés.
-      allow update: if isAdmin() && validLicenseFields() && request.resource.data.createdAt == resource.data.createdAt
+      allow update: if (isSignedIn() && isActiveUser() && resource.data.userId == request.auth.uid && keyLicenseOk(lid)
+                        && request.resource.data.createdAt == resource.data.createdAt)
+                    || isAdmin() && validLicenseFields() && request.resource.data.createdAt == resource.data.createdAt
                     && request.resource.data.userId == resource.data.userId
                     && request.resource.data.productId == resource.data.productId;
       // Administrateur ; ou le propriétaire, UNIQUEMENT si son profil est supprimé dans le même lot (suppression de son compte).
@@ -455,6 +490,70 @@ service cloud.firestore {
                         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
                         && !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)))
                     || isAdmin();
+    }
+
+    // ------------------------------------------------------------ établissements / entreprises clientes : organizations/{id}
+
+    function validOrg() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'kind', 'seats', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'kind', 'siret', 'email', 'phone', 'address', 'contactName', 'seats', 'notes', 'status', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 120)
+        && d.kind in ['entreprise', 'etablissement', 'ecole', 'collectivite', 'association', 'autre']
+        && isString(d.get('siret', ''), 0, 20) && isString(d.get('email', ''), 0, 160) && isString(d.get('phone', ''), 0, 40)
+        && isString(d.get('address', ''), 0, 300) && isString(d.get('contactName', ''), 0, 120) && isString(d.get('notes', ''), 0, 1000)
+        && d.seats is int && d.seats >= 1 && d.seats <= 10000
+        && d.status in ['active', 'suspended']
+        && d.updatedAt == request.time;
+    }
+
+    match /organizations/{oid} {
+      // Administrateur ; ou compte ACTIF rattaché à cet établissement (lecture de sa fiche seulement).
+      allow get: if isSignedIn() && (isAdmin()
+                    || (isActiveUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('orgId', '') == oid));
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validOrg() && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && validOrg() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ clés de licence : licenseKeys/{sha256 de la clé}
+
+    // L'identifiant est l'empreinte SHA-256 de la clé normalisée : seul celui qui connaît la clé peut lire sa fiche (aucune liste).
+    function validKey(kid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['key', 'productId', 'productName', 'licenseType', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['key', 'productId', 'productName', 'licenseType', 'durationDays', 'expiresAt', 'orgId', 'orgName', 'label',
+                             'status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'createdAt', 'updatedAt'])
+        && kid.matches('[0-9a-f]{64}')
+        && isString(d.key, 12, 60) && isId(d.productId) && isString(d.productName, 1, 80)
+        && d.licenseType.matches('[a-z][a-z0-9_]{1,39}')
+        && (d.get('durationDays', null) == null || (d.durationDays is int && d.durationDays >= 1 && d.durationDays <= 3650))
+        && (d.get('expiresAt', null) == null || d.expiresAt is timestamp)
+        && isString(d.get('orgId', ''), 0, 40) && isString(d.get('orgName', ''), 0, 120) && isString(d.get('label', ''), 0, 120)
+        && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
+        && d.status in ['available', 'redeemed', 'revoked']
+        && d.updatedAt == request.time;
+    }
+
+    match /licenseKeys/{kid} {
+      allow get: if isSignedIn() && (isAdmin() || isActiveUser());
+      allow list: if isAdmin();
+      allow create: if isAdmin() && validKey(kid) && request.resource.data.status == 'available' && request.resource.data.createdAt == request.time;
+      // Administrateur : libellé, révocation, rétablissement (jamais le produit ni le titulaire d'une clé activée).
+      allow update: if (isAdmin() && validKey(kid) && request.resource.data.createdAt == resource.data.createdAt
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'status', 'updatedAt'])
+                        && resource.data.status != 'redeemed')
+                    // Utilisateur : activation d'une clé disponible pour SON compte, avec la licence créée dans le même lot.
+                    || (isSignedIn() && isActiveUser() && resource.data.status == 'available'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'updatedAt'])
+                        && request.resource.data.status == 'redeemed'
+                        && request.resource.data.redeemedBy == request.auth.uid
+                        && request.resource.data.redeemedEmail == request.auth.token.email.lower()
+                        && request.resource.data.redeemedAt == request.time && request.resource.data.updatedAt == request.time
+                        && (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time)
+                        && getAfter(/databases/$(database)/documents/licenses/$(request.auth.uid + '_' + resource.data.productId)).data.get('keyId', '') == kid);
+      allow delete: if isAdmin() && resource.data.status != 'redeemed';
     }
 
     // ============================================================ CMS : pages, projets, médias
