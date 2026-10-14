@@ -151,7 +151,13 @@
   A['acc-lic-retry'] = () => accountPage();
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
-  const APP_URLS = { archiplan: new URL('../archiplan/', location.href.split('#')[0]).href };
+  const APP_URLS = { archiplan: new URL('../archiplan/', location.href.split('#')[0]).href, architrafic: new URL('../ArchiTraffic/', location.href.split('#')[0]).href };
+  /* ARCHITRAFIC : licence gratuite liée au compte (pour l'instant), affichée même sans document de licence */
+  const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' }];
+  function freeAppCards(lics) {
+    return FREE_APPS.filter((a) => !lics.some((l) => l.productId === a.id)).map((a) => `<article class="app-card"><div class="app-b"><h3>${esc(a.name)}</h3><p class="mt2">${esc(a.tagline)}</p>` +
+      `<dl class="app-d"><div><dt>Licence</dt><dd>Gratuite</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>`).join('');
+  }
 
   function fillAccount(lics) {
     const prods = new Map(CATLG.all().map((p) => [p.id, p]));
@@ -159,7 +165,7 @@
     const apps = document.getElementById('acc-apps'), tbl = document.getElementById('acc-lics'), sum = document.getElementById('acc-sum');
     if (!apps || !tbl) return;
     if (!sorted.length) {
-      apps.innerHTML = '<div class="panel"><p>Aucune application n’est encore associée à votre compte.</p><p class="mut" style="margin-top:6px">Découvrez les offres Studio Prism : pour en activer une, contactez-nous.</p><p style="margin-top:12px"><a class="btn b1 ar" href="#/abonnements">Voir les abonnements</a></p></div>';
+      apps.innerHTML = freeAppCards([]) + '<div class="panel"><p>Aucune application n’est encore associée à votre compte.</p><p class="mut" style="margin-top:6px">Découvrez les offres Studio Prism : pour en activer une, contactez-nous.</p><p style="margin-top:12px"><a class="btn b1 ar" href="#/abonnements">Voir les abonnements</a></p></div>';
       tbl.innerHTML = '<p class="mut">Aucune licence.</p>';
       if (sum) sum.innerHTML = '';
       return;
@@ -175,7 +181,7 @@
       return `<article class="app-card">${logoImg(p || { name }, 'app-logo')}<div class="app-b"><h3>${esc(name)}</h3><p class="mt2">${esc((p && (p.tagline || TYPES[p.category])) || 'Application')}</p>` +
         `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(typeLabel(l.licenseType))}</dd></div><div><dt>Statut</dt><dd>${licBadge(l)}</dd></div>` +
         `<div><dt>Activée le</dt><dd>${esc(fdate(l.activatedAt))}</dd></div><div><dt>Expire le</dt><dd>${l.expiresAt ? esc(fdate(l.expiresAt)) : 'Sans date d’expiration'}</dd></div></dl>${open}</div></article>`;
-    }).join('');
+    }).join('') + freeAppCards(sorted);
     tbl.innerHTML = `<div class="adm-tw"><table class="adm-t lic-t" role="table"><caption class="sr">Mes licences</caption><thead><tr role="row"><th scope="col" role="columnheader">Produit</th><th scope="col" role="columnheader">Licence</th><th scope="col" role="columnheader">Statut</th><th scope="col" role="columnheader">Activation</th><th scope="col" role="columnheader">Expiration</th></tr></thead><tbody>` +
       sorted.map((l) => `<tr role="row"><td role="cell" data-label="Produit"><div class="adm-v"><b>${esc((prods.get(l.productId) || {}).name || l.productName)}</b></div></td><td role="cell" data-label="Licence"><div class="adm-v">${esc(typeLabel(l.licenseType))}</div></td><td role="cell" data-label="Statut"><div class="adm-v">${licBadge(l)}</div></td><td role="cell" class="adm-d" data-label="Activation"><div class="adm-v">${esc(fdate(l.activatedAt))}</div></td><td role="cell" class="adm-d" data-label="Expiration"><div class="adm-v">${l.expiresAt ? esc(fdate(l.expiresAt)) : '—'}</div></td></tr>`).join('') + '</tbody></table></div>';
     if (sum) sum.innerHTML = `<ul class="acc-sumul">${sorted.map((l) => `<li><b>${esc((prods.get(l.productId) || {}).name || l.productName)}</b> — ${esc(typeLabel(l.licenseType))} ${licBadge(l)}</li>`).join('')}</ul>`;

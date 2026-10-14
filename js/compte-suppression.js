@@ -168,13 +168,18 @@ async function doDelete(u) {
       ...(await q("apFolders", where("ownerUid", "==", uid))),
       ...(await q("apGrants", where("uid", "==", uid))),
       doc(db, "userSecrets", uid), doc(db, "clientProfiles", uid), doc(db, "apLibrary", uid)];
+    // ARCHITRAFIC : mêmes données, collections « at »
+    const atProj = await q("atProjects", where("ownerUid", "==", uid)); const atRefs = []; atProj.forEach((p) => { atRefs.push(doc(db, "atProjects", p.id, "content", "main"), p); });
+    await commitChunks(atRefs, 20);
+    others.push(...(await q("atShares", where("ownerUid", "==", uid))), ...(await q("atShares", where("email", "==", email))), ...(await q("atFolders", where("ownerUid", "==", uid))), ...(await q("atGrants", where("uid", "==", uid))), doc(db, "atLibrary", uid));
     const uniq = [...new Map(others.map((r) => [r.path, r])).values()];
     await commitChunks(uniq, 400);
     // Profil + licences dans un seul lot (les règles n'autorisent la suppression d'une licence que si le profil disparaît avec)
     const lics = await getDocs(query(collection(db, "licenses"), where("userId", "==", uid)));
     // Compteur de stockage ARCHIPLAN : supprimé avec le profil (les règles l'exigent)
     const usage = await getDoc(doc(db, "apUsage", uid)).catch(() => null);
-    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); if (usage && usage.exists()) b.delete(doc(db, "apUsage", uid));
+    const atUsage = await getDoc(doc(db, "atUsage", uid)).catch(() => null);
+    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); if (usage && usage.exists()) b.delete(doc(db, "apUsage", uid)); if (atUsage && atUsage.exists()) b.delete(doc(db, "atUsage", uid));
     b.delete(doc(db, "users", uid)); await b.commit();
     // Compte de connexion (connexion récente grâce au lien email)
     await deleteUser(u);
@@ -184,7 +189,7 @@ async function doDelete(u) {
   }
   // Nettoyage de cet appareil (ARCHIPLAN est sur le même domaine)
   try { ["sp.lock.", "sp.prof.", "sp.access.", "ap.localDismissed."].forEach((k) => localStorage.removeItem(k + uid)); localStorage.removeItem("archiplan.v1"); sessionStorage.removeItem("sp.del.from"); } catch (e) { /* stockage indisponible */ }
-  render(`<h1>Votre compte a été supprimé</h1><div class="note ok">Votre compte Studio Prism et toutes les données associées (profil, licences, fiche client, code PIN, projets ARCHIPLAN) ont été supprimés.</div>
+  render(`<h1>Votre compte a été supprimé</h1><div class="note ok">Votre compte Studio Prism et toutes les données associées (profil, licences, fiche client, code PIN, projets ARCHIPLAN et chantiers ARCHITRAFIC) ont été supprimés.</div>
     <p class="mut">Merci d'avoir utilisé les apps Studio Prism. Vous pouvez créer un nouveau compte à tout moment.</p><div class="row"><a class="btn b1" href="${SITE}">Retour au site</a></div>`);
 }
 
