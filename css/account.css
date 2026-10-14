@@ -322,3 +322,9 @@
 /* établissements et clés de licence */
 .kcode{font:600 13px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;background:var(--bg,#F2F7FA);border:1px solid var(--line);border-radius:6px;padding:2px 7px;white-space:nowrap}
 .org-t,.key-t{min-width:900px}
+.app-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.org-filt{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin:20px 0 4px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg,#F2F7FA)}
+.seg-f{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg-f button{border:0;background:transparent;border-radius:7px;padding:6px 12px;font:600 13.5px Inter,system-ui,sans-serif;cursor:pointer;color:var(--mut)}
+.seg-f button.on{background:var(--nuit,#071B55);color:#fff}.seg-f small{opacity:.7;margin-left:3px}
+.org-fc{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin:0}.org-fc select{height:36px;border-radius:8px;border:1px solid var(--line);padding:0 8px;font:inherit;font-weight:400}

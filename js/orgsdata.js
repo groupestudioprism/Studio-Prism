@@ -48,21 +48,27 @@ export async function saveOrg(o, id) {
   await (id ? updateDoc(ref, data) : setDoc(ref, data));
   return ref.id;
 }
+/* Suppression complète : comptes détachés, licences de l'établissement supprimées, clés supprimées, puis la fiche. */
 export async function deleteOrg(id) {
-  const [keys, users] = await Promise.all([getDocs(query(collection(db, "licenseKeys"), where("orgId", "==", id))), getDocs(query(collection(db, "users"), where("orgId", "==", id)))]);
-  if (users.size) throw fail("app/org-has-members");
-  const b = writeBatch(db);
-  keys.docs.filter((d) => d.data().status !== "redeemed").forEach((d) => b.delete(d.ref));
-  b.delete(doc(db, "organizations", id));
-  await b.commit();
+  const [keys, users, lics] = await Promise.all([
+    getDocs(query(collection(db, "licenseKeys"), where("orgId", "==", id))),
+    getDocs(query(collection(db, "users"), where("orgId", "==", id))),
+    getDocs(query(collection(db, "licenses"), where("orgId", "==", id)))]);
+  const ops = [];
+  users.docs.forEach((d) => ops.push((b) => b.update(d.ref, { orgId: "", orgName: "", orgRole: "", orgClass: "", updatedAt: serverTimestamp() })));
+  lics.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+  keys.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+  for (let i = 0; i < ops.length; i += 400) { const b = writeBatch(db); ops.slice(i, i + 400).forEach((f) => f(b)); await b.commit(); }
+  await deleteDoc(doc(db, "organizations", id));
+  return { users: users.size, licenses: lics.size, keys: keys.size };
 }
 export async function adminOrgMembers(id) { return rows(await getDocs(query(collection(db, "users"), where("orgId", "==", id)))).map((u) => ({ uid: u.id, ...u })); }
 export async function adminFindUserByEmail(email) {
   const s = await getDocs(query(collection(db, "users"), where("email", "==", String(email).trim().toLowerCase())));
   return s.empty ? null : { uid: s.docs[0].id, ...s.docs[0].data() };
 }
-export async function adminSetUserOrg(uid, org) {
-  await updateDoc(doc(db, "users", uid), { orgId: org ? org.id : "", orgName: org ? org.name : "", updatedAt: serverTimestamp() });
+export async function adminSetUserOrg(uid, org, role, classe) {
+  await updateDoc(doc(db, "users", uid), { orgId: org ? org.id : "", orgName: org ? org.name : "", orgRole: org ? role || "" : "", orgClass: org ? classe || "" : "", updatedAt: serverTimestamp() });
 }
 
 /* ------------------------------------------------------------------ administration : clés */
@@ -81,7 +87,7 @@ export async function adminCreateKeys(keys, spec) {
       b.set(ref, {
         key: formatKey(normalizeKey(k)), productId: spec.productId, productName: spec.productName, licenseType: spec.licenseType,
         durationDays: spec.durationDays || null, expiresAt: spec.expiresAt ? Timestamp.fromDate(spec.expiresAt) : null,
-        orgId: spec.org ? spec.org.id : "", orgName: spec.org ? spec.org.name : "", label: spec.label || "", status: "available",
+        orgId: spec.org ? spec.org.id : "", orgName: spec.org ? spec.org.name : "", label: spec.label || "", role: spec.role || "", classe: spec.classe || "", status: "available",
         redeemedBy: "", redeemedEmail: "", redeemedAt: null, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
       out.push({ id, key: formatKey(normalizeKey(k)) });
@@ -91,8 +97,9 @@ export async function adminCreateKeys(keys, spec) {
   return out;
 }
 export async function adminSetKeyStatus(id, status) { await updateDoc(doc(db, "licenseKeys", id), { status, updatedAt: serverTimestamp() }); }
-export async function adminSetKeyLabel(id, label) { await updateDoc(doc(db, "licenseKeys", id), { label: String(label || "").slice(0, 120), updatedAt: serverTimestamp() }); }
+export async function adminSetKeyLabel(id, label, role, classe) { await updateDoc(doc(db, "licenseKeys", id), { label: String(label || "").slice(0, 120), role: role || "", classe: String(classe || "").slice(0, 60), updatedAt: serverTimestamp() }); }
 export async function adminDeleteKey(id) { await deleteDoc(doc(db, "licenseKeys", id)); }
+export const ROLES = { eleve: "Élève / étudiant", enseignant: "Enseignant" };
 
 /* ------------------------------------------------------------------ utilisateur : activer une clé */
 export async function peekKey(raw) {
@@ -116,7 +123,7 @@ export async function redeemKey(raw, user) {
     activatedAt: serverTimestamp(), expiresAt, keyId: k.id, orgId: k.orgId || "",
     createdAt: prev && prev.createdAt ? prev.createdAt : serverTimestamp(), updatedAt: serverTimestamp()
   });
-  if (k.orgId) b.update(doc(db, "users", user.uid), { orgId: k.orgId, orgName: k.orgName, orgKeyId: k.id, updatedAt: serverTimestamp() });
+  if (k.orgId) b.update(doc(db, "users", user.uid), { orgId: k.orgId, orgName: k.orgName, orgKeyId: k.id, orgRole: k.role || "", orgClass: k.classe || "", updatedAt: serverTimestamp() });
   await b.commit();
   return k;
 }

@@ -181,9 +181,10 @@ service cloud.firestore {
     function adminUpdateOk(uid) {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
-      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName'])
+      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName', 'orgRole', 'orgClass'])
         && d.updatedAt == request.time
         && isString(d.get('orgId', ''), 0, 40) && isString(d.get('orgName', ''), 0, 120)
+        && d.get('orgRole', '') in ['', 'eleve', 'enseignant'] && isString(d.get('orgClass', ''), 0, 60)
         && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
@@ -198,7 +199,8 @@ service cloud.firestore {
       let changed = d.diff(resource.data).affectedKeys();
       let k = getAfter(/databases/$(database)/documents/licenseKeys/$(d.orgKeyId)).data;
       return resource.data.status == 'active'
-        && changed.hasOnly(['orgId', 'orgName', 'orgKeyId', 'updatedAt'])
+        && changed.hasOnly(['orgId', 'orgName', 'orgKeyId', 'orgRole', 'orgClass', 'updatedAt'])
+        && d.get('orgRole', '') == k.get('role', '') && d.get('orgClass', '') == k.get('classe', '')
         && d.updatedAt == request.time
         && k.redeemedBy == uid && k.status == 'redeemed' && k.redeemedAt == request.time
         && k.orgId == d.orgId && k.orgName == d.orgName && d.orgId != '';
@@ -524,7 +526,8 @@ service cloud.firestore {
       let d = request.resource.data;
       return d.keys().hasAll(['key', 'productId', 'productName', 'licenseType', 'status', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['key', 'productId', 'productName', 'licenseType', 'durationDays', 'expiresAt', 'orgId', 'orgName', 'label',
-                             'status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'createdAt', 'updatedAt'])
+                             'role', 'classe', 'status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'createdAt', 'updatedAt'])
+        && d.get('role', '') in ['', 'eleve', 'enseignant'] && isString(d.get('classe', ''), 0, 60)
         && kid.matches('[0-9a-f]{64}')
         && isString(d.key, 12, 60) && isId(d.productId) && isString(d.productName, 1, 80)
         && d.licenseType.matches('[a-z][a-z0-9_]{1,39}')
@@ -540,10 +543,10 @@ service cloud.firestore {
       allow get: if isSignedIn() && (isAdmin() || isActiveUser());
       allow list: if isAdmin();
       allow create: if isAdmin() && validKey(kid) && request.resource.data.status == 'available' && request.resource.data.createdAt == request.time;
-      // Administrateur : libellé, révocation, rétablissement (jamais le produit ni le titulaire d'une clé activée).
+      // Administrateur : libellé, profil, classe, révocation, rétablissement (jamais le produit ni le titulaire ; le statut d'une clé activée ne change pas).
       allow update: if (isAdmin() && validKey(kid) && request.resource.data.createdAt == resource.data.createdAt
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'status', 'updatedAt'])
-                        && resource.data.status != 'redeemed')
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'role', 'classe', 'status', 'updatedAt'])
+                        && (resource.data.status != 'redeemed' || request.resource.data.status == 'redeemed'))
                     // Utilisateur : activation d'une clé disponible pour SON compte, avec la licence créée dans le même lot.
                     || (isSignedIn() && isActiveUser() && resource.data.status == 'available'
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'updatedAt'])
@@ -553,7 +556,7 @@ service cloud.firestore {
                         && request.resource.data.redeemedAt == request.time && request.resource.data.updatedAt == request.time
                         && (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time)
                         && getAfter(/databases/$(database)/documents/licenses/$(request.auth.uid + '_' + resource.data.productId)).data.get('keyId', '') == kid);
-      allow delete: if isAdmin() && resource.data.status != 'redeemed';
+      allow delete: if isAdmin();   // suppression d'un établissement : toutes ses clés
     }
 
     // ============================================================ CMS : pages, projets, médias

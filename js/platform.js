@@ -150,6 +150,9 @@
 
   A['acc-lic-retry'] = () => accountPage();
 
+  /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
+  const APP_URLS = { archiplan: new URL('../archiplan/', location.href.split('#')[0]).href };
+
   function fillAccount(lics) {
     const prods = new Map(CATLG.all().map((p) => [p.id, p]));
     const sorted = lics.slice().sort((x, y) => String(x.productName).localeCompare(String(y.productName), 'fr'));
@@ -162,10 +165,13 @@
       return;
     }
     apps.innerHTML = sorted.map((l) => {
-      const p = prods.get(l.productId), s = licState(l), url = safeUrl(p && p.url), name = (p && p.name) || l.productName;
+      const p = prods.get(l.productId), s = licState(l), name = (p && p.name) || l.productName;
+      // Adresse de l'application : celle de la fiche produit (https) si elle existe, sinon l'application web connue (ARCHIPLAN…)
+      const own = safeUrl(p && p.url), url = own && /^https:/.test(own) ? own : (APP_URLS[l.productId] || '');
+      const more = `<a class="btn b4" href="#/produits/${esc(l.productId)}">En savoir plus</a>`;
       const open = s === 'active' && url
-        ? `<a class="btn b1 ar" href="${esc(url)}">Ouvrir ${esc(name)}</a>`
-        : `<button class="btn b1" disabled aria-disabled="true">Ouvrir ${esc(name)}</button><p class="fe" style="display:block">${s !== 'active' ? `Licence ${esc((LIC_STATUS[s] || s).toLowerCase())} : contactez Studio Prism.` : 'Application momentanément indisponible.'}</p>`;
+        ? `<p class="app-btns"><a class="btn b1 ar" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir ${esc(name)}</a> ${more}</p>`
+        : `<p class="app-btns"><button class="btn b1" disabled aria-disabled="true">Ouvrir ${esc(name)}</button> ${more}</p><p class="fe" style="display:block">${s !== 'active' ? `Licence ${esc((LIC_STATUS[s] || s).toLowerCase())} : contactez Studio Prism.` : 'Cette application ne s’ouvre pas depuis le navigateur (application à installer).'}</p>`;
       return `<article class="app-card">${logoImg(p || { name }, 'app-logo')}<div class="app-b"><h3>${esc(name)}</h3><p class="mt2">${esc((p && (p.tagline || TYPES[p.category])) || 'Application')}</p>` +
         `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(typeLabel(l.licenseType))}</dd></div><div><dt>Statut</dt><dd>${licBadge(l)}</dd></div>` +
         `<div><dt>Activée le</dt><dd>${esc(fdate(l.activatedAt))}</dd></div><div><dt>Expire le</dt><dd>${l.expiresAt ? esc(fdate(l.expiresAt)) : 'Sans date d’expiration'}</dd></div></dl>${open}</div></article>`;
