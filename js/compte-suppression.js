@@ -1,8 +1,8 @@
 /* Studio Prism — suppression de SON compte, commune au site, à ARCHIPLAN et à Archi Vision.
  *
- * Parcours : 1) l'utilisateur connecté demande la suppression → un lien de confirmation est envoyé à son adresse
- * (Firebase Authentication, « lien de connexion par e-mail ») ; 2) le lien rouvre cette page et reconnecte le compte
- * (connexion récente, exigée pour supprimer un compte) ; 3) le code PIN du compte est demandé (userSecrets/{uid}, haché) ;
+ * Parcours : 1) l'utilisateur connecté demande la suppression ; 2) il confirme avec le MOT DE PASSE de son compte
+ * (réauthentification Firebase : connexion récente, exigée pour supprimer un compte ; compte Google : fenêtre Google) ;
+ * 3) le code PIN du compte est demandé (userSecrets/{uid}, haché) ;
  * 4) suppression : projets ARCHIPLAN (et leurs partages), dossiers et dossiers partagés, accès par lien, bibliothèque personnelle,
  * fiche client, code PIN, puis profil, licences et compteur de stockage dans un seul lot (exigence des règles), puis le compte de connexion.
  * Sans serveur (forfait Spark) : réservé aux comptes Particulier actifs non administrateurs, comme « Mon compte » du site.
@@ -10,7 +10,7 @@
 import {
   auth, db, doc, getDoc, getDocs, collection, query, where, writeBatch, onAuthStateChanged, deleteUser, signOut
 } from "./firebase.js";
-import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvider, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
 auth.languageCode = "fr";
 const PAGE = location.origin + location.pathname;
@@ -19,23 +19,23 @@ const ARCHIPLAN = new URL("../archiplan/", SITE).href;
 const FROM = new URLSearchParams(location.search).get("from") === "archiplan" ? "archiplan" : (sessionStorage.getItem("sp.del.from") || "site");
 sessionStorage.setItem("sp.del.from", FROM);
 const MAX_LICENSES = 6, PIN_TRIES = 5;
-const EMAIL_KEY = "sp.deleteEmail";
 
 const box = document.getElementById("box");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const back = () => FROM === "archiplan" ? `<a class="btn b4" href="${ARCHIPLAN}">Retour à ARCHIPLAN</a>` : `<a class="btn b4" href="${SITE}#/compte">Retour à mon compte</a>`;
-const steps = (i) => `<ol class="steps" aria-label="Étape ${i + 1} sur 3">${["Demande", "Lien email", "Code PIN"].map((n, k) => `<li class="${k < i ? "done" : k === i ? "cur" : ""}"><i>${k < i ? "✓" : k + 1}</i>${n}</li>`).join("")}</ol>`;
+const steps = (i) => `<ol class="steps" aria-label="Étape ${i + 1} sur 3">${["Demande", "Mot de passe", "Code PIN"].map((n, k) => `<li class="${k < i ? "done" : k === i ? "cur" : ""}"><i>${k < i ? "✓" : k + 1}</i>${n}</li>`).join("")}</ol>`;
 const render = (h) => { box.innerHTML = h; const f = box.querySelector("input"); if (f) setTimeout(() => f.focus(), 50); };
 const loading = (t) => render(`<div class="center"><div class="spin" aria-hidden="true"></div><p class="mut">${esc(t)}</p></div>`);
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: "app/timeout" }), ms))]);
 const ERR = {
-  "auth/invalid-action-code": "Ce lien n'est plus valide (déjà utilisé ou expiré). Recommencez la demande.",
-  "auth/expired-action-code": "Ce lien a expiré. Recommencez la demande.",
-  "auth/invalid-email": "Cette adresse ne correspond pas au lien reçu.",
+  "auth/wrong-password": "Mot de passe incorrect.",
+  "auth/invalid-credential": "Mot de passe incorrect.",
+  "auth/invalid-login-credentials": "Mot de passe incorrect.",
+  "auth/user-mismatch": "Ce n'est pas le compte connecté. Choisissez le même compte Google.",
+  "auth/popup-closed-by-user": "Fenêtre Google fermée avant la fin. Réessayez.",
+  "auth/popup-blocked": "Le navigateur a bloqué la fenêtre Google : autorisez les fenêtres pour ce site.",
   "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes, puis réessayez.",
   "auth/network-request-failed": "Connexion impossible. Vérifiez votre réseau.",
-  "auth/operation-not-allowed": "La confirmation par email n'est pas encore activée pour Studio Prism. Contactez Studio Prism.",
-  "auth/unauthorized-continue-uri": "Cette page n'est pas autorisée pour la confirmation par email. Contactez Studio Prism.",
   "permission-denied": "Opération refusée par la sécurité de Studio Prism.",
   "app/timeout": "Le service met trop de temps à répondre. Réessayez.",
 };
@@ -73,50 +73,38 @@ async function stepAsk(u) {
   let el;
   try { el = await withTimeout(eligibility(u), 15000); } catch (e) { return render(`<h1>Supprimer mon compte</h1><div class="note err">${esc(errMsg(e))}</div><div class="row">${back()}</div>`); }
   if (!el.ok) return render(`<h1>Supprimer mon compte</h1><div class="note warn">${esc(el.why)}</div><p class="mut">Écrivez-nous depuis la page Contact du site : nous traiterons votre demande.</p><div class="row"><a class="btn b1" href="${SITE}#/contact">Contacter Studio Prism</a>${back()}</div>`);
+  const hasPw = (u.providerData || []).some((p) => p.providerId === "password") || !(u.providerData || []).some((p) => p.providerId === "google.com");
   render(`${steps(0)}<h1>Supprimer mon compte Studio Prism</h1>
     <p>Compte : <b>${esc(u.email)}</b></p>
     <p class="mut">Ce compte sert au site Studio Prism, à ARCHIPLAN et à Archi Vision. Seront supprimés définitivement :</p>
     <ul><li>votre compte de connexion et votre profil ;</li><li>vos licences${el.licenses ? ` (${el.licenses})` : ""} et votre fiche client ;</li>
     <li>votre code PIN ;</li><li>vos projets ARCHIPLAN${el.projects ? ` (${el.projects})` : ""}, vos dossiers et vos partages : les personnes avec qui vous les partagez n'y auront plus accès.</li></ul>
-    <div class="note">Pour confirmer qu'il s'agit bien de vous, nous envoyons un <b>lien de confirmation</b> à ${esc(u.email)}. Ouvrez-le : cette page vous demandera ensuite votre <b>code PIN</b>.</div>
-    <p class="fe" id="err" role="alert"></p>
-    <div class="row"><button class="btn bd" id="send">Recevoir le lien de confirmation</button>${back()}</div>`);
-  document.getElementById("send").onclick = async (e) => {
-    const b = e.currentTarget; b.disabled = true; b.textContent = "Envoi…";
-    try {
-      await sendSignInLinkToEmail(auth, u.email, { url: PAGE + "?confirm=1", handleCodeInApp: true });
-      localStorage.setItem(EMAIL_KEY, u.email);
-      stepSent(u.email);
-    } catch (x) { b.disabled = false; b.textContent = "Recevoir le lien de confirmation"; document.getElementById("err").textContent = errMsg(x); }
-  };
-}
-function stepSent(email) {
-  render(`${steps(1)}<h1>Vérifiez votre boîte mail</h1>
-    <div class="note ok">Un lien de confirmation vient d'être envoyé à <b>${esc(email)}</b>.</div>
-    <p class="mut">Ouvrez-le sur cet appareil de préférence. Il est valable une heure. Rien reçu ? Regardez dans les courriers indésirables. L'email vient de Studio Prism (noreply@archivision-studioprism.firebaseapp.com).</p>
-    <p class="mut">Vous avez changé d'avis ? Ignorez simplement cet email : rien ne sera supprimé.</p>
-    <div class="row">${back()}</div>`);
+    <div class="row"><button class="btn bd" id="go">Continuer</button>${back()}</div>`);
+  document.getElementById("go").onclick = () => stepPw(u, hasPw);
 }
 
-/* ---------- 2. Retour par le lien ---------- */
-async function stepLink() {
-  let email = localStorage.getItem(EMAIL_KEY);
-  if (!email) {
-    render(`${steps(1)}<h1>Confirmez votre adresse email</h1><p class="mut">Vous ouvrez le lien sur un autre appareil : saisissez l'adresse email de votre compte Studio Prism.</p>
-      <form id="f"><label for="em">Adresse email</label><input id="em" type="email" autocomplete="email" inputmode="email" autocapitalize="off"><p class="fe" id="err" role="alert"></p>
-      <div class="row"><button class="btn b1" type="submit">Continuer</button></div></form>`);
-    email = await new Promise((res) => { document.getElementById("f").onsubmit = (e) => { e.preventDefault(); const v = document.getElementById("em").value.trim(); if (v) res(v); }; });
-  }
-  loading("Confirmation du lien…");
-  try {
-    const cred = await withTimeout(signInWithEmailLink(auth, email, location.href), 20000);
-    localStorage.removeItem(EMAIL_KEY);
-    history.replaceState(null, "", PAGE);
-    await stepPin(cred.user);
-  } catch (e) {
-    history.replaceState(null, "", PAGE);
-    render(`<h1>Lien non valide</h1><div class="note err">${esc(errMsg(e))}</div><div class="row"><a class="btn b1" href="${PAGE}">Recommencer</a>${back()}</div>`);
-  }
+/* ---------- 2. Mot de passe (réauthentification) ---------- */
+function stepPw(u, hasPw) {
+  render(`${steps(1)}<h1>Confirmez qu'il s'agit bien de vous</h1><p>Compte : <b>${esc(u.email)}</b></p>
+    ${hasPw ? `<form id="f"><label for="pw">Mot de passe de votre compte Studio Prism</label><input id="pw" type="password" autocomplete="current-password"><p class="fe" id="err" role="alert"></p>
+      <div class="row"><button class="btn bd" type="submit">Continuer</button><button class="btn b4" type="button" id="cancel">Annuler</button></div></form>
+      <p class="mut" style="margin-top:12px">Mot de passe oublié ? <a href="${SITE}#/compte/connexion">Réinitialisez-le depuis la page de connexion</a>, puis recommencez.</p>`
+    : `<p class="mut">Votre compte utilise la connexion Google : confirmez avec votre compte Google ${esc(u.email)}.</p><p class="fe" id="err" role="alert"></p>
+      <div class="row"><button class="btn bd" id="g">Confirmer avec Google</button><button class="btn b4" type="button" id="cancel">Annuler</button></div>`}
+    <p class="mut" style="margin-top:12px">Le code PIN de votre compte vous sera demandé ensuite.</p>`);
+  document.getElementById("cancel").onclick = cancel;
+  const fail = (b, label, x) => { b.disabled = false; b.textContent = label; document.getElementById("err").textContent = errMsg(x); };
+  if (hasPw) document.getElementById("f").onsubmit = async (e) => {
+    e.preventDefault(); const pw = document.getElementById("pw").value, b = box.querySelector("#f .bd");
+    if (!pw) { document.getElementById("err").textContent = "Saisissez votre mot de passe."; return; }
+    b.disabled = true; b.textContent = "Vérification…";
+    try { await withTimeout(reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pw)), 20000); stepPin(u); }
+    catch (x) { fail(b, "Continuer", x); document.getElementById("pw").value = ""; }
+  };
+  else document.getElementById("g").onclick = async (e) => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = "Connexion Google…";
+    try { await reauthenticateWithPopup(u, new GoogleAuthProvider()); stepPin(u); } catch (x) { fail(b, "Confirmer avec Google", x); }
+  };
 }
 
 /* ---------- 3. Code PIN ---------- */
@@ -203,7 +191,6 @@ async function doDelete(u) {
 /* ---------- Démarrage ---------- */
 (async () => {
   try {
-    if (isSignInWithEmailLink(auth, location.href)) return await stepLink();
     const u = await waitUser();
     if (!u) {
       return render(`<h1>Supprimer mon compte</h1><p class="mut">Connectez-vous d'abord à votre compte Studio Prism, puis revenez sur cette page (ou utilisez « Supprimer mon compte » dans ARCHIPLAN ou dans Mon compte).</p>
