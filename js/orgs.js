@@ -361,7 +361,7 @@
       const k = await (await OD()).redeemKey(v, st.auth.user);
       try { sessionStorage.removeItem(PENDING); } catch (e) { /* rien */ }
       V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Licence activée</h1><div class="panel"><p><b>${esc(k.productName)}</b> — ${esc(tLabel(k.licenseType))} est activée sur votre compte (${esc(dur(k))}).</p>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
-        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="../archiplan/">Ouvrir ARCHIPLAN</a>' : ''}</p></div></div></section>`);
+        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="../ArchiPlan/">Ouvrir ARCHIPLAN</a>' : ''}</p></div></div></section>`);
     } catch (e) { console.error('[Studio Prism] Activation de clé :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Activer'; }
   }
   /* Clé saisie avant la connexion : on reprend l'activation dès que le compte est ouvert. */

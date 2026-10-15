@@ -15,7 +15,7 @@ import { reauthenticateWithCredential, reauthenticateWithPopup, EmailAuthProvide
 auth.languageCode = "fr";
 const PAGE = location.origin + location.pathname;
 const SITE = new URL("./", location.href).href;
-const ARCHIPLAN = new URL("../archiplan/", SITE).href;
+const ARCHIPLAN = new URL("../ArchiPlan/", SITE).href;
 const FROM = new URLSearchParams(location.search).get("from") === "archiplan" ? "archiplan" : (sessionStorage.getItem("sp.del.from") || "site");
 sessionStorage.setItem("sp.del.from", FROM);
 const MAX_LICENSES = 6, PIN_TRIES = 5;

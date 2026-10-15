@@ -37,7 +37,7 @@
 
   /* Lien affichable : https://, #/ (page du site) ou assets/ (fichier du site). Tout le reste (javascript:, data:…) est ignoré. */
   const safeUrl = (u) => (typeof u === 'string' && (/^https:\/\/[^\s<>"]+$/.test(u) || /^#\/[^\s<>"]*$/.test(u) || /^assets\/[^\s<>"]+$/.test(u)) && u.length <= 300 ? u : '');
-  const SUITE_APPS = { archiplan: '../archiplan/', architrafic: '../ArchiTraffic/', architraffic: '../ArchiTraffic/' };
+  const SUITE_APPS = { archiplan: '../ArchiPlan/', architrafic: '../ArchiTraffic/', architraffic: '../ArchiTraffic/' };
   const webOf = (p) => {
     const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
     if (w) return w;
