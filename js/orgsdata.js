@@ -63,6 +63,15 @@ export async function deleteOrg(id) {
   return { users: users.size, licenses: lics.size, keys: keys.size };
 }
 export async function adminOrgMembers(id) { return rows(await getDocs(query(collection(db, "users"), where("orgId", "==", id)))).map((u) => ({ uid: u.id, ...u })); }
+/* Comptes Entreprise en attente de validation (inscription sur le site : users/{uid}.status == "pending"). */
+export async function adminListPending() {
+  return (await getDocs(query(collection(db, "users"), where("status", "==", "pending")))).docs.map((d) => ({ uid: d.id, ...d.data() }))
+    .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+}
+/* Validation : le compte devient actif et, si une fiche entreprise est donnée, il y est rattaché (même écriture). */
+export async function adminApprove(uid, org) {
+  await updateDoc(doc(db, "users", uid), { status: "active", orgId: org ? org.id : "", orgName: org ? org.name : "", orgRole: "", orgClass: "", updatedAt: serverTimestamp() });
+}
 export async function adminFindUserByEmail(email) {
   const raw = String(email).trim(), low = raw.toLowerCase();
   let s = await getDocs(query(collection(db, "users"), where("email", "==", low)));

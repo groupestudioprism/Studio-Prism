@@ -91,8 +91,8 @@ function productData(input) {
     tagline: input.tagline || "", description: input.description || "", availability: input.availability || "", info: input.info || "",
     platforms: input.platforms || [], logo: input.logo || "", image: input.image || "", url: input.url || "", status: input.status,
     featured: !!input.featured, displayOrder: input.displayOrder, updatedAt: serverTimestamp(),
-    // site web : champ écrit seulement s'il est renseigné (les règles qui ne le connaissent pas encore n'empêchent rien d'autre)
-    ...(input.website ? { website: input.website } : {})
+    // lien vers le site de l'application + page « Voir plus » (présentation détaillée, points forts)
+    website: input.website || "", details: input.details || "", highlights: (input.highlights || []).slice(0, 12)
   };
 }
 

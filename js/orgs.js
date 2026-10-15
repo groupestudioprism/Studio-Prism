@@ -54,14 +54,15 @@
   };
   const segOfKind = (k) => (SEG.scol.kinds.includes(k) ? 'scol' : 'ent');
   const segOfOrg = (oid) => { const o = oid && O.orgs.find((x) => x.id === oid); return o ? segOfKind(o.kind) : O.seg; };
-  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '', seg: 'scol' };
+  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '', seg: 'scol', pending: [], showPending: false };
 
   function orgsTab(seg, p, shell) {
-    const S = SEG[seg]; O.seg = seg; O.q = '';
+    const S = SEG[seg]; O.seg = seg; O.q = ''; O.showPending = !!window.SP_OPEN_PENDING; window.SP_OPEN_PENDING = false;
     V(shell(`<p class="lead">${S.lead}</p>
 <div class="adm-stats" id="org-stats"></div>
 <div class="adm-tools"><div class="acc-f adm-q" style="flex:1"><label for="org-q">Rechercher</label><input id="org-q" type="search" placeholder="${S.q}" autocomplete="off"></div>
-<button class="btn b4" data-a="org-keys-new" data-org="">Générer des clés</button> <button class="btn b4" data-a="org-key-manual" data-org="">Saisir une clé</button> <button class="btn b1" data-a="org-new">${S.add}</button></div>
+${seg === 'ent' ? '<button class="btn b4 org-pend-btn" data-a="org-pending" id="org-pend-btn">En attente</button> ' : ''}<button class="btn b4" data-a="org-keys-new" data-org="">Générer des clés</button> <button class="btn b4" data-a="org-key-manual" data-org="">Saisir une clé</button> <button class="btn b1" data-a="org-new">${S.add}</button></div>
+${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 <div id="org-list"><p class="mut">Chargement…</p></div>
 <h2 class="lh" style="margin-top:28px">Clés sans établissement ni entreprise</h2><p class="mut">Clés individuelles (vente à un particulier, licence offerte…). Les mêmes clés apparaissent dans les onglets Scolaire et Entreprise.</p><div id="org-free-keys"></div>`));
     loadOrgs();
@@ -69,7 +70,7 @@
   async function loadOrgs() {
     try {
       const [od, pd] = await Promise.all([OD(), PD()]);
-      [O.orgs, O.keys, O.prods, O.offers] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => [])]);
+      [O.orgs, O.keys, O.prods, O.offers, O.pending] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => [])]);
       O.err = '';
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
     renderOrgs();
@@ -94,8 +95,50 @@
         <td data-label="Statut"><div class="adm-v">${badge(o.status === 'active' ? 'bd-ok' : 'bd-off', o.status === 'active' ? 'Actif' : 'Suspendu')}</div></td>
         <td class="adm-act"><button class="btn b4" data-a="org-open" data-org="${esc(o.id)}">Fiche</button> <button class="btn b4" data-a="org-edit" data-org="${esc(o.id)}">Modifier</button></td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="panel"><p>${segOrgs.length ? 'Aucun résultat pour cette recherche.' : S.none}</p></div>`;
+    renderPending();
     const fk = document.getElementById('org-free-keys');
     if (fk) fk.innerHTML = keyTable(kOf('').filter((k) => m(k.key) || m(k.label) || m(k.redeemedEmail) || m(k.productName)), '');
+  }
+  /* ---- Entreprise : demandes de compte en attente (inscription « Entreprise » sur le site) ---- */
+  function renderPending() {
+    const n = O.pending.length, btn = document.getElementById('org-pend-btn'), box = document.getElementById('org-pending');
+    if (btn) { btn.innerHTML = `En attente${n ? ` <span class="org-pend-n">${n}</span>` : ''}`; btn.setAttribute('aria-expanded', String(!!O.showPending)); btn.classList.toggle('on', !!O.showPending); }
+    if (!box) return;
+    if (!O.showPending) { box.innerHTML = ''; return; }
+    const tierTxt = (u) => (u.companyUserLimit ? `jusqu’à ${u.companyUserLimit} comptes` : u.companyUserRange === '100+' ? 'plus de 100 comptes' : '');
+    box.innerHTML = `<div class="panel adm-pend"><h3 class="lh" style="margin:0 0 4px">Demandes de compte entreprise</h3><p class="mut">Ces comptes ont été créés sur le site avec le profil « Entreprise ». Ils ne peuvent pas se connecter tant qu’ils ne sont pas validés.</p>` +
+      (n ? `<ul class="adm-pend-l">${O.pending.map((u) => `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${u.jobTitle ? ' · ' + esc(u.jobTitle) : ''}${tierTxt(u) ? ' · ' + esc(tierTxt(u)) : ''} · demandé le ${esc(fdate(u.createdAt))}</small></div>` +
+        `<span class="adm-pend-b"><button class="btn b1" data-a="org-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`).join('')}</ul>`
+        : '<p style="margin-top:10px">Aucune demande en attente.</p>') + '</div>';
+  }
+  const pendById = (uid) => O.pending.find((u) => u.uid === uid);
+  function approveForm(uid) {
+    const u = pendById(uid); if (!u) return;
+    const ents = O.orgs.filter((o) => segOfKind(o.kind) === 'ent'), same = ents.find((o) => String(o.name).trim().toLowerCase() === String(u.companyName || '').trim().toLowerCase());
+    pmodal(`<h3>Valider la demande de ${esc(u.companyName || fullName(u))}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p><form data-f="org-approve" data-uid="${esc(uid)}">
+      <fieldset class="acc-f"><legend>Fiche entreprise</legend>
+      ${same ? '' : `<label class="chk"><input type="radio" name="ap-mode" value="new" checked> Créer la fiche entreprise « ${esc(u.companyName || '')} » et y rattacher le compte</label>`}
+      ${ents.length ? `<label class="chk"><input type="radio" name="ap-mode" value="existing"${same ? ' checked' : ''}> Rattacher à une entreprise existante</label>${sel('ap-org', ents.map((o) => [o.id, o.name]), same ? same.id : ents[0].id)}` : ''}
+      <label class="chk"><input type="radio" name="ap-mode" value="none"> Valider sans rattacher à une fiche</label></fieldset>
+      <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider le compte</button></p></form>`);
+  }
+  async function submitApprove(fm) {
+    const u = pendById(fm.dataset.uid), err = fm.querySelector('#ap-err'), btn = fm.querySelector('button[type=submit]'), mode = (fm.querySelector('[name=ap-mode]:checked') || {}).value || 'none';
+    if (!u) return; btn.disabled = true; err.textContent = '';
+    try {
+      const od = await OD(); let org = null;
+      if (mode === 'existing') org = orgById(fm.elements['ap-org'].value);
+      if (mode === 'new') {
+        const id = await od.saveOrg({ name: (u.companyName || fullName(u)).slice(0, 120), kind: 'entreprise', email: String(u.companyEmail || u.email || '').toLowerCase(), contactName: fullName(u), seats: Math.min(10000, Math.max(1, u.companyUserLimit || 10)), notes: 'Créée à la validation de la demande de compte de ' + u.email, status: 'active' }, null);
+        org = { id, name: (u.companyName || fullName(u)).slice(0, 120) };
+      }
+      await od.adminApprove(u.uid, org);
+      A.x(); await loadOrgs(); toast(`Compte validé : ${u.email}${org ? ' · rattaché à ' + org.name : ''}. La personne peut maintenant se connecter.`);
+    } catch (e) { console.error('[Studio Prism] Validation :', e); err.textContent = errMsg(e); btn.disabled = false; }
+  }
+  function refuseForm(uid) {
+    const u = pendById(uid); if (!u) return;
+    pmodal(`<h3>Refuser la demande de ${esc(u.companyName || fullName(u))} ?</h3><p>Le compte en attente (${esc(u.email)}) et sa fiche d’inscription sont supprimés. L’adresse e-mail sera libérée à sa prochaine tentative de connexion.</p><p class="mut">Action définitive.</p><p class="fe" id="rf-err" role="alert"></p><p><button class="btn btn-danger" data-a="org-refuse-ok" data-uid="${esc(uid)}">Refuser et supprimer la demande</button></p>`);
   }
   function keyTable(ks, oid) {
     const S = SEG[segOfOrg(oid)];
@@ -274,6 +317,12 @@
   /* ---- actions ---- */
   Object.assign(A, {
     'org-reload': () => loadOrgs(),
+    'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
+    'org-approve': (b) => approveForm(b.dataset.uid),
+    'org-refuse': (b) => refuseForm(b.dataset.uid),
+    'org-refuse-ok': async (b) => { const u = pendById(b.dataset.uid); if (!u) return; b.disabled = true; b.textContent = 'Suppression…';
+      try { const d = await K.dataMod(); await (K.serverOn() ? d.deleteUserByAdmin(u.uid, u.email) : d.deleteUserNoServer(u.uid, u.email)); A.x(); await loadOrgs(); toast('Demande refusée : ' + u.email); }
+      catch (e) { const er = document.getElementById('rf-err'); if (er) er.textContent = errMsg(e); b.disabled = false; b.textContent = 'Réessayer'; } },
     'org-new': () => orgForm(null),
     'org-edit': (b) => orgForm(b.dataset.org),
     'org-open': (b) => openOrg(b.dataset.org),
@@ -301,6 +350,7 @@
     const f = e.target.dataset && e.target.dataset.f; if (!f || f.indexOf('org-') !== 0 && f !== 'key-redeem') return;
     e.preventDefault();
     if (f === 'org-form') submitOrg(e.target);
+    else if (f === 'org-approve') submitApprove(e.target);
     else if (f === 'org-keys') submitKeys(e.target);
     else if (f === 'org-label') { const fm = e.target; try { await (await OD()).adminSetKeyLabel(fm.dataset.id, fm.elements.kl.value, fm.elements.kr ? fm.elements.kr.value : '', fm.elements.kc ? fm.elements.kc.value.trim() : ''); await loadOrgs(); if (fm.dataset.org) openOrg(fm.dataset.org); else A.x(); } catch (x) { toast(errMsg(x)); } }
     else if (f === 'org-attach') {

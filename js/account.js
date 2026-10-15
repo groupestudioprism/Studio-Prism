@@ -245,7 +245,7 @@
     const notice = st.auth.notice && st.auth.status !== 'in' && st.auth.status !== 'loading' ? errMsg(st.auth.notice) : '';
     const company = `<div id="co" class="acc-co" hidden><h2 class="lh">Votre entreprise</h2>` +
       field('coName', 'Nom de l’entreprise', 'text', 'organization', { attrs: 'maxlength="120"' }) +
-      field('coEmail', 'E-mail de l’entreprise', 'email', 'off', { attrs: 'maxlength="160" inputmode="email"' }) +
+      field('coEmail', 'E-mail de l’entreprise', 'email', 'off', { opt: 1, attrs: 'maxlength="160" inputmode="email"' }) +
       `<div class="row">${field('coJob', 'Votre fonction', 'text', 'organization-title', { opt: 1, attrs: 'maxlength="80"' })}${field('coPhone', 'Téléphone professionnel', 'tel', 'tel', { opt: 1, attrs: 'maxlength="30"' })}</div>` +
       field('coSite', 'Site internet', 'text', 'url', { opt: 1, attrs: 'maxlength="200" inputmode="url" placeholder="www.exemple.fr"' }) +
       `<div class="acc-f"><label for="coTier">Nombre de comptes nécessaires</label><select id="coTier" name="coTier" aria-describedby="h-coTier e-coTier"><option value="">Choisir…</option>${TIERS.map((t) => `<option value="${t.id}">${t.label}</option>`).join('')}</select>` +
@@ -307,7 +307,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       else if (fm.elements.mdp2.value !== pw) er.mdp2 = 'Les mots de passe ne correspondent pas.';
       if (isCo) {
         if (!g('coName')) er.coName = 'Renseignez le nom de l’entreprise.';
-        if (!EMAIL_RE.test(g('coEmail'))) er.coEmail = g('coEmail') ? 'E-mail de l’entreprise invalide.' : 'Renseignez l’e-mail de l’entreprise.';
+        if (g('coEmail') && !EMAIL_RE.test(g('coEmail'))) er.coEmail = 'E-mail de l’entreprise invalide.';   // facultatif : à défaut, l'e-mail du compte
         tier = TIERS.find((t) => t.id === g('coTier'));
         if (!tier) er.coTier = 'Choisissez le nombre de comptes nécessaires.';
         site = normUrl(g('coSite'));
@@ -328,7 +328,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
         const payload = { firstName: g('prenom'), lastName: g('nom'), email, password: pw, accountKind: isCo ? 'company' : 'individual' };
         if (isCo) {
           payload.company = {
-            name: g('coName'), email: g('coEmail').toLowerCase(), jobTitle: g('coJob'), phone: g('coPhone'),
+            name: g('coName'), email: (g('coEmail') || email).toLowerCase(), jobTitle: g('coJob'), phone: g('coPhone'),
             website: site, userRange: tier.id, userLimit: tier.limit
           };
         }
@@ -386,7 +386,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const SUBCLS = { free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' };
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
-  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Scolaire', '#/admin/scolaire'], ['ents', 'Entreprise', '#/admin/entreprises'], ['pages', 'Pages', '#/admin/pages']];
+  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Scolaire', '#/admin/scolaire'], ['ents', 'Entreprise', '#/admin/entreprises']];
   const adminShell = (inner, tab) => `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><div class="k">Comptes, produits, contenu du site et accès</div><h1>Administration Studio Prism</h1>` +
     `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>${inner}</div></section>`;
 
@@ -519,11 +519,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     if (!pb) return;
     const list = AD.users.filter((u) => u.status === 'pending'), np = Math.max((AD.counts && AD.counts.pending) || 0, list.length);
     if (!np) { pb.innerHTML = ''; return; }
-    const tr = (u) => { const t = TIERS.find((x) => x.id === u.companyUserRange); return t ? t.short : ''; };
-    pb.innerHTML = `<div class="panel adm-pend"><div class="adm-pend-h"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation. Tant qu’elle n’est pas validée, la personne ne peut pas se connecter.</p></div>` +
-      (list.length ? `<ul class="adm-pend-l">${list.map((u) => `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${u.jobTitle ? ' · ' + esc(u.jobTitle) : ''}${tr(u) ? ' · ' + esc(tr(u)) + ' comptes' : ''} · demandé le ${fdate(u.createdAt)}</small></div>` +
-        `<span class="adm-pend-b"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}">Fiche</button> <button class="btn b1" data-a="adm-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="adm-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`).join('')}</ul>`
-        : `<p class="mut">Les demandes ne sont pas dans les comptes chargés : utilisez « Charger plus d’utilisateurs », ou le filtre Statut › En attente.</p>`) + `</div>`;
+    pb.innerHTML = `<div class="panel adm-pend adm-pend-row"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation${list.length ? ' : ' + list.slice(0, 3).map((u) => esc(u.companyName || u.email)).join(', ') + (list.length > 3 ? '…' : '') : ''}.</p><a class="btn b1" href="#/admin/entreprises" data-a="adm-go-pending">Traiter dans l’onglet Entreprise</a></div>`;
   }
 
   function licenseMatch(u) {
@@ -581,17 +577,15 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   function licCell(u) {
     const mine = AD.lic[u.uid];
     if (!mine) return `<span class="mut">${AD.licError ? '—' : 'Chargement…'}</span>`;
-    const prods = (AD.products || []).filter((p) => p.status !== 'draft' && p.status !== 'hidden' && ((AD.sellable && AD.sellable.has(p.id)) || mine.some((l) => l.productId === p.id)));
-    const lines = prods.map((p) => {
-      const l = mine.find((x) => x.productId === p.id);
-      const stt = l ? licState(l) : '';
-      return `<div class="adm-lic"><b>${esc(p.name)}</b> — ${l ? `${esc(typeLabel(l.licenseType))}${stt !== 'active' ? ` <span class="bd bd-off">${esc(LIC_STATUS[stt] || stt)}</span>` : ''}` : '<span class="mut">Aucun</span>'}</div>`;
-    });
-    mine.filter((l) => !prods.some((p) => p.id === l.productId)).forEach((l) => {
-      lines.push(`<div class="adm-lic"><b>${esc(l.productName)}</b> — ${esc(typeLabel(l.licenseType))}</div>`);
-    });
-    return lines.length ? lines.join('') : '<span class="mut">—</span>';
+    // uniquement les applications / licences que l'utilisateur a réellement (prises, activées ou utilisées) : aucune ligne « Aucun »
+    if (!mine.length) return '<span class="mut">—</span>';
+    const nameOf = (l) => ((AD.products || []).find((p) => p.id === l.productId) || {}).name || l.productName || l.productId;
+    return mine.slice().sort((a, b) => String(nameOf(a)).localeCompare(String(nameOf(b)), 'fr')).map((l) => {
+      const stt = licState(l);
+      return `<div class="adm-lic"><b>${esc(nameOf(l))}</b> — ${esc(typeLabel(l.licenseType))}${stt !== 'active' ? ` <span class="bd bd-off">${esc(LIC_STATUS[stt] || stt)}</span>` : ''}</div>`;
+    }).join('');
   }
+
 
   function rowHtml(u) {
     const co = u.accountKind === 'company';
@@ -638,6 +632,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
 
   A['adm-more'] = () => loadAdmin(true);
   /* Validation manuelle d'un compte Entreprise : pending → active. Refus : la demande est supprimée (même suppression que « Supprimer »). */
+  A['adm-go-pending'] = (b) => { window.SP_OPEN_PENDING = true; location.hash = b.getAttribute('href'); };
   A['adm-approve'] = async (btn) => {
     const u = AD.users.find((x) => x.uid === btn.dataset.uid); if (!u) return;
     btn.disabled = true;

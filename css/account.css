@@ -339,3 +339,30 @@
 .adm-pend-l small{display:block;color:#5b6472;margin-top:2px}
 .adm-pend-b{display:flex;gap:8px;flex-wrap:wrap}
 .adm-pend-b .btn{margin:0}
+.adm-pend-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.org-pend-n{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:10px;background:#E0A800;color:#1a1300;font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.org-pend-btn.on{border-color:#E0A800;background:#FFF4D6}
+.adm-pend fieldset{border:0;padding:0;margin:12px 0 0}
+.adm-pend legend,.mod fieldset legend{font-weight:600;margin-bottom:6px}
+.mod fieldset{border:0;padding:0;margin:12px 0 0}
+.mod label.chk{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-weight:400;cursor:pointer}
+.mod label.chk input{margin-top:3px;width:auto}
+/* page Abonnements : une ligne par produit, détail sur « Voir plus » */
+.ab-list{margin-top:28px;border-top:1px solid var(--line)}
+.ab-row{border-bottom:1px solid var(--line);scroll-margin-top:calc(var(--hh,90px) + 16px)}
+.ab-rh{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1.6fr) auto;gap:8px 18px;align-items:center;padding:16px 0}
+.ab-rt h2{margin:0;font-size:22px}
+.ab-rt .mt2{margin:2px 0 0;font-size:15px}
+.ab-rs{display:flex;flex-wrap:wrap;gap:6px}
+.ab-tg{margin:0;white-space:nowrap}
+.ab-rd{padding:4px 0 28px}
+.ab-row.open .ab-rh{padding-bottom:8px}
+.ab-links2{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 18px}
+@media(max-width:900px){.ab-rh{grid-template-columns:auto minmax(0,1fr) auto}.ab-rs{grid-column:1/-1;grid-row:2}}
+@media(max-width:480px){.ab-rh{grid-template-columns:auto minmax(0,1fr)}.ab-tg{grid-column:1/-1;width:100%}}
+/* fiche produit et page « Voir plus » */
+.prod-chips{margin:14px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+.prod-text{max-width:760px;margin-top:48px;font-size:18px;line-height:1.7}
+.prod-text p{margin:0 0 18px}
+.prod-hl li{font-size:17px}
+.pf-more{margin-top:18px}

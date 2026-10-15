@@ -302,7 +302,8 @@ service cloud.firestore {
       return d.keys().hasAll(['name', 'slug', 'category', 'description', 'logo', 'image', 'url', 'status', 'featured',
                               'displayOrder', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['name', 'slug', 'category', 'tagline', 'description', 'logo', 'image', 'url', 'status', 'featured',
-                             'displayOrder', 'createdAt', 'updatedAt', 'pole', 'stage', 'availability', 'info', 'platforms', 'website'])
+                             'displayOrder', 'createdAt', 'updatedAt', 'pole', 'stage', 'availability', 'info', 'platforms', 'website',
+                             'details', 'highlights'])
         && isId(pid)
         && d.slug == pid
         && isString(d.name, 1, 80)
@@ -317,6 +318,9 @@ service cloud.firestore {
         && (isSafeUrl(d.logo) || isMediaRef(d.logo)) && (isSafeUrl(d.image) || isMediaRef(d.image)) && isSafeUrl(d.url)
         // site web de l'application (adresse https:// uniquement), affiché sur la fiche produit et les cartes du pôle
         && (d.get('website', '') == '' || (d.website is string && d.website.size() <= 300 && d.website.matches('https://[!#-:=?-~]+')))
+        // page « Voir plus » créée avec le produit : présentation détaillée (texte) et points forts (liste de lignes courtes)
+        && isString(d.get('details', ''), 0, 5000)
+        && d.get('highlights', []) is list && d.get('highlights', []).size() <= 12
         && d.status in ['published', 'draft', 'unavailable', 'archived', 'active', 'hidden']
         && d.featured is bool
         && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999

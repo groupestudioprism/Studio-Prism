@@ -92,17 +92,27 @@
       return;
     }
     const jump = sections.length > 1 ? `<div class="chips ab-jump" role="navigation" aria-label="Produits">${sections.map((p) => `<a class="chip" href="#/abonnements/${esc(p.id)}">${esc(p.name)}</a>`).join('')}</div>` : '';
-    V(abShell(`${lede('Un seul compte Studio Prism, des licences par produit. Choisissez l’offre adaptée à chaque application ou service. Tous les produits sont dans le <a class="more" href="#/produits">catalogue</a>.')}${jump}` +
-      sections.map((p) => {
-        const href = CATLG.productHref(p);
-        return `<article class="ab-prod" id="ab-${esc(p.id)}"><div class="ab-ph">${logoImg(p, 'ab-logo')}<div><h2>${esc(p.name)}</h2>` +
-          `<p class="mt2">${esc(p.tagline || TYPES[p.category] || '')}</p>${p.description ? `<p class="ab-pd">${esc(p.description)}</p>` : ''}</div>` +
-          `<div class="ab-links"><a class="more ab-more" href="${esc(href)}">Découvrir ${esc(p.name)} →</a>${href !== '#/produits/' + p.id ? `<a class="more ab-more" href="#/produits/${esc(p.id)}">Fiche produit →</a>` : ''}</div></div>` +
-          `${CATLG.commercial(p)}</article>`;
-      }).join('')));
+    const open = new Set(slug ? [slug] : sections.length === 1 ? [sections[0].id] : []);
+    V(abShell(`${lede('Un seul compte Studio Prism, des licences par produit. Choisissez l’offre adaptée à chaque application ou service. Tous les produits sont dans le <a class="more" href="#/produits">catalogue</a>.')}` +
+      `<div class="ab-list">${sections.map((p) => {
+        const on = open.has(p.id), chips = CATLG.planChips(p.plans || []);
+        // une ligne par produit : logo, nom, accroche, résumé des offres, puis « Voir plus » qui déplie tout le détail (formules, prix, comparatif)
+        return `<article class="ab-row${on ? ' open' : ''}" id="ab-${esc(p.id)}"><div class="ab-rh">${logoImg(p, 'ab-logo')}` +
+          `<div class="ab-rt"><h2>${esc(p.name)}</h2><p class="mt2">${esc(p.tagline || TYPES[p.category] || '')}</p></div>` +
+          `<div class="ab-rs">${chips.slice(0, 3).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}${chips.length > 3 ? `<span class="pc-chip">+ ${chips.length - 3}</span>` : ''}</div>` +
+          `<button type="button" class="btn b4 ab-tg" data-a="ab-toggle" data-pid="${esc(p.id)}" aria-expanded="${on}" aria-controls="abd-${esc(p.id)}">${on ? 'Voir moins' : 'Voir plus'}</button></div>` +
+          `<div class="ab-rd" id="abd-${esc(p.id)}"${on ? '' : ' hidden'}>${p.description ? `<p class="ab-pd">${esc(p.description)}</p>` : ''}` +
+          `<p class="ab-links2"><a class="more" href="#/produits/${esc(p.id)}">Fiche produit →</a>${p.website ? ` <a class="more" href="${esc(p.website)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)} ↗</a>` : ''}</p>` +
+          `${CATLG.commercial(p)}</div></article>`;
+      }).join('')}</div>`));
     const target = slug && document.getElementById('ab-' + slug);
     if (target) setTimeout(() => target.scrollIntoView({ behavior: 'auto', block: 'start' }), 0);
   }
+
+  A['ab-toggle'] = (b) => {
+    const row = b.closest('.ab-row'), d = row && row.querySelector('.ab-rd'); if (!d) return;
+    const on = d.hidden; d.hidden = !on; row.classList.toggle('open', on); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? 'Voir moins' : 'Voir plus';
+  };
 
   A['ab-retry'] = () => { resetCatalogue(); offersPage(); };
 
@@ -862,8 +872,12 @@
       fld('pf-plat', 'Plateformes <span class="mut">(facultatif)</span>', inp('pf-plat', 'text', x && x.platforms.join(', '), 'maxlength="200" autocomplete="off" placeholder="Web, iOS, Android, Roblox…"'), 'Séparées par des virgules (8 au maximum).') +
       fld('pf-logo', 'Logo <span class="mut">(médiathèque ou lien)</span>', inp('pf-logo', 'text', x && x.logo, 'maxlength="300" autocomplete="off" placeholder="media:… (médiathèque), assets/img/logo.png ou https://…"') + pickBtn('pf-logo'), 'Choisissez un fichier de la médiathèque (recommandé : le remplacer met à jour tous les affichages) ou collez un lien.') +
       fld('pf-img', 'Image <span class="mut">(médiathèque ou lien)</span>', inp('pf-img', 'text', x && x.image, 'maxlength="300" autocomplete="off"') + pickBtn('pf-img')) +
-      fld('pf-url', 'Page du produit <span class="mut">(lien)</span>', inp('pf-url', 'text', x && x.url, 'maxlength="300" autocomplete="off" placeholder="#/projets/archivision ou https://…"'), 'Page du site (#/…), fichier du site (assets/…) ou adresse https://. Vide : la fiche #/produits/identifiant est utilisée.') +
-      fld('pf-web', 'Site web de l’application <span class="mut">(facultatif)</span>', inp('pf-web', 'url', x && (x.websiteSet || ''), 'maxlength="300" autocomplete="off" placeholder="https://groupestudioprism.github.io/ARCHIPLAN/"'), 'Adresse https:// où l’application s’ouvre. Affichée sur la fiche produit (« Ouvrir … ») et sur sa carte dans la page de son pôle (Prism App…).') +
+      fld('pf-web', 'Lien vers le site <span class="mut">(facultatif)</span>', inp('pf-web', 'url', x && (x.websiteSet || ''), 'maxlength="300" autocomplete="off" placeholder="https://groupestudioprism.github.io/ArchiPlan/"'), 'Adresse https:// de l’application. Sur la page du produit, le bouton « Ouvrir ' + esc(x ? x.name : 'le produit') + ' » y mène.') +
+      `<fieldset class="pf-offers pf-more"><legend>Page « Voir plus » <span class="mut">(créée automatiquement avec le produit)</span></legend>` +
+      fld('pf-details', 'Présentation détaillée', txa('pf-details', x && x.details, 8, 'maxlength="5000"'), 'Le texte de la page « Voir plus ». Laissez une ligne vide entre deux paragraphes. 5000 caractères au maximum.') +
+      fld('pf-hl', 'Points forts <span class="mut">(facultatif)</span>', txa('pf-hl', x && (x.highlights || []).join('\n'), 4, 'maxlength="2000"'), 'Un point fort par ligne (12 au maximum).') +
+      fld('pf-url', 'Utiliser plutôt une page existante du site <span class="mut">(facultatif)</span>', inp('pf-url', 'text', x && x.url, 'maxlength="300" autocomplete="off" placeholder="#/projets/archivision"'), 'Utilisée seulement si la présentation détaillée et les points forts sont vides : « Voir plus » mène alors à cette page du site (#/…).') +
+      `<p class="acc-h">Aperçu après enregistrement : ${x ? `<a class="more" href="#/produits/${esc(x.id)}/presentation" data-a="x">page « Voir plus » de ${esc(x.name)}</a>` : 'la page sera à l’adresse #/produits/identifiant/presentation'}.</p></fieldset>` +
       `<div class="row">${fld('pf-order', 'Ordre d’affichage', inp('pf-order', 'number', x ? x.displayOrder : (CT.prods.length + 1), 'min="0" max="9999" step="1"'))}<div class="acc-f">${chk('pf-feat', 'Mis en avant (« Réalisations »)', x && x.featured)}</div></div>` +
       (x ? `<div class="pf-offers"><h4>Offres</h4><p class="mt2">${plans.length ? `${plans.length} formule${plans.length > 1 ? 's' : ''} : ${esc(plans.map((pl) => pl.name).join(', '))}.` : 'Aucune offre : le produit est présenté sans tarif.'} Les formules, prix et périodes se gèrent dans l’onglet <a class="more" href="#/admin/abonnements" data-a="x">Offres et prix</a>.</p></div>`
         : `<fieldset class="pf-offers"><legend>Offre initiale <span class="mut">(facultative)</span></legend>${fld('pf-offer', 'Mode de commercialisation', sel('pf-offer', INITIAL_OFFERS, ''), 'Un produit n’a besoin d’aucune offre : vous pourrez en ajouter, ou non, plus tard (onglet Offres et prix).')}` +
@@ -932,6 +946,9 @@
     if (fm.elements['pf-info'].value.length > 1000) er['pf-info'] = '1000 caractères maximum.';
     if (plats.length > 8) er['pf-plat'] = '8 plateformes au maximum.';
     [['pf-logo', 'Lien du logo', optMedia], ['pf-img', 'Lien de l’image', optMedia], ['pf-url', 'Lien du produit', optUrl]].forEach(([k, l, ok]) => { if (!ok(g(k))) er[k] = `${l} invalide : utilisez #/…, assets/…, https://… ou un média de la médiathèque.`; });
+    const hls = fm.elements['pf-hl'].value.split('\n').map((x) => x.trim()).filter(Boolean);
+    if (hls.length > 12) er['pf-hl'] = '12 points forts au maximum.';
+    if (fm.elements['pf-details'].value.length > 5000) er['pf-details'] = '5000 caractères au maximum.';
     if (g('pf-web') && !/^https:\/\/[!#-:=?-~]+$/.test(g('pf-web'))) er['pf-web'] = 'Adresse invalide : elle doit commencer par https:// (sans espace).';
     if (!Number.isInteger(order) || order < 0 || order > 9999) er['pf-order'] = 'Nombre entier entre 0 et 9999.';
     const prod = { id: g('pf-id'), name: g('pf-name') };
@@ -943,7 +960,7 @@
       const d = await D();
       const r = await d.saveProduct({
         id: prod.id, name: prod.name, category: g('pf-cat'), pole: g('pf-pole'), stage: g('pf-stage'), tagline: g('pf-tag'), description: g('pf-desc'),
-        availability: g('pf-avail'), info: fm.elements['pf-info'].value.trim(), platforms: plats, logo: g('pf-logo'), image: g('pf-img'), url: g('pf-url'), website: g('pf-web'),
+        availability: g('pf-avail'), info: fm.elements['pf-info'].value.trim(), platforms: plats, logo: g('pf-logo'), image: g('pf-img'), url: g('pf-url'), website: g('pf-web'), details: fm.elements['pf-details'].value.trim(), highlights: hls.map((x) => x.slice(0, 200)),
         status: g('pf-status'), featured: fm.elements['pf-feat'].checked, displayOrder: order
       }, !edit, fm.dataset.prev);
       let offerFailed = false;

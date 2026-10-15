@@ -88,6 +88,7 @@
       status, category, pole, stage: STAGES[p.stage] ? p.stage : '', tagline: p.tagline || '', description: p.description || '',
       availability: p.availability || '', info: p.info || '', platforms: Array.isArray(p.platforms) ? p.platforms.filter((x) => typeof x === 'string') : [],
       featured: !!p.featured, displayOrder: Number.isFinite(p.displayOrder) ? p.displayOrder : 0, logo: p.logo || '', image: p.image || '', url: p.url || '',
+      details: typeof p.details === 'string' ? p.details : '', highlights: Array.isArray(p.highlights) ? p.highlights.filter((x) => typeof x === 'string' && x.trim()).slice(0, 12) : [],
       website: webOf(p), websiteSet: typeof p.website === 'string' ? p.website : ''   // websiteSet : valeur enregistrée (formulaire)
     });
   }
@@ -453,8 +454,20 @@
     return { rows, bullets };
   }
 
+  /* Boutons d'un produit : Ouvrir (site de l'application), Voir plus (page de présentation), Voir les offres (page Abonnements du produit),
+     Nous contacter. La page « Voir plus » est une page du site (lien « Page du produit » en #/…) ou, à défaut, la page de présentation
+     créée automatiquement à partir des champs du produit : #/produits/{id}/presentation. */
+  // présentation saisie dans le formulaire du produit → page automatique ; sinon page existante du site (#/…) ; sinon page automatique
+  const moreHref = (p) => { const pg = pageOf(p), auto = '#/produits/' + p.id + '/presentation'; return (p.details || (p.highlights || []).length) ? auto : pg && pg !== '#/produits/' + p.id ? pg : auto; };
+  function ctaRow(p, here) {
+    const plans = p.plans || [];
+    return (p.website ? `<a class="btn b1 ar" href="${esc(p.website)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '') +
+      (here !== 'more' ? `<a class="btn ${p.website ? 'b4' : 'b1'} ar" href="${esc(moreHref(p))}">Voir plus</a>` : `<a class="btn b4 ar" href="#/produits/${esc(p.id)}">Fiche produit</a>`) +
+      (plans.length ? `<a class="btn b4 ar" href="#/abonnements/${esc(p.id)}">Voir les offres</a>` : '') +
+      `<a class="btn b4 ar" href="#/contact">Nous contacter</a>`;
+  }
+
   function productHtml(p) {
-    const own = '#/produits/' + p.id, page = pageOf(p), web = p.website;
     const { rows, bullets } = infoBlock(p);
     const spec = [['Pôle', `<a class="more" href="${POLE_PAGE[p.pole]}">${esc(POLES[p.pole])}</a>`], ['Type', esc(TYPES[p.category])]];
     if (p.stage) spec.push(['Avancement', esc(STAGES[p.stage])]);
@@ -462,23 +475,33 @@
     if (p.platforms.length) spec.push(['Plateformes', esc(p.platforms.join(' · '))]);
     rows.forEach((r) => spec.push(r));
     const others = C.products.filter((x) => x.pole === p.pole && x.id !== p.id).slice(0, 3);
-    const plans = p.plans || [];
-    const cta = (web ? `<a class="btn b1 ar" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '') +
-      (page && page !== own ? `<a class="btn ${web ? 'b4' : 'b1'} ar" href="${esc(page)}">Découvrir ${esc(p.name)}</a>` : '') +
-      (plans.length ? '<button type="button" class="btn b4 ar" data-a="goto" data-v="produit-offres">Voir les offres</button>' : '') +
-      `<a class="btn b4 ar" href="#/contact">Nous contacter</a>`;
+    const chips = planChips(p.plans || []);
     return `<section class="pg prod"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / <a href="#/produits">Produits</a> / ${esc(p.name)}</p>` +
       `<div class="pp"><div class="im pim ${POLE_CLS[p.pole]} pimg${visual(p).charAt(1) === 'i' ? ' pim-i' : ''}" aria-hidden="true">${visual(p)}</div><div>${tags(p)}` +
       `<h1 style="font-size:clamp(32px,4vw,52px);margin:10px 0 14px">${esc(p.name)}</h1>${p.tagline ? `<p class="mt2" style="margin-bottom:8px">${esc(p.tagline)}</p>` : ''}` +
       `${p.description ? `<p class="lead2">${esc(p.description)}</p>` : ''}` +
+      `${chips.length ? `<p class="prod-chips">${chips.slice(0, 4).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}</p>` : ''}` +
       `${p.status === 'unavailable' ? '<p class="acc-note">Ce produit est momentanément indisponible. Contactez Studio Prism pour en savoir plus.</p>' : ''}` +
-      `<p class="prod-cta">${cta}</p></div></div>` +
+      `<p class="prod-cta">${ctaRow(p, 'fiche')}</p></div></div>` +
       `<h2 style="margin-top:56px">Informations</h2>${spec.length ? `<dl class="spec">${spec.map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${b}</dd></div>`).join('')}</dl>` : ''}` +
       `${bullets.length ? `<ul class="ab-ul prod-ul">${bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}` +
-      `<h2 id="produit-offres" style="margin-top:56px">${plans.length ? 'Offres' : 'Offres et accès'}</h2>` +
-      (plans.length ? commercial(p) : `<div class="panel"><p>Ce produit n’a pas d’offre en ligne pour le moment.</p><p class="mut" style="margin-top:6px">Pour connaître ses conditions d’accès ou demander un devis, contactez Studio Prism.</p><p style="margin-top:12px"><a class="btn b1 ar" href="#/contact">Nous contacter</a></p></div>`) +
       (others.length ? `<h2 style="margin-top:56px">Autres produits ${esc(POLES[p.pole])}</h2><div class="g">${others.map(pcard).join('')}</div>` : '') +
       `</div></section>`;
+  }
+
+  /* Page « Voir plus » créée automatiquement : présentation détaillée et points forts saisis dans le formulaire du produit. */
+  function presentationHtml(p) {
+    const paras = String(p.details || '').split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+    const { rows, bullets } = infoBlock(p);
+    return `<section class="pg prod prod-more"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / <a href="#/produits">Produits</a> / <a href="#/produits/${esc(p.id)}">${esc(p.name)}</a> / Présentation</p>` +
+      `<div class="pp"><div class="im pim ${POLE_CLS[p.pole]} pimg${visual(p).charAt(1) === 'i' ? ' pim-i' : ''}" aria-hidden="true">${visual(p)}</div><div>${tags(p)}` +
+      `<h1 style="font-size:clamp(32px,4vw,52px);margin:10px 0 14px">${esc(p.name)}</h1>${p.tagline ? `<p class="mt2" style="margin-bottom:8px">${esc(p.tagline)}</p>` : ''}` +
+      `${p.description ? `<p class="lead2">${esc(p.description)}</p>` : ''}<p class="prod-cta">${ctaRow(p, 'more')}</p></div></div>` +
+      (paras.length ? `<div class="prod-text">${paras.map((x) => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join('')}</div>` : '') +
+      (p.highlights.length ? `<h2 style="margin-top:48px">Points forts</h2><ul class="ab-ul prod-ul prod-hl">${p.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : '') +
+      (rows.length || bullets.length ? `<h2 style="margin-top:48px">En pratique</h2>${rows.length ? `<dl class="spec">${rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>` : ''}${bullets.length ? `<ul class="ab-ul prod-ul">${bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}` : '') +
+      (!paras.length && !p.highlights.length ? `<div class="panel" style="margin-top:32px"><p>La présentation détaillée de ${esc(p.name)} arrive bientôt.</p><p class="mut" style="margin-top:6px">Pour en savoir plus dès maintenant, contactez Studio Prism.</p></div>` : '') +
+      `<p class="prod-cta" style="margin-top:48px">${ctaRow(p, 'more')}</p></div></section>`;
   }
 
   function productPage() {
@@ -487,7 +510,7 @@
       if (CUR !== key) return;
       const p = find(id);
       if (!p) return nf();
-      V(productHtml(p));
+      V(CUR.split('/')[2] === 'presentation' ? presentationHtml(p) : productHtml(p));
       if (K.st.auth.status === 'in') hooks.loadMine().then(() => { if (CUR === key) repaintAll(); }).catch(() => {});
     };
     if (find(id) || C.done) {
