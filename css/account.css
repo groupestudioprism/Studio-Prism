@@ -381,3 +381,8 @@ html.pl-open{overflow:hidden}
 .pinlock{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(7,27,85,.72);backdrop-filter:blur(6px)}
 .pinlock .pl-box{width:100%;max-width:420px}
 .pinlock #pl-pin{letter-spacing:.4em;font-size:20px;text-align:center}
+/* Téléchargements réservés aux administrateurs (js/downloads.js) */
+.dl-t{margin-top:8px}.dl-list{display:grid;gap:16px;margin-top:16px}
+.dl-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}.dl-h h3{margin:0}
+.dl-act{margin:14px 0 6px;display:flex;gap:10px;flex-wrap:wrap}.dl-how{font-size:14px}
+.dl-adm{margin:18px 0}
