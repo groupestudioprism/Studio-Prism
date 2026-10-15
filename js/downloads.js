@@ -3,17 +3,16 @@
  *  - #/admin/telechargements : onglet « Téléchargements » de l'administration (APK Android d'ARCHIVISION pour l'instant) ;
  *  - page ArchiVision (#/archivision) : encart « Version Android » affiché aux seuls administrateurs connectés.
  *
- * TÉLÉCHARGEMENT DIRECT : « Télécharger l'APK » ouvre une fenêtre de confirmation, puis le fichier se télécharge
- * directement sur l'appareil (plus de passage par Google Drive). Le fichier est servi par les « Releases » GitHub
- * du dépôt groupestudioprism/ArchiVision : l'adresse …/releases/latest/download/ArchiVision.apk pointe toujours vers
- * la dernière version publiée, et GitHub l'envoie comme pièce jointe (le navigateur l'enregistre au lieu de l'ouvrir).
- * La version, la date et la taille affichées sont lues sur l'API publique de GitHub ; sans réseau, les valeurs ci-dessous servent.
+ * TÉLÉCHARGEMENT DIRECT : « Télécharger l'APK » ouvre une fenêtre de confirmation, puis « Autoriser le téléchargement »
+ * enregistre le fichier directement sur l'appareil (plus de passage par Google Drive). L'APK est servi par ce même site
+ * (dossier telechargements/), donc le navigateur l'enregistre au lieu de l'ouvrir. Version, date et taille sont lues dans
+ * telechargements/archivision.json ; sans réponse, les valeurs de secours ci-dessous s'affichent.
  *
- * Attention : un fichier de Release d'un dépôt public est téléchargeable par toute personne qui a le lien. Le bouton n'est
- * montré qu'aux administrateurs, mais c'est l'APK lui-même qui protège l'app (connexion Studio Prism + licence ARCHIVISION).
+ * Attention : un fichier publié sur GitHub Pages est téléchargeable par toute personne qui a le lien. Le bouton n'est montré
+ * qu'aux administrateurs, mais c'est l'APK lui-même qui protège l'app (connexion Studio Prism + licence ARCHIVISION).
  *
- * NOUVELLE VERSION : sur GitHub → groupestudioprism/ArchiVision → Releases → « Draft a new release » → tag vX.Y.Z →
- * glisser le fichier en le nommant exactement ArchiVision.apk → Publish. Le site l'affiche tout seul, rien à modifier ici. */
+ * NOUVELLE VERSION : remplacer telechargements/ArchiVision.apk (même nom) et mettre à jour version, date et taille (en octets)
+ * dans telechargements/archivision.json. Rien d'autre à modifier. */
 (function () {
   'use strict';
   const K = window.SP && window.SP.kit;
@@ -24,29 +23,24 @@
     id: 'archivision-android',
     name: 'ArchiVision · Android',
     desc: 'Application Android (APK) : maquettes BIM en visite 3D et en réalité augmentée (ARCore), compte Studio Prism, licence et stockage intégrés.',
-    repo: 'groupestudioprism/ArchiVision', asset: 'ArchiVision.apk',
+    asset: 'ArchiVision.apk', info: 'telechargements/archivision.json',
     version: '1.0.0', date: '15/10/2026', size: '≈ 39 Mo',       // valeurs de secours si l'API GitHub ne répond pas
-    needs: 'Téléphone ou tablette Android 8.0 ou plus récent. Réalité augmentée : appareil compatible ARCore.',
-    // Secours tant qu'aucune Release GitHub n'existe : téléchargement direct depuis le Drive (compte Google ayant accès au fichier)
-    fallback: 'https://drive.usercontent.google.com/download?id=1gRHiLpZp0ZW8XnVDLugpkDTTNMKM4Zsh&export=download&confirm=t'
+    needs: 'Téléphone ou tablette Android 8.0 ou plus récent. Réalité augmentée : appareil compatible ARCore.'
   }];
-  FILES.forEach((f) => { f.url = `https://github.com/${f.repo}/releases/latest/download/${f.asset}`; });
+  FILES.forEach((f) => { f.url = 'telechargements/' + f.asset; });
 
-  /* Dernière version publiée (une requête par fichier et par visite ; 60 requêtes / heure autorisées sans compte GitHub). */
+  /* Version publiée : lue une fois par visite dans le fichier d'informations (même site, sans cache). */
   const mo = (b) => (b / 1048576).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Mo';
   function refresh(f) {
     if (f._p) return f._p;
-    f._p = fetch(`https://api.github.com/repos/${f.repo}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
-      .then((r) => (r.ok ? r.json() : (r.status === 404 ? {} : null)))
-      .then((rel) => {
-        if (!rel) return;
-        const a = (rel.assets || []).find((x) => x.name === f.asset) || (rel.assets || []).find((x) => /\.apk$/i.test(x.name));
-        if (!a) { if (f.fallback) f.url = f.fallback; return; }   // aucune Release publiée : secours Drive
-        f.version = String(rel.tag_name || f.version).replace(/^v/i, '');
-        f.date = new Date(rel.published_at || a.updated_at).toLocaleDateString('fr-FR');
-        f.size = mo(a.size);
-        f.url = a.browser_download_url;
-        f.file = a.name;
+    f._p = fetch(f.info + '?t=' + Date.now(), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        if (j.version) f.version = String(j.version);
+        if (j.date) f.date = new Date(j.date + 'T12:00:00').toLocaleDateString('fr-FR');
+        if (j.size) f.size = mo(+j.size);
+        if (j.file) { f.file = j.file; f.url = 'telechargements/' + encodeURIComponent(j.file) + '?v=' + encodeURIComponent(f.version); }
         document.querySelectorAll(`[data-dl-meta="${f.id}"]`).forEach((el) => { el.textContent = meta(f); });
       })
       .catch(() => {});

@@ -246,7 +246,7 @@ Sans serveur, un administrateur ne peut pas créer le compte de connexion d'une 
 
 Administration → **Téléchargements** (et l'encart « Version Android » de la page ArchiVision, visible des seuls administrateurs).
 
-- **Télécharger l'APK** → fenêtre de confirmation → **Autoriser le téléchargement** : le fichier `ArchiVision.apk` s'enregistre directement sur l'appareil (plus de passage par Google Drive). Sur Android, l'ouvrir depuis les téléchargements et autoriser « Installer des applis inconnues » si demandé.
-- Le fichier est hébergé dans les **Releases GitHub** du dépôt `groupestudioprism/ArchiVision` ; le site affiche tout seul la dernière version, sa date et sa taille.
-- **Publier une nouvelle version** : GitHub → `groupestudioprism/ArchiVision` → *Releases* → *Draft a new release* → tag `v1.0.1` (par exemple) → glisser l'APK **nommé exactement `ArchiVision.apk`** → *Publish release*. Rien à modifier sur le site.
-- ⚠ Un fichier de Release d'un dépôt public est téléchargeable par quiconque a le lien. Le bouton n'est montré qu'aux administrateurs ; l'app reste protégée par la connexion Studio Prism et la licence ARCHIVISION.
+- **Télécharger l'APK** → fenêtre de confirmation → **Autoriser le téléchargement** : `ArchiVision.apk` s'enregistre directement sur l'appareil (plus de passage par Google Drive). Sur Android, l'ouvrir depuis les téléchargements et autoriser « Installer des applis inconnues » si demandé.
+- Le fichier est hébergé par le site lui-même : dossier `telechargements/` de ce dépôt.
+- **Publier une nouvelle version** : remplacer `telechargements/ArchiVision.apk` (garder exactement ce nom) et mettre à jour `version`, `date` (AAAA-MM-JJ) et `size` (taille en octets) dans `telechargements/archivision.json`. Le site affiche tout seul la nouvelle version.
+- ⚠ Un fichier publié sur le site est téléchargeable par quiconque a le lien. Le bouton n'est montré qu'aux administrateurs ; l'app reste protégée par la connexion Studio Prism et la licence ARCHIVISION.
