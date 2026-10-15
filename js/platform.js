@@ -173,7 +173,7 @@
     apps.innerHTML = sorted.map((l) => {
       const p = prods.get(l.productId), s = licState(l), name = (p && p.name) || l.productName;
       // Adresse de l'application : celle de la fiche produit (https) si elle existe, sinon l'application web connue (ARCHIPLAN…)
-      const own = safeUrl(p && p.url), url = own && /^https:/.test(own) ? own : (APP_URLS[l.productId] || '');
+      const url = (p && p.website) || APP_URLS[l.productId] || '';
       const more = `<a class="btn b4" href="#/produits/${esc(l.productId)}">En savoir plus</a>`;
       const open = s === 'active' && url
         ? `<p class="app-btns"><a class="btn b1 ar" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir ${esc(name)}</a> ${more}</p>`
@@ -863,6 +863,7 @@
       fld('pf-logo', 'Logo <span class="mut">(médiathèque ou lien)</span>', inp('pf-logo', 'text', x && x.logo, 'maxlength="300" autocomplete="off" placeholder="media:… (médiathèque), assets/img/logo.png ou https://…"') + pickBtn('pf-logo'), 'Choisissez un fichier de la médiathèque (recommandé : le remplacer met à jour tous les affichages) ou collez un lien.') +
       fld('pf-img', 'Image <span class="mut">(médiathèque ou lien)</span>', inp('pf-img', 'text', x && x.image, 'maxlength="300" autocomplete="off"') + pickBtn('pf-img')) +
       fld('pf-url', 'Page du produit <span class="mut">(lien)</span>', inp('pf-url', 'text', x && x.url, 'maxlength="300" autocomplete="off" placeholder="#/projets/archivision ou https://…"'), 'Page du site (#/…), fichier du site (assets/…) ou adresse https://. Vide : la fiche #/produits/identifiant est utilisée.') +
+      fld('pf-web', 'Site web de l’application <span class="mut">(facultatif)</span>', inp('pf-web', 'url', x && (x.websiteSet || ''), 'maxlength="300" autocomplete="off" placeholder="https://groupestudioprism.github.io/ARCHIPLAN/"'), 'Adresse https:// où l’application s’ouvre. Affichée sur la fiche produit (« Ouvrir … ») et sur sa carte dans la page de son pôle (Prism App…).') +
       `<div class="row">${fld('pf-order', 'Ordre d’affichage', inp('pf-order', 'number', x ? x.displayOrder : (CT.prods.length + 1), 'min="0" max="9999" step="1"'))}<div class="acc-f">${chk('pf-feat', 'Mis en avant (« Réalisations »)', x && x.featured)}</div></div>` +
       (x ? `<div class="pf-offers"><h4>Offres</h4><p class="mt2">${plans.length ? `${plans.length} formule${plans.length > 1 ? 's' : ''} : ${esc(plans.map((pl) => pl.name).join(', '))}.` : 'Aucune offre : le produit est présenté sans tarif.'} Les formules, prix et périodes se gèrent dans l’onglet <a class="more" href="#/admin/abonnements" data-a="x">Offres et prix</a>.</p></div>`
         : `<fieldset class="pf-offers"><legend>Offre initiale <span class="mut">(facultative)</span></legend>${fld('pf-offer', 'Mode de commercialisation', sel('pf-offer', INITIAL_OFFERS, ''), 'Un produit n’a besoin d’aucune offre : vous pourrez en ajouter, ou non, plus tard (onglet Offres et prix).')}` +
@@ -931,6 +932,7 @@
     if (fm.elements['pf-info'].value.length > 1000) er['pf-info'] = '1000 caractères maximum.';
     if (plats.length > 8) er['pf-plat'] = '8 plateformes au maximum.';
     [['pf-logo', 'Lien du logo', optMedia], ['pf-img', 'Lien de l’image', optMedia], ['pf-url', 'Lien du produit', optUrl]].forEach(([k, l, ok]) => { if (!ok(g(k))) er[k] = `${l} invalide : utilisez #/…, assets/…, https://… ou un média de la médiathèque.`; });
+    if (g('pf-web') && !/^https:\/\/[!#-:=?-~]+$/.test(g('pf-web'))) er['pf-web'] = 'Adresse invalide : elle doit commencer par https:// (sans espace).';
     if (!Number.isInteger(order) || order < 0 || order > 9999) er['pf-order'] = 'Nombre entier entre 0 et 9999.';
     const prod = { id: g('pf-id'), name: g('pf-name') };
     const offer = edit ? null : initialOffer(fm, prod, er);
@@ -941,7 +943,7 @@
       const d = await D();
       const r = await d.saveProduct({
         id: prod.id, name: prod.name, category: g('pf-cat'), pole: g('pf-pole'), stage: g('pf-stage'), tagline: g('pf-tag'), description: g('pf-desc'),
-        availability: g('pf-avail'), info: fm.elements['pf-info'].value.trim(), platforms: plats, logo: g('pf-logo'), image: g('pf-img'), url: g('pf-url'),
+        availability: g('pf-avail'), info: fm.elements['pf-info'].value.trim(), platforms: plats, logo: g('pf-logo'), image: g('pf-img'), url: g('pf-url'), website: g('pf-web'),
         status: g('pf-status'), featured: fm.elements['pf-feat'].checked, displayOrder: order
       }, !edit, fm.dataset.prev);
       let offerFailed = false;

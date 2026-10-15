@@ -300,7 +300,7 @@ service cloud.firestore {
       return d.keys().hasAll(['name', 'slug', 'category', 'description', 'logo', 'image', 'url', 'status', 'featured',
                               'displayOrder', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['name', 'slug', 'category', 'tagline', 'description', 'logo', 'image', 'url', 'status', 'featured',
-                             'displayOrder', 'createdAt', 'updatedAt', 'pole', 'stage', 'availability', 'info', 'platforms'])
+                             'displayOrder', 'createdAt', 'updatedAt', 'pole', 'stage', 'availability', 'info', 'platforms', 'website'])
         && isId(pid)
         && d.slug == pid
         && isString(d.name, 1, 80)
@@ -313,6 +313,8 @@ service cloud.firestore {
         && d.get('platforms', []) is list && d.get('platforms', []).size() <= 8
         && isString(d.description, 0, 1000)
         && (isSafeUrl(d.logo) || isMediaRef(d.logo)) && (isSafeUrl(d.image) || isMediaRef(d.image)) && isSafeUrl(d.url)
+        // site web de l'application (adresse https:// uniquement), affiché sur la fiche produit et les cartes du pôle
+        && (d.get('website', '') == '' || (d.website is string && d.website.size() <= 300 && d.website.matches('https://[!#-:=?-~]+')))
         && d.status in ['published', 'draft', 'unavailable', 'archived', 'active', 'hidden']
         && d.featured is bool
         && d.displayOrder is int && d.displayOrder >= 0 && d.displayOrder <= 9999

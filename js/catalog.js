@@ -37,6 +37,13 @@
 
   /* Lien affichable : https://, #/ (page du site) ou assets/ (fichier du site). Tout le reste (javascript:, data:…) est ignoré. */
   const safeUrl = (u) => (typeof u === 'string' && (/^https:\/\/[^\s<>"]+$/.test(u) || /^#\/[^\s<>"]*$/.test(u) || /^assets\/[^\s<>"]+$/.test(u)) && u.length <= 300 ? u : '');
+  const SUITE_APPS = { archiplan: '../archiplan/', architrafic: '../ArchiTraffic/', architraffic: '../ArchiTraffic/' };
+  const webOf = (p) => {
+    const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
+    if (w) return w;
+    if (typeof p.url === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.url) && p.url.length <= 300) return p.url;
+    try { return SUITE_APPS[p.id] ? new URL(SUITE_APPS[p.id], location.href.split('#')[0]).href : ''; } catch (e) { return ''; }
+  };
 
   function money(n, cur) {
     try { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: cur || 'EUR', minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }).format(n); }
@@ -80,7 +87,8 @@
     return Object.assign({}, p, {
       status, category, pole, stage: STAGES[p.stage] ? p.stage : '', tagline: p.tagline || '', description: p.description || '',
       availability: p.availability || '', info: p.info || '', platforms: Array.isArray(p.platforms) ? p.platforms.filter((x) => typeof x === 'string') : [],
-      featured: !!p.featured, displayOrder: Number.isFinite(p.displayOrder) ? p.displayOrder : 0, logo: p.logo || '', image: p.image || '', url: p.url || ''
+      featured: !!p.featured, displayOrder: Number.isFinite(p.displayOrder) ? p.displayOrder : 0, logo: p.logo || '', image: p.image || '', url: p.url || '',
+      website: webOf(p), websiteSet: typeof p.website === 'string' ? p.website : ''   // websiteSet : valeur enregistrée (formulaire)
     });
   }
 
@@ -240,6 +248,8 @@
 
   const hooks = { myLic: () => [], loadMine: () => Promise.resolve([]) };
 
+  /* Site web de l'application : champ « website » (https://), sinon un lien « Page du produit » en https://, sinon l'application de la
+     suite hébergée à côté du site (ARCHIPLAN, ARCHITRAFIC). */
   const pageOf = (p) => { const u = safeUrl(p.url); return u && u.charAt(0) === '#' ? u : ''; };
   const productHref = (p) => { const u = pageOf(p); return u && u !== '#/produits/' + p.id ? u : '#/produits/' + p.id; };
 
@@ -258,10 +268,10 @@
 
   function pcard(p) {
     const href = productHref(p), chips = planChips(p.plans || []), vis = visual(p);
-    const offers = p.plans && p.plans.length && href !== '#/produits/' + p.id;
+    const offers = p.plans && p.plans.length && href !== '#/produits/' + p.id, web = p.website;
     return `<article class="card pcard" data-pid="${esc(p.id)}"><a class="pc-a" href="${esc(href)}"><div class="im pim ${POLE_CLS[p.pole]}${vis.charAt(1) === 'i' ? ' pim-i' : ''}" aria-hidden="true">${vis}</div>` +
       `<div class="t">${tags(p)}<h3>${esc(p.name)}</h3>${p.tagline ? `<p class="mt2 pc-t">${esc(p.tagline)}</p>` : ''}${p.description ? `<p class="pc-d">${esc(p.description)}</p>` : ''}</div></a>` +
-      (chips.length || offers ? `<div class="pc-f">${chips.slice(0, 3).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}${chips.length > 3 ? `<span class="pc-chip">+ ${chips.length - 3}</span>` : ''}${offers ? `<a class="more" href="#/produits/${esc(p.id)}">Voir les offres →</a>` : ''}</div>` : '') +
+      (chips.length || offers || web ? `<div class="pc-f">${chips.slice(0, 3).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}${chips.length > 3 ? `<span class="pc-chip">+ ${chips.length - 3}</span>` : ''}${offers ? `<a class="more" href="#/produits/${esc(p.id)}">Voir les offres →</a>` : ''}${web ? `<a class="more" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Site web ↗</a>` : ''}</div>` : '') +
       `</article>`;
   }
 
@@ -444,7 +454,7 @@
   }
 
   function productHtml(p) {
-    const own = '#/produits/' + p.id, page = pageOf(p), ext = safeUrl(p.url);
+    const own = '#/produits/' + p.id, page = pageOf(p), web = p.website;
     const { rows, bullets } = infoBlock(p);
     const spec = [['Pôle', `<a class="more" href="${POLE_PAGE[p.pole]}">${esc(POLES[p.pole])}</a>`], ['Type', esc(TYPES[p.category])]];
     if (p.stage) spec.push(['Avancement', esc(STAGES[p.stage])]);
@@ -453,7 +463,8 @@
     rows.forEach((r) => spec.push(r));
     const others = C.products.filter((x) => x.pole === p.pole && x.id !== p.id).slice(0, 3);
     const plans = p.plans || [];
-    const cta = (page && page !== own ? `<a class="btn b1 ar" href="${esc(page)}">Découvrir ${esc(p.name)}</a>` : (!page && ext ? `<a class="btn b1 ar" href="${esc(ext)}" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '')) +
+    const cta = (web ? `<a class="btn b1 ar" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '') +
+      (page && page !== own ? `<a class="btn ${web ? 'b4' : 'b1'} ar" href="${esc(page)}">Découvrir ${esc(p.name)}</a>` : '') +
       (plans.length ? '<button type="button" class="btn b4 ar" data-a="goto" data-v="produit-offres">Voir les offres</button>' : '') +
       `<a class="btn b4 ar" href="#/contact">Nous contacter</a>`;
     return `<section class="pg prod"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / <a href="#/produits">Produits</a> / ${esc(p.name)}</p>` +

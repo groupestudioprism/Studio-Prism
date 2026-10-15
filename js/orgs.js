@@ -37,15 +37,33 @@
   const dur = (k) => k.expiresAt ? `jusqu’au ${fdate(k.expiresAt)}` : k.durationDays ? `${k.durationDays % 365 === 0 ? (k.durationDays / 365) + ' an' + (k.durationDays > 365 ? 's' : '') : k.durationDays + ' jours'} après activation` : 'sans limite';
 
   /* ================================================================== ADMINISTRATION */
-  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '' };
+  /* Deux onglets sur la même collection organizations : SCOLAIRE (écoles, établissements : élèves / enseignants, classes) et
+     ENTREPRISE (entreprises, collectivités, associations : services / équipes, pas de profil élève ou enseignant).
+     Le classement se fait par le type (kind) : aucune donnée à migrer. Le champ « classe » sert de service / équipe côté entreprise. */
+  const SEG = {
+    scol: { tab: 'orgs', href: '#/admin/scolaire', kinds: ['ecole', 'etablissement'], def: 'ecole', roles: true,
+      one: 'Établissement scolaire', many: 'Établissements', newL: 'Nouvel établissement scolaire', editL: 'Modifier l’établissement', add: '+ Établissement scolaire',
+      created: 'Établissement créé.', saved: 'Établissement mis à jour.', none: 'Aucun établissement scolaire pour le moment. Créez-en un pour regrouper les comptes et les licences de ses élèves et enseignants.',
+      lead: 'Écoles, lycées, universités et centres de formation : élèves, enseignants, classes et clés de licence. Une clé peut être remise avant la création du compte : la personne crée son compte Studio Prism puis saisit sa clé, la licence s’active et le compte est rangé dans son établissement et sa classe.',
+      q: 'Établissement, SIRET, contact, clé…', group: 'Classe', groupPh: 'ex. BTS 1A, 3e B…', noGroup: 'Sans classe', person: 'élève', seats: 'Nombre de postes (élèves + enseignants)', groupCol: 'Profil / classe' },
+    ent: { tab: 'ents', href: '#/admin/entreprises', kinds: ['entreprise', 'collectivite', 'association', 'autre'], def: 'entreprise', roles: false,
+      one: 'Entreprise', many: 'Entreprises', newL: 'Nouvelle entreprise', editL: 'Modifier l’entreprise', add: '+ Entreprise',
+      created: 'Entreprise créée.', saved: 'Entreprise mise à jour.', none: 'Aucune entreprise pour le moment. Créez-en une pour regrouper les comptes et les licences de ses salariés.',
+      lead: 'Entreprises, bureaux d’études, collectivités et associations clientes : postes, services, comptes rattachés et clés de licence. Chaque salarié crée son compte Studio Prism puis saisit sa clé : la licence s’active et le compte est rattaché à l’entreprise.',
+      q: 'Entreprise, SIRET, contact, clé…', group: 'Service / équipe', groupPh: 'ex. Bureau d’études, Chantier Nord…', noGroup: 'Sans service', person: 'salarié', seats: 'Nombre de postes (salariés)', groupCol: 'Service' }
+  };
+  const segOfKind = (k) => (SEG.scol.kinds.includes(k) ? 'scol' : 'ent');
+  const segOfOrg = (oid) => { const o = oid && O.orgs.find((x) => x.id === oid); return o ? segOfKind(o.kind) : O.seg; };
+  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '', seg: 'scol' };
 
-  function orgsTab(p, shell) {
-    V(shell(`<p class="lead">Établissements, entreprises et clés de licence. Une clé peut être remise avant la création du compte : la personne crée son compte Studio Prism puis saisit sa clé, la licence s’active et le compte est rangé dans son établissement.</p>
+  function orgsTab(seg, p, shell) {
+    const S = SEG[seg]; O.seg = seg; O.q = '';
+    V(shell(`<p class="lead">${S.lead}</p>
 <div class="adm-stats" id="org-stats"></div>
-<div class="adm-tools"><div class="acc-f adm-q" style="flex:1"><label for="org-q">Rechercher</label><input id="org-q" type="search" placeholder="Établissement, SIRET, contact, clé…" autocomplete="off"></div>
-<button class="btn b4" data-a="org-keys-new" data-org="">Générer des clés</button> <button class="btn b4" data-a="org-key-manual" data-org="">Saisir une clé</button> <button class="btn b1" data-a="org-new">+ Établissement / entreprise</button></div>
+<div class="adm-tools"><div class="acc-f adm-q" style="flex:1"><label for="org-q">Rechercher</label><input id="org-q" type="search" placeholder="${S.q}" autocomplete="off"></div>
+<button class="btn b4" data-a="org-keys-new" data-org="">Générer des clés</button> <button class="btn b4" data-a="org-key-manual" data-org="">Saisir une clé</button> <button class="btn b1" data-a="org-new">${S.add}</button></div>
 <div id="org-list"><p class="mut">Chargement…</p></div>
-<h2 class="lh" style="margin-top:28px">Clés sans établissement</h2><p class="mut">Clés individuelles (vente à un particulier, licence offerte…).</p><div id="org-free-keys"></div>`));
+<h2 class="lh" style="margin-top:28px">Clés sans établissement ni entreprise</h2><p class="mut">Clés individuelles (vente à un particulier, licence offerte…). Les mêmes clés apparaissent dans les onglets Scolaire et Entreprise.</p><div id="org-free-keys"></div>`));
     loadOrgs();
   }
   async function loadOrgs() {
@@ -61,26 +79,28 @@
     if (O.err) { list.innerHTML = `<div class="panel"><p>${esc(O.err)}</p><p class="mut">Les règles Firestore du site doivent inclure les blocs « organizations » et « licenseKeys ».</p><p><button class="btn b1" data-a="org-reload">Réessayer</button></p></div>`; return; }
     const q = O.q.trim().toLowerCase(), m = (s) => !q || String(s || '').toLowerCase().includes(q);
     const kOf = (oid) => O.keys.filter((k) => (k.orgId || '') === oid);
+    const S = SEG[O.seg], segOrgs = O.orgs.filter((o) => segOfKind(o.kind) === O.seg), ids = new Set(segOrgs.map((o) => o.id)), segKeys = O.keys.filter((k) => ids.has(k.orgId));
     const st2 = document.getElementById('org-stats');
-    if (st2) st2.innerHTML = [['Établissements', O.orgs.length], ['Clés disponibles', O.keys.filter((k) => k.status === 'available').length], ['Clés activées', O.keys.filter((k) => k.status === 'redeemed').length], ['Postes prévus', O.orgs.reduce((s, o) => s + (o.seats || 0), 0)]]
+    if (st2) st2.innerHTML = [[S.many, segOrgs.length], ['Clés disponibles', segKeys.filter((k) => k.status === 'available').length], ['Clés activées', segKeys.filter((k) => k.status === 'redeemed').length], ['Postes prévus', segOrgs.reduce((s, o) => s + (o.seats || 0), 0)]]
       .map(([l, n]) => `<div class="adm-stat"><span class="adm-n">${n}</span><span class="adm-l">${l}</span></div>`).join('');
-    const orgs = O.orgs.filter((o) => m(o.name) || m(o.siret) || m(o.contactName) || m(o.email) || kOf(o.id).some((k) => m(k.key) || m(k.redeemedEmail)));
-    list.innerHTML = orgs.length ? `<div class="adm-tw"><table class="adm-t org-t"><thead><tr><th>Établissement</th><th>Type</th><th>Contact</th><th>Postes</th><th>Clés</th><th>Statut</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${orgs.map((o) => {
+    const orgs = segOrgs.filter((o) => m(o.name) || m(o.siret) || m(o.contactName) || m(o.email) || kOf(o.id).some((k) => m(k.key) || m(k.redeemedEmail)));
+    list.innerHTML = orgs.length ? `<div class="adm-tw"><table class="adm-t org-t"><thead><tr><th>${S.one}</th><th>Type</th><th>Contact</th><th>Postes</th><th>Clés</th><th>Statut</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${orgs.map((o) => {
       const ks = kOf(o.id), used = ks.filter((k) => k.status === 'redeemed').length, avail = ks.filter((k) => k.status === 'available').length;
-      return `<tr><td data-label="Établissement"><div class="adm-v"><b>${esc(o.name)}</b><small>${esc(o.siret ? 'SIRET ' + o.siret : '')}</small></div></td>
+      return `<tr><td data-label="${S.one}"><div class="adm-v"><b>${esc(o.name)}</b><small>${esc(o.siret ? 'SIRET ' + o.siret : '')}</small></div></td>
         <td data-label="Type"><div class="adm-v">${badge('bd-kind', (window.SP_ORG_KINDS || {})[o.kind] || o.kind || '—')}</div></td>
         <td data-label="Contact"><div class="adm-v">${esc(o.contactName || '—')}<small>${esc(o.email || '')}${o.phone ? ' · ' + esc(o.phone) : ''}</small></div></td>
         <td data-label="Postes"><div class="adm-v"><b>${used}</b> / ${o.seats || '—'}<small>comptes activés / prévus</small></div></td>
         <td data-label="Clés"><div class="adm-v">${avail} disponible${avail > 1 ? 's' : ''}<small>${ks.length} au total</small></div></td>
         <td data-label="Statut"><div class="adm-v">${badge(o.status === 'active' ? 'bd-ok' : 'bd-off', o.status === 'active' ? 'Actif' : 'Suspendu')}</div></td>
         <td class="adm-act"><button class="btn b4" data-a="org-open" data-org="${esc(o.id)}">Fiche</button> <button class="btn b4" data-a="org-edit" data-org="${esc(o.id)}">Modifier</button></td></tr>`; }).join('')}</tbody></table></div>`
-      : `<div class="panel"><p>${O.orgs.length ? 'Aucun établissement ne correspond.' : 'Aucun établissement pour le moment. Créez-en un pour regrouper les comptes et les licences d’une même entreprise.'}</p></div>`;
+      : `<div class="panel"><p>${segOrgs.length ? 'Aucun résultat pour cette recherche.' : S.none}</p></div>`;
     const fk = document.getElementById('org-free-keys');
     if (fk) fk.innerHTML = keyTable(kOf('').filter((k) => m(k.key) || m(k.label) || m(k.redeemedEmail) || m(k.productName)), '');
   }
   function keyTable(ks, oid) {
-    if (!ks.length) return `<div class="panel"><p class="mut">Aucune clé${oid ? ' pour cet établissement' : ''}.</p></div>`;
-    return `<div class="adm-tw"><table class="adm-t key-t"><thead><tr><th>Clé</th><th>Licence</th><th>Profil / classe</th><th>Validité</th><th>Libellé / poste</th><th>Statut</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${ks.map((k) => `<tr>
+    const S = SEG[segOfOrg(oid)];
+    if (!ks.length) return `<div class="panel"><p class="mut">Aucune clé${oid ? ' pour ' + (S.roles ? 'cet établissement' : 'cette entreprise') : ''}.</p></div>`;
+    return `<div class="adm-tw"><table class="adm-t key-t"><thead><tr><th>Clé</th><th>Licence</th><th>${oid ? S.groupCol : 'Profil / groupe'}</th><th>Validité</th><th>Libellé / poste</th><th>Statut</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${ks.map((k) => `<tr>
       <td data-label="Clé"><div class="adm-v"><code class="kcode">${esc(k.key)}</code></div></td>
       <td data-label="Licence"><div class="adm-v"><b>${esc(k.productName)}</b><small>${esc(tLabel(k.licenseType))}</small></div></td>
       <td data-label="Profil"><div class="adm-v">${esc(ROLE_L[k.role] || '—')}${k.classe ? `<small>${esc(k.classe)}</small>` : ''}</div></td>
@@ -97,6 +117,7 @@
   const pass = (role, classe) => (!FO.role || role === FO.role) && (!FO.classe || classe === FO.classe);
   async function openOrg(id) {
     const o = orgById(id); if (!o) return;
+    const S = SEG[segOfKind(o.kind)];
     if (FO.id !== id) Object.assign(FO, { id, mem: [], lics: [], role: '', classe: '' });
     const m = pmodal(`<h3>${esc(o.name)}</h3><p class="mut">${esc((window.SP_ORG_KINDS || {})[o.kind] || '')}${o.siret ? ' · SIRET ' + esc(o.siret) : ''}</p>${spec([
       ['Contact', esc(o.contactName || '—')], ['E-mail', esc(o.email || '—')], ['Téléphone', esc(o.phone || '—')], ['Adresse', esc(o.address || '—')],
@@ -104,9 +125,9 @@
       ${o.notes ? `<p class="mt2">${esc(o.notes)}</p>` : ''}
       <div class="org-filt" id="org-filt"></div>
       <div class="fiche-h"><h4>Comptes rattachés</h4><button class="btn b4" data-a="org-attach" data-org="${esc(id)}">Rattacher un compte existant</button></div><div id="org-members"><p class="mut">Chargement…</p></div>
-      <div class="fiche-h"><h4>Clés de licence</h4><span><button class="btn b4" data-a="org-keys-xlsx" data-org="${esc(id)}">Excel par classe (.xlsx)</button> <button class="btn b4" data-a="org-keys-csv" data-org="${esc(id)}">CSV</button> <button class="btn b4" data-a="org-key-manual" data-org="${esc(id)}">Saisir une clé</button> <button class="btn b1" data-a="org-keys-new" data-org="${esc(id)}">Générer des clés</button></span></div>
+      <div class="fiche-h"><h4>Clés de licence</h4><span><button class="btn b4" data-a="org-keys-xlsx" data-org="${esc(id)}">Excel par ${S.roles ? 'classe' : 'service'} (.xlsx)</button> <button class="btn b4" data-a="org-keys-csv" data-org="${esc(id)}">CSV</button> <button class="btn b4" data-a="org-key-manual" data-org="${esc(id)}">Saisir une clé</button> <button class="btn b1" data-a="org-keys-new" data-org="${esc(id)}">Générer des clés</button></span></div>
       <div id="org-keys"></div>
-      <div class="fiche-act"><button class="btn b4" data-a="org-edit" data-org="${esc(id)}">Modifier l’établissement</button> <button class="btn btn-danger" data-a="org-del" data-org="${esc(id)}">Supprimer l’établissement</button></div>`, true);
+      <div class="fiche-act"><button class="btn b4" data-a="org-edit" data-org="${esc(id)}">${S.editL}</button> <button class="btn btn-danger" data-a="org-del" data-org="${esc(id)}">Supprimer ${S.roles ? 'l’établissement' : 'l’entreprise'}</button></div>`, true);
     FO.loading = true; renderFiche();
     try {
       const od = await OD(), pd = await PD(); FO.mem = await od.adminOrgMembers(id);
@@ -116,31 +137,33 @@
   }
   function renderFiche() {
     const id = FO.id, f = document.getElementById('org-filt'); if (!f) return;
+    const S = SEG[segOfOrg(id)];
     const ks = O.keys.filter((k) => k.orgId === id), cls = classesOf(id);
     const n = (role) => ks.filter((k) => !role || k.role === role).length;
-    f.innerHTML = `<div class="seg-f" role="tablist">${[['', 'Tous'], ['enseignant', 'Enseignants'], ['eleve', 'Élèves']].map(([v, t]) => `<button type="button" class="${FO.role === v ? 'on' : ''}" data-a="org-frole" data-v="${v}">${t} <small>${n(v)}</small></button>`).join('')}</div>
-      <label class="org-fc">Classe <select id="org-fclass"><option value="">Toutes les classes</option>${cls.map((c) => `<option${c === FO.classe ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`;
+    f.innerHTML = (S.roles ? `<div class="seg-f" role="tablist">${[['', 'Tous'], ['enseignant', 'Enseignants'], ['eleve', 'Élèves']].map(([v, t]) => `<button type="button" class="${FO.role === v ? 'on' : ''}" data-a="org-frole" data-v="${v}">${t} <small>${n(v)}</small></button>`).join('')}</div>` : '') + `
+      <label class="org-fc">${S.group} <select id="org-fclass"><option value="">${S.roles ? 'Toutes les classes' : 'Tous les services'}</option>${cls.map((c) => `<option${c === FO.classe ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`;
     const kb = document.getElementById('org-keys'); if (kb) kb.innerHTML = keyTable(ks.filter((k) => pass(k.role || '', k.classe || '')), id);
     const box = document.getElementById('org-members'); if (!box) return;
     if (FO.loading){ box.innerHTML = '<p class="mut">Chargement…</p>'; return; }
     const mem = FO.mem.filter((u) => pass(u.orgRole || '', u.orgClass || ''));
-    box.innerHTML = mem.length ? `<div class="adm-tw"><table class="adm-t"><thead><tr><th>Compte</th><th>Profil / classe</th><th>Licences</th><th>Statut</th><th></th></tr></thead><tbody>${mem.map((u) => `<tr>
+    box.innerHTML = mem.length ? `<div class="adm-tw"><table class="adm-t"><thead><tr><th>Compte</th><th>${S.groupCol}</th><th>Licences</th><th>Statut</th><th></th></tr></thead><tbody>${mem.map((u) => `<tr>
         <td data-label="Compte"><div class="adm-v"><b>${esc(fullName(u))}</b><small>${esc(u.email)}</small></div></td>
         <td data-label="Profil"><div class="adm-v">${esc(ROLE_L[u.orgRole] || '—')}${u.orgClass ? `<small>${esc(u.orgClass)}</small>` : ''}</div></td>
         <td data-label="Licences"><div class="adm-v">${FO.lics.filter((l) => l.userId === u.uid).map((l) => `${esc(l.productName)} — ${esc(tLabel(l.licenseType))}${l.expiresAt ? ` <small>jusqu’au ${esc(fdate(l.expiresAt))}</small>` : ''}`).join('<br>') || '<span class="mut">Aucune</span>'}</div></td>
         <td data-label="Statut"><div class="adm-v">${badge(u.status === 'active' ? 'bd-ok' : 'bd-off', u.status === 'active' ? 'Actif' : 'Désactivé')}</div></td>
         <td class="adm-act"><button class="btn b4" data-a="org-detach" data-uid="${esc(u.uid)}" data-org="${esc(id)}">Détacher</button></td></tr>`).join('')}</tbody></table></div>`
-      : `<p class="mut">${FO.mem.length ? 'Aucun compte pour ce filtre.' : 'Aucun compte rattaché pour le moment. Les personnes qui activent une clé de cet établissement apparaissent ici.'}</p>`;
+      : `<p class="mut">${FO.mem.length ? 'Aucun compte pour ce filtre.' : `Aucun compte rattaché pour le moment. Les personnes qui activent une clé de ${S.roles ? 'cet établissement' : 'cette entreprise'} apparaissent ici.`}</p>`;
   }
 
   /* ---- création / modification ---- */
   function orgForm(id) {
-    const o = id ? orgById(id) : { kind: 'entreprise', status: 'active', seats: 10 };
-    const kinds = Object.entries(window.SP_ORG_KINDS || { entreprise: 'Entreprise' });
-    pmodal(`<h3>${id ? 'Modifier l’établissement' : 'Nouvel établissement / entreprise'}</h3><form data-f="org-form" data-org="${esc(id || '')}" novalidate>
+    const S = SEG[id ? segOfOrg(id) : O.seg], o = id ? orgById(id) : { kind: S.def, status: 'active', seats: S.roles ? 30 : 10 };
+    const all = window.SP_ORG_KINDS || { entreprise: 'Entreprise', ecole: 'École / formation' };
+    const kinds = Object.entries(all).filter(([k]) => S.kinds.includes(k) || k === o.kind);
+    pmodal(`<h3>${id ? S.editL : S.newL}</h3><form data-f="org-form" data-org="${esc(id || '')}" novalidate>
       ${fld('og-name', 'Nom', inp('og-name', 'text', o.name, 'maxlength="120"'))}
       <div class="row">${fld('og-kind', 'Type', sel('og-kind', kinds, o.kind))}${fld('og-siret', 'SIRET <span class="mut">(facultatif)</span>', inp('og-siret', 'text', o.siret, 'maxlength="20" inputmode="numeric"'))}</div>
-      <div class="row">${fld('og-contact', 'Contact', inp('og-contact', 'text', o.contactName, 'maxlength="120"'))}${fld('og-seats', 'Nombre de postes', inp('og-seats', 'number', o.seats, 'min="1" max="10000"'))}</div>
+      <div class="row">${fld('og-contact', 'Contact', inp('og-contact', 'text', o.contactName, 'maxlength="120"'))}${fld('og-seats', S.seats, inp('og-seats', 'number', o.seats, 'min="1" max="10000"'))}</div>
       <div class="row">${fld('og-email', 'E-mail', inp('og-email', 'email', o.email, 'maxlength="160"'))}${fld('og-phone', 'Téléphone', inp('og-phone', 'tel', o.phone, 'maxlength="40"'))}</div>
       ${fld('og-addr', 'Adresse', inp('og-addr', 'text', o.address, 'maxlength="300"'))}
       ${fld('og-notes', 'Notes internes <span class="mut">(facultatif)</span>', `<textarea id="og-notes" name="og-notes" maxlength="1000" rows="3">${esc(o.notes || '')}</textarea>`)}
@@ -157,7 +180,7 @@
     const btn = fm.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       const nid = await (await OD()).saveOrg({ name: g('og-name'), kind: g('og-kind'), siret: g('og-siret').replace(/\s/g, ''), contactName: g('og-contact'), seats, email: g('og-email').toLowerCase(), phone: g('og-phone'), address: g('og-addr'), notes: g('og-notes'), status: g('og-status') || 'active' }, id || null);
-      await loadOrgs(); toast(id ? 'Établissement mis à jour.' : 'Établissement créé.'); openOrg(nid);
+      const S = SEG[segOfKind(g('og-kind'))]; await loadOrgs(); toast(id ? S.saved : S.created); openOrg(nid);
     } catch (e) { fm.querySelector('#og-err').textContent = errMsg(e); btn.disabled = false; }
   }
 
@@ -169,13 +192,13 @@
     if (!prods.length) return pmodal('<h3>Clés de licence</h3><p>Le catalogue est vide : ajoutez d’abord un produit (onglet Catalogue).</p>');
     const first = prods.find((p) => p.id === 'archiplan') || prods[0];
     const free = o ? Math.max(0, (o.seats || 0) - O.keys.filter((k) => k.orgId === oid && k.status !== 'revoked').length) : 10;
-    pmodal(`<h3>${manual ? 'Saisir une clé existante' : 'Générer des clés de licence'}</h3><p class="mut">${o ? esc(o.name) + ` · ${free} poste${free > 1 ? 's' : ''} sans clé` : 'Clés sans établissement'}</p>
+    pmodal(`<h3>${manual ? 'Saisir une clé existante' : 'Générer des clés de licence'}</h3><p class="mut">${o ? esc(o.name) + ` · ${free} poste${free > 1 ? 's' : ''} sans clé` : 'Clés sans établissement ni entreprise'}</p>
       <form data-f="org-keys" data-org="${esc(oid || '')}" data-manual="${manual ? 1 : ''}" novalidate>
       ${manual ? fld('ok-key', 'Clé', inp('ok-key', 'text', '', 'maxlength="60" autocomplete="off" autocapitalize="characters" placeholder="ABCD-EFGH-IJKL-MNOP" style="font-family:monospace"'), 'Lettres et chiffres, tirets facultatifs (au moins 12 caractères).')
         : fld('ok-n', 'Nombre de clés', inp('ok-n', 'number', Math.max(1, Math.min(free || 1, 50)), 'min="1" max="500"'))}
       <div class="row">${fld('ok-prod', 'Produit', sel('ok-prod', prods.map((p) => [p.id, p.name]), first.id))}${fld('ok-type', 'Type de licence', sel('ok-type', typesFor(first.id), 'pro'))}</div>
       <div class="row">${fld('ok-dur', 'Validité', sel('ok-dur', [['365', '1 an après activation'], ['730', '2 ans après activation'], ['1095', '3 ans après activation'], ['30', '30 jours (essai)'], ['90', '90 jours'], ['date', 'Jusqu’à une date'], ['', 'Sans limite']], '365'))}${fld('ok-date', 'Date de fin <span class="mut">(si « jusqu’à une date »)</span>', inp('ok-date', 'date', ''))}</div>
-      ${o ? `<div class="row">${fld('ok-role', 'Profil', sel('ok-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], FO.role))}${fld('ok-class', 'Classe <span class="mut">(facultatif)</span>', inp('ok-class', 'text', FO.classe, 'maxlength="60" list="ok-classes" placeholder="ex. BTS 1A, 3e B…"') + `<datalist id="ok-classes">${classesOf(oid).map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`)}</div>` : ''}
+      ${o ? (() => { const S = SEG[segOfKind(o.kind)]; return `<div class="row">${S.roles ? fld('ok-role', 'Profil', sel('ok-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], FO.role)) : ''}${fld('ok-class', S.group + ' <span class="mut">(facultatif)</span>', inp('ok-class', 'text', FO.classe, `maxlength="60" list="ok-classes" placeholder="${S.groupPh}"`) + `<datalist id="ok-classes">${classesOf(oid).map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`)}</div>`; })() : ''}
       ${fld('ok-label', 'Libellé <span class="mut">(facultatif : nom de la personne, poste, n° de commande…)</span>', inp('ok-label', 'text', '', 'maxlength="120"'))}
       <p class="fe" id="ok-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">${manual ? 'Enregistrer la clé' : 'Générer'}</button></p></form>`, true);
   }
@@ -200,9 +223,9 @@
     } catch (e) { fm.querySelector('#ok-err').textContent = errMsg(e) + (e.key ? ' (' + e.key + ')' : ''); btn.disabled = false; btn.textContent = manual ? 'Enregistrer la clé' : 'Générer'; }
   }
   function keysCsv(oid) {
-    const o = orgById(oid), ks = O.keys.filter((k) => (k.orgId || '') === (oid || ''));
+    const o = orgById(oid), ks = O.keys.filter((k) => (k.orgId || '') === (oid || '')), S = SEG[segOfOrg(oid)];
     const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = '﻿' + [['Clé', 'Profil', 'Classe', 'Produit', 'Type', 'Validité', 'Libellé', 'Statut', 'Activée par', 'Activée le'].map(q).join(';'),
+    const csv = '﻿' + [['Clé', 'Profil', S.group, 'Produit', 'Type', 'Validité', 'Libellé', 'Statut', 'Activée par', 'Activée le'].map(q).join(';'),
       ...ks.map((k) => [k.key, ROLE_L[k.role] || '', k.classe, k.productName, tLabel(k.licenseType), dur(k), k.label, KS[k.status]?.[1] || k.status, k.redeemedEmail, k.redeemedAt ? fdate(k.redeemedAt) : ''].map(q).join(';'))].join('\r\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `cles-${(o ? o.name : 'sans-etablissement').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}.csv`; document.body.appendChild(a); a.click(); a.remove();
@@ -230,12 +253,12 @@
       rows.map((r, ri) => `<row r="${ri + 1}">${r.map((c, ci) => c == null || c === '' ? '' : `<c r="${col(ci)}${ri + 1}" t="inlineStr"${ri === 0 ? ' s="1"' : ri === 2 ? ' s="2"' : ci === 0 ? ' s="3"' : ''}><is><t xml:space="preserve">${xe(c)}</t></is></c>`).join('')}</row>`).join('') + '</sheetData></worksheet>';
   }
   function keysXlsx(oid) {
-    const o = orgById(oid), ks = O.keys.filter((k) => k.orgId === oid), groups = new Map();
-    ks.slice().sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key), 'fr', { numeric: true })).forEach((k) => { const g = k.role === 'enseignant' ? 'Enseignants' : (k.classe || 'Sans classe'); (groups.get(g) || groups.set(g, []).get(g)).push(k); });
-    const names = [...groups.keys()].sort((a, b) => (a === 'Enseignants' ? -1 : b === 'Enseignants' ? 1 : a === 'Sans classe' ? 1 : b === 'Sans classe' ? -1 : a.localeCompare(b, 'fr', { numeric: true })));
+    const o = orgById(oid), ks = O.keys.filter((k) => k.orgId === oid), groups = new Map(), S = SEG[segOfKind(o.kind)], NG = S.noGroup;
+    ks.slice().sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key), 'fr', { numeric: true })).forEach((k) => { const g = S.roles && k.role === 'enseignant' ? 'Enseignants' : (k.classe || NG); (groups.get(g) || groups.set(g, []).get(g)).push(k); });
+    const names = [...groups.keys()].sort((a, b) => (a === 'Enseignants' ? -1 : b === 'Enseignants' ? 1 : a === NG ? 1 : b === NG ? -1 : a.localeCompare(b, 'fr', { numeric: true })));
     if (!names.length) return toast('Aucune clé à exporter.');
     const used = new Set(), safe = (n) => { let b = n.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 28) || 'Feuille', x = b, i = 2; while (used.has(x)) x = b + ' ' + i++; used.add(x); return x; };
-    const sheets = names.map((n) => ({ name: safe(n), xml: sheet([[`${o.name} — ${n}`], [`${groups.get(n).length} clé(s) · exporté le ${new Date().toLocaleDateString('fr-FR')}`], ['Clé', 'Profil', 'Classe', 'Libellé / élève', 'Produit', 'Licence', 'Validité', 'Statut', 'Activée par', 'Activée le'],
+    const sheets = names.map((n) => ({ name: safe(n), xml: sheet([[`${o.name} — ${n}`], [`${groups.get(n).length} clé(s) · exporté le ${new Date().toLocaleDateString('fr-FR')}`], ['Clé', 'Profil', S.group, `Libellé / ${S.person}`, 'Produit', 'Licence', 'Validité', 'Statut', 'Activée par', 'Activée le'],
       ...groups.get(n).map((k) => [k.key, ROLE_L[k.role] || '', k.classe || '', k.label || '', k.productName, tLabel(k.licenseType), dur(k), KS[k.status]?.[1] || k.status, k.redeemedEmail || '', k.redeemedAt ? fdate(k.redeemedAt) : ''])], [24, 12, 12, 28, 14, 14, 24, 11, 28, 12]) }));
     const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((x, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`;
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2A2E35"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="2" borderId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0"><alignment horizontal="left"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
@@ -245,7 +268,7 @@
       { name: 'xl/_rels/workbook.xml.rels', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((x, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
       { name: 'xl/styles.xml', data: styles }, ...sheets.map((x, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: x.xml }))];
     const a = document.createElement('a'); a.href = URL.createObjectURL(zip(files));
-    a.download = `cles-${o.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}-par-classe.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+    a.download = `cles-${o.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}-par-${S.roles ? 'classe' : 'service'}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
   }
 
   /* ---- actions ---- */
@@ -264,12 +287,12 @@
     // Clé sans établissement (disponible ou activée) : suppression après confirmation. Une licence déjà obtenue avec la clé reste valable.
     'org-key-del-ask': (b) => { const k = O.keys.find((x) => x.id === b.dataset.id); if (!k) return; pmodal(`<h3>Supprimer la clé ${esc(k.key)} ?</h3><p>${k.status === 'redeemed' ? `Cette clé a été activée par <b>${esc(k.redeemedEmail || '—')}</b>. La clé est supprimée, mais la <b>licence</b> déjà obtenue reste valable (à retirer depuis la fiche du compte si besoin).` : 'Cette clé n’a pas encore été activée : elle ne pourra plus l’être.'}</p><p class="mut">Action définitive.</p><p><button class="btn btn-danger" data-a="org-key-del" data-id="${esc(k.id)}">Supprimer la clé</button></p>`); },
     'org-key-del': async (b) => { b.disabled = true; const oid = O.keys.find((k) => k.id === b.dataset.id)?.orgId || ''; try { await (await OD()).adminDeleteKey(b.dataset.id); await loadOrgs(); if (b.closest('.mod')) { if (oid) openOrg(oid); else A.x(); } toast('Clé supprimée.'); } catch (e) { toast(errMsg(e)); b.disabled = false; } },
-    'org-key-label': (b) => { const k = O.keys.find((x) => x.id === b.dataset.id); pmodal(`<h3>Modifier la clé</h3><p><code class="kcode">${esc(k.key)}</code></p><form data-f="org-label" data-id="${esc(k.id)}" data-org="${esc(k.orgId || '')}">${fld('kl', 'Libellé', inp('kl', 'text', k.label, 'maxlength="120"'))}${k.orgId ? `<div class="row">${fld('kr', 'Profil', sel('kr', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], k.role || ''))}${fld('kc', 'Classe', inp('kc', 'text', k.classe, 'maxlength="60"'))}</div>` : ''}${k.status === 'redeemed' ? '<p class="mut">Clé déjà activée : le profil et la classe du compte ne changent pas (modifiez-les depuis la fiche du compte).</p>' : ''}<p><button class="btn b1" type="submit">Enregistrer</button></p></form>`); },
-    'org-del': (b) => { const o = orgById(b.dataset.org), nk = O.keys.filter((k) => k.orgId === o.id).length; pmodal(`<h3>Supprimer « ${esc(o.name)} » ?</h3><p>En un seul clic : la fiche, ses <b>${nk} clé${nk > 1 ? 's' : ''}</b> et les <b>licences</b> obtenues avec ces clés sont supprimées, et les comptes rattachés sont détachés. Les comptes eux-mêmes et leurs projets sont conservés.</p><p class="mut">Action définitive.</p><p class="fe" id="od-err" role="alert"></p><p><button class="btn btn-danger" data-a="org-del-ok" data-org="${esc(o.id)}">Supprimer l’établissement et ses licences</button></p>`); },
-    'org-del-ok': async (b) => { b.disabled = true; b.textContent = 'Suppression…'; try { const r = await (await OD()).deleteOrg(b.dataset.org); A.x(); FO.id = ''; await loadOrgs(); toast(`Établissement supprimé : ${r.keys} clé(s), ${r.licenses} licence(s), ${r.users} compte(s) détaché(s).`); } catch (e) { document.getElementById('od-err').textContent = errMsg(e); b.disabled = false; b.textContent = 'Réessayer'; } },
+    'org-key-label': (b) => { const k = O.keys.find((x) => x.id === b.dataset.id); pmodal(`<h3>Modifier la clé</h3><p><code class="kcode">${esc(k.key)}</code></p><form data-f="org-label" data-id="${esc(k.id)}" data-org="${esc(k.orgId || '')}">${fld('kl', 'Libellé', inp('kl', 'text', k.label, 'maxlength="120"'))}${k.orgId ? (() => { const S = SEG[segOfOrg(k.orgId)]; return `<div class="row">${S.roles ? fld('kr', 'Profil', sel('kr', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], k.role || '')) : ''}${fld('kc', S.group, inp('kc', 'text', k.classe, 'maxlength="60"'))}</div>`; })() : ''}${k.status === 'redeemed' ? '<p class="mut">Clé déjà activée : le profil et le groupe du compte ne changent pas (modifiez-les depuis la fiche du compte).</p>' : ''}<p><button class="btn b1" type="submit">Enregistrer</button></p></form>`); },
+    'org-del': (b) => { const o = orgById(b.dataset.org), nk = O.keys.filter((k) => k.orgId === o.id).length; pmodal(`<h3>Supprimer « ${esc(o.name)} » ?</h3><p>En un seul clic : la fiche, ses <b>${nk} clé${nk > 1 ? 's' : ''}</b> et les <b>licences</b> obtenues avec ces clés sont supprimées, et les comptes rattachés sont détachés. Les comptes eux-mêmes et leurs projets sont conservés.</p><p class="mut">Action définitive.</p><p class="fe" id="od-err" role="alert"></p><p><button class="btn btn-danger" data-a="org-del-ok" data-org="${esc(o.id)}">Supprimer ${SEG[segOfKind(o.kind)].roles ? 'l’établissement' : 'l’entreprise'} et ses licences</button></p>`); },
+    'org-del-ok': async (b) => { b.disabled = true; b.textContent = 'Suppression…'; try { const r = await (await OD()).deleteOrg(b.dataset.org); A.x(); FO.id = ''; await loadOrgs(); toast(`Fiche supprimée : ${r.keys} clé(s), ${r.licenses} licence(s), ${r.users} compte(s) détaché(s).`); } catch (e) { document.getElementById('od-err').textContent = errMsg(e); b.disabled = false; b.textContent = 'Réessayer'; } },
     'org-frole': (b) => { FO.role = b.dataset.v; renderFiche(); },
     'org-keys-xlsx': (b) => keysXlsx(b.dataset.org),
-    'org-attach': (b) => pmodal(`<h3>Rattacher un compte existant</h3><form data-f="org-attach" data-org="${esc(b.dataset.org)}">${fld('oa-mail', 'E-mail du compte Studio Prism', inp('oa-mail', 'email', '', 'maxlength="160"'))}<div class="row">${fld('oa-role', 'Profil', sel('oa-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], ''))}${fld('oa-class', 'Classe', inp('oa-class', 'text', '', 'maxlength="60"'))}</div><p class="fe" id="oa-err" role="alert"></p><p><button class="btn b1" type="submit">Rattacher</button></p></form>`),
+    'org-attach': (b) => { const S = SEG[segOfOrg(b.dataset.org)]; const o = orgById(b.dataset.org); pmodal(`<h3>Rattacher des comptes existants</h3><p class="mut">Des personnes qui ont déjà un compte Studio Prism rejoignent ${esc(o ? o.name : '')}. Leurs projets et leurs licences personnelles sont conservés.</p><form data-f="org-attach" data-org="${esc(b.dataset.org)}">${fld('oa-mail', 'E-mail(s) des comptes Studio Prism', `<textarea id="oa-mail" name="oa-mail" rows="4" maxlength="8000" placeholder="prenom.nom@entreprise.fr&#10;autre.salarie@entreprise.fr"></textarea>`, 'Une adresse par ligne (ou séparées par des virgules). Un compte déjà rattaché ailleurs est déplacé ici.')}<div class="row">${S.roles ? fld('oa-role', 'Profil', sel('oa-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], '')) : ''}${fld('oa-class', S.group, inp('oa-class', 'text', '', 'maxlength="60"'))}</div><p class="fe" id="oa-err" role="alert"></p><p><button class="btn b1" type="submit">Rattacher</button></p></form>`); },
     'org-detach': async (b) => { b.disabled = true; try { await (await OD()).adminSetUserOrg(b.dataset.uid, null); toast('Compte détaché.'); openOrg(b.dataset.org); } catch (e) { toast(errMsg(e)); b.disabled = false; } }
   });
   function refreshOpen(b) { const oid = b.closest('.mod') ? (O.keys.find((k) => k.id === b.dataset.id)?.orgId || '') : null; if (oid) openOrg(oid); }
@@ -281,9 +304,22 @@
     else if (f === 'org-keys') submitKeys(e.target);
     else if (f === 'org-label') { const fm = e.target; try { await (await OD()).adminSetKeyLabel(fm.dataset.id, fm.elements.kl.value, fm.elements.kr ? fm.elements.kr.value : '', fm.elements.kc ? fm.elements.kc.value.trim() : ''); await loadOrgs(); if (fm.dataset.org) openOrg(fm.dataset.org); else A.x(); } catch (x) { toast(errMsg(x)); } }
     else if (f === 'org-attach') {
-      const fm = e.target, err = fm.querySelector('#oa-err'), od = await OD();
-      try { const u = await od.adminFindUserByEmail(fm.elements['oa-mail'].value); if (!u) { err.textContent = 'Aucun compte avec cette adresse.'; return; }
-        await od.adminSetUserOrg(u.uid, orgById(fm.dataset.org), fm.elements['oa-role'].value, fm.elements['oa-class'].value.trim()); toast('Compte rattaché.'); openOrg(fm.dataset.org); } catch (x) { err.textContent = errMsg(x); }
+      const fm = e.target, err = fm.querySelector('#oa-err'), btn = fm.querySelector('button[type=submit]'), od = await OD(), org = orgById(fm.dataset.org);
+      const mails = [...new Set(fm.elements['oa-mail'].value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean))];
+      err.textContent = '';
+      if (!mails.length) { err.textContent = 'Saisissez au moins une adresse e-mail.'; return; }
+      const bad = mails.filter((m) => !K.EMAIL_RE.test(m)); if (bad.length) { err.textContent = 'Adresse(s) invalide(s) : ' + bad.join(', '); return; }
+      btn.disabled = true; btn.textContent = 'Rattachement…';
+      const role = fm.elements['oa-role'] ? fm.elements['oa-role'].value : '', classe = fm.elements['oa-class'].value.trim(), ok = [], moved = [], missing = [], failed = [];
+      for (const m of mails) {
+        try { const u = await od.adminFindUserByEmail(m); if (!u) { missing.push(m); continue; }
+          await od.adminSetUserOrg(u.uid, org, role, classe); ok.push(m); if (u.orgId && u.orgId !== org.id) moved.push(`${m} (quitte ${u.orgName || 'un autre groupe'})`);
+        } catch (x) { failed.push(`${m} : ${errMsg(x)}`); }
+      }
+      if (!missing.length && !failed.length) { toast(`${ok.length} compte${ok.length > 1 ? 's' : ''} rattaché${ok.length > 1 ? 's' : ''}.${moved.length ? ' Déplacé(s) : ' + moved.join(', ') + '.' : ''}`); openOrg(fm.dataset.org); return; }
+      btn.disabled = false; btn.textContent = 'Rattacher';
+      err.innerHTML = [ok.length ? `${ok.length} rattaché(s).` : '', missing.length ? `Aucun compte Studio Prism pour : ${esc(missing.join(', '))} (la personne doit d’abord créer son compte, ou recevoir une clé).` : '', failed.length ? esc(failed.join(' · ')) : ''].filter(Boolean).join('<br>');
+      fm.elements['oa-mail'].value = missing.concat(failed.map((x) => x.split(' : ')[0])).join('\n');
     }
     else if (f === 'key-redeem') submitRedeem(e.target);
   });
@@ -330,6 +366,7 @@
   }
   /* Clé saisie avant la connexion : on reprend l'activation dès que le compte est ouvert. */
 
-  Object.assign(R, { 'admin/etablissements': () => K.adminGate('orgs', orgsTab), activer: activatePage });
+  const scol = () => K.adminGate('orgs', (p, sh) => orgsTab('scol', p, sh)), ents = () => K.adminGate('ents', (p, sh) => orgsTab('ent', p, sh));
+  Object.assign(R, { 'admin/scolaire': scol, 'admin/etablissements': scol, 'admin/entreprises': ents, activer: activatePage });
   import(K.MOD('orgsdata.js')).then((m) => { window.SP_ORG_KINDS = m.ORG_KINDS; }).catch(() => {});
 })();

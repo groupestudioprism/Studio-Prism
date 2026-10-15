@@ -51,7 +51,8 @@
 .adm-n{font:700 30px/1.1 Inter,system-ui,sans-serif;color:var(--nuit)}
 .adm-l{font-size:13px;font-weight:600;color:var(--mut)}
 
-.adm-bar{display:grid;grid-template-columns:minmax(200px,2fr) repeat(6,minmax(0,1fr)) auto;gap:0 12px;align-items:end;max-width:none;padding:6px 20px 18px}
+.adm-bar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0 12px;align-items:end;max-width:none;padding:6px 20px 18px}
+.adm-bar .adm-q{grid-column:span 2}
 .adm-bar label{margin-top:12px}
 .adm-rs .btn{margin:0;white-space:nowrap}
 #adm-info{margin:16px 0 8px;min-height:20px}
@@ -88,7 +89,7 @@
 
 @media(max-width:1100px){
   .adm-bar{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .adm-q{grid-column:1/-1}
+  .adm-bar .adm-q{grid-column:1/-1}
   .adm-rs{grid-column:1/-1}
   .adm-rs .btn{width:100%;margin-top:14px}
 }

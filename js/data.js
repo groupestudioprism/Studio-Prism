@@ -90,7 +90,9 @@ function productData(input) {
     name: input.name, slug: input.id, category: input.category, pole: input.pole || "app", stage: input.stage || "concept",
     tagline: input.tagline || "", description: input.description || "", availability: input.availability || "", info: input.info || "",
     platforms: input.platforms || [], logo: input.logo || "", image: input.image || "", url: input.url || "", status: input.status,
-    featured: !!input.featured, displayOrder: input.displayOrder, updatedAt: serverTimestamp()
+    featured: !!input.featured, displayOrder: input.displayOrder, updatedAt: serverTimestamp(),
+    // site web : champ écrit seulement s'il est renseigné (les règles qui ne le connaissent pas encore n'empêchent rien d'autre)
+    ...(input.website ? { website: input.website } : {})
   };
 }
 

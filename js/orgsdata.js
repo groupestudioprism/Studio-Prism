@@ -33,7 +33,7 @@ export function generateKey(prefix) {
 }
 
 /* ------------------------------------------------------------------ administration : établissements */
-export const ORG_KINDS = { entreprise: "Entreprise", etablissement: "Établissement", ecole: "École / formation", collectivite: "Collectivité", association: "Association", autre: "Autre" };
+export const ORG_KINDS = { entreprise: "Entreprise", etablissement: "Établissement scolaire", ecole: "École / formation", collectivite: "Collectivité", association: "Association", autre: "Autre" };
 
 export async function adminListOrgs() {
   return rows(await getDocs(collection(db, "organizations"))).sort((a, b) => String(a.name).localeCompare(String(b.name), "fr"));
@@ -64,8 +64,13 @@ export async function deleteOrg(id) {
 }
 export async function adminOrgMembers(id) { return rows(await getDocs(query(collection(db, "users"), where("orgId", "==", id)))).map((u) => ({ uid: u.id, ...u })); }
 export async function adminFindUserByEmail(email) {
-  const s = await getDocs(query(collection(db, "users"), where("email", "==", String(email).trim().toLowerCase())));
-  return s.empty ? null : { uid: s.docs[0].id, ...s.docs[0].data() };
+  const raw = String(email).trim(), low = raw.toLowerCase();
+  let s = await getDocs(query(collection(db, "users"), where("email", "==", low)));
+  if (s.empty && raw !== low) s = await getDocs(query(collection(db, "users"), where("email", "==", raw)));
+  if (!s.empty) return { uid: s.docs[0].id, ...s.docs[0].data() };
+  // adresse enregistrée avec des majuscules (Firestore ne compare pas sans la casse) : recherche dans la liste des comptes (administrateur)
+  const all = await getDocs(collection(db, "users")), d = all.docs.find((x) => String(x.data().email || "").toLowerCase() === low);
+  return d ? { uid: d.id, ...d.data() } : null;
 }
 export async function adminSetUserOrg(uid, org, role, classe) {
   await updateDoc(doc(db, "users", uid), { orgId: org ? org.id : "", orgName: org ? org.name : "", orgRole: org ? role || "" : "", orgClass: org ? classe || "" : "", updatedAt: serverTimestamp() });

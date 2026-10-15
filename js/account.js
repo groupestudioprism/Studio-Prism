@@ -366,7 +366,9 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
 
   /* ------------------------------------------------------------------ administration */
   const AD = { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, q: '', kind: '', sub: '', role: '', status: '', prod: '', licf: '', products: null, sellable: null, lic: {}, licError: false };
-  const AD_FILTERS = { q: '', kind: '', sub: '', role: '', status: '', prod: '', licf: '' };
+  const AD_FILTERS = { q: '', kind: '', sub: '', role: '', status: '', prod: '', licf: '', org: '', orole: '', created: '', seen: '', sort: 'recent' };
+  const AD_SEL = { 'adm-kind': 'kind', 'adm-sub': 'sub', 'adm-role': 'role', 'adm-status': 'status', 'adm-prod': 'prod', 'adm-licf': 'licf', 'adm-org': 'org', 'adm-orole': 'orole', 'adm-created': 'created', 'adm-seen': 'seen', 'adm-sort': 'sort' };
+  const SCHOOL_KINDS = ['ecole', 'etablissement'];
   const fdate = (ts, withTime) => {
     const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
     if (!d || isNaN(d)) return '—';
@@ -376,7 +378,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const SUBCLS = { free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' };
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
-  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Établissements et clés', '#/admin/etablissements'], ['pages', 'Pages', '#/admin/pages']];
+  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Scolaire', '#/admin/scolaire'], ['ents', 'Entreprise', '#/admin/entreprises'], ['pages', 'Pages', '#/admin/pages']];
   const adminShell = (inner, tab) => `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><div class="k">Comptes, produits, contenu du site et accès</div><h1>Administration Studio Prism</h1>` +
     `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>${inner}</div></section>`;
 
@@ -405,7 +407,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   }
 
   function usersTab(p, shell) {
-    Object.assign(AD, { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, lic: {}, licError: false, products: null, sellable: null }, AD_FILTERS);
+    Object.assign(AD, { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, lic: {}, licError: false, products: null, sellable: null, orgs: null }, AD_FILTERS);
     const sel = (id, label, opts) => `<div class="acc-f"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
     V(shell(`<p class="lead">Connecté en tant que ${esc(fullName(p))}. Les comptes ci-dessous proviennent de Firebase.</p>
 <div class="adm-stats" id="adm-stats" aria-live="polite"></div>
@@ -416,6 +418,11 @@ ${sel('adm-role', 'Rôle', [['', 'Tous'], ['user', 'Utilisateur'], ['admin', 'Ad
 ${sel('adm-status', 'Statut', [['', 'Tous'], ['active', 'Actif'], ['suspended', 'Désactivé']])}
 ${sel('adm-prod', 'Application', [['', 'Toutes']])}
 ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none', 'Sans licence'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
+${sel('adm-org', 'Rattachement', [['', 'Tous'], ['scol', 'Scolaire (tous)'], ['ent', 'Entreprise (toutes)'], ['none', 'Aucun rattachement']])}
+${sel('adm-orole', 'Profil scolaire', [['', 'Tous'], ['eleve', 'Élève'], ['enseignant', 'Enseignant']])}
+${sel('adm-created', 'Inscription', [['', 'Toutes'], ['7', '7 derniers jours'], ['30', '30 derniers jours'], ['365', '12 derniers mois']])}
+${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours'], ['-90', 'Inactif depuis 90 jours'], ['-365', 'Inactif depuis 1 an']])}
+${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A → Z)'], ['login', 'Dernière connexion'], ['email', 'E-mail']])}
 <div class="acc-f adm-rs"><button type="button" class="btn b4" data-a="adm-reset">Réinitialiser</button></div></div>
 <div class="adm-tools"><p class="mt2" id="adm-info" role="status" aria-live="polite"></p><button type="button" class="btn b4" data-a="adm-svc-open">Gestion des comptes : état du service</button> <button type="button" class="btn b1" data-a="adm-add-user">+ Ajouter un utilisateur</button></div><div id="adm-list"></div>
 <p class="c"><button class="btn b4" id="adm-more" data-a="adm-more" hidden>Charger plus d’utilisateurs</button></p>`));
@@ -435,6 +442,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
       AD.hasMore = r.hasMore;
       AD.error = '';
       await loadLicenses(r.users);
+      if (!AD.orgs) loadOrgsForFilter();
     } catch (e) {
       console.error('[Studio Prism] Liste des utilisateurs :', e);
       AD.error = errMsg(e);
@@ -467,6 +475,21 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
     }
   }
 
+  /* Établissements scolaires et entreprises (onglets Scolaire / Entreprise) : options du filtre « Rattachement ». Facultatif. */
+  async function loadOrgsForFilter() {
+    try {
+      AD.orgs = await (await import(MOD('orgsdata.js'))).adminListOrgs();
+      const el = document.getElementById('adm-org');
+      if (el) [['scol', 'Scolaire'], ['ent', 'Entreprise']].forEach(([seg, label]) => {
+        const list = AD.orgs.filter((o) => (SCHOOL_KINDS.includes(o.kind) ? 'scol' : 'ent') === seg);
+        if (!list.length) return;
+        const g = document.createElement('optgroup'); g.label = label;
+        list.forEach((o) => g.appendChild(new Option(o.name, 'org:' + o.id)));
+        el.appendChild(g);
+      });
+    } catch (e) { AD.orgs = []; console.warn('[Studio Prism] Établissements indisponibles pour le filtre :', e); }
+  }
+
   async function refreshCounts() {
     try { AD.counts = await st.admin.countUsers(); } catch (e) { console.warn('[Studio Prism] Compteurs indisponibles :', e); AD.counts = null; }
     renderStats();
@@ -491,11 +514,35 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
     return pool.some((l) => l.licenseType === AD.licf);
   }
 
+  const ms = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : 0);
+  const DAY = 86400000;
+  function orgMatch(u) {
+    if (!AD.org) return true;
+    if (AD.org === 'none') return !u.orgId && u.accountKind !== 'company';
+    if (AD.org.indexOf('org:') === 0) return u.orgId === AD.org.slice(4);
+    const o = u.orgId && (AD.orgs || []).find((x) => x.id === u.orgId);
+    const seg = o ? (SCHOOL_KINDS.includes(o.kind) ? 'scol' : 'ent') : (u.orgRole ? 'scol' : (u.orgId ? 'ent' : ''));
+    return AD.org === 'ent' ? seg === 'ent' || u.accountKind === 'company' : seg === 'scol';
+  }
+  function dateMatch(u) {
+    const now = Date.now();
+    if (AD.created && !(ms(u.createdAt) >= now - Number(AD.created) * DAY)) return false;
+    if (AD.seen) { const n = Number(AD.seen), last = ms(u.lastLogin); if (n > 0 ? !(last >= now - n * DAY) : !(last < now + n * DAY)) return false; }
+    return true;
+  }
+  const SORTS = {
+    recent: (a, b) => ms(b.createdAt) - ms(a.createdAt),
+    name: (a, b) => fullName(a).localeCompare(fullName(b), 'fr', { sensitivity: 'base' }),
+    login: (a, b) => ms(b.lastLogin) - ms(a.lastLogin),
+    email: (a, b) => String(a.email || '').localeCompare(String(b.email || ''), 'fr')
+  };
   function filtered() {
     const q = AD.q.trim().toLowerCase();
     return AD.users.filter((u) => (!AD.kind || u.accountKind === AD.kind) && (!AD.sub || u.subscription === AD.sub) &&
-      (!AD.role || u.role === AD.role) && (!AD.status || u.status === AD.status) && licenseMatch(u) &&
-      (!q || [u.firstName, u.lastName, u.firstName + ' ' + u.lastName, u.email, u.companyName, u.orgName].some((v) => String(v || '').toLowerCase().indexOf(q) >= 0)));
+      (!AD.role || u.role === AD.role) && (!AD.status || u.status === AD.status) && licenseMatch(u) && orgMatch(u) &&
+      (!AD.orole || u.orgRole === AD.orole) && dateMatch(u) &&
+      (!q || [u.firstName, u.lastName, u.firstName + ' ' + u.lastName, u.email, u.companyName, u.orgName, u.orgClass].some((v) => String(v || '').toLowerCase().indexOf(q) >= 0)))
+      .sort(SORTS[AD.sort] || SORTS.recent);
   }
 
   const typeLabel = (t) => L.sub[t] || String(t || '—').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
@@ -529,7 +576,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     return `<tr role="row">` +
       cell('Utilisateur', `<b>${esc(fullName(u))}</b><small class="adm-mail">${esc(u.email)}</small>`) +
-      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}</small>` : ''}`) +
+      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}`) +
       cell('Abonnement', badge(SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')) +
       cell('Rôle', badge(u.role === 'admin' ? 'bd-admin' : 'bd-user', L.role[u.role] || u.role || '—')) +
       cell('Applications / Licences', licCell(u), 'adm-l') +
@@ -556,7 +603,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
       more.hidden = true;
       return;
     }
-    const rows = filtered(), active = AD.q || AD.kind || AD.sub || AD.role || AD.status;
+    const rows = filtered(), active = Object.keys(AD_FILTERS).some((k) => k !== 'sort' && AD[k]);
     info.textContent = `${rows.length} utilisateur${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''}` +
       (AD.hasMore ? ` sur ${AD.users.length} chargés${active ? ' — la recherche et les filtres portent sur les utilisateurs chargés : utilisez « Charger plus » pour en inclure d’autres' : ''}.` : '.');
     list.innerHTML = rows.length
@@ -571,7 +618,7 @@ ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none',
   A['acc-retry'] = async () => { try { if (st.api) await st.api.refresh(); else { await loadAuth(); } } catch (e) { route(); } };
   A['adm-reset'] = () => {
     Object.assign(AD, AD_FILTERS);
-    ['adm-q', 'adm-kind', 'adm-sub', 'adm-role', 'adm-status', 'adm-prod', 'adm-licf'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['adm-q'].concat(Object.keys(AD_SEL)).forEach((id) => { const el = document.getElementById(id); if (el) el.value = id === 'adm-sort' ? 'recent' : ''; });
     renderList();
   };
 
@@ -645,7 +692,7 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
   document.addEventListener('submit', (e) => { if (e.target.dataset && e.target.dataset.f === 'adm-edit') saveEdit(e.target); });
   document.addEventListener('input', (e) => { if (e.target.id === 'adm-q') { AD.q = e.target.value; renderList(); } });
   document.addEventListener('change', (e) => {
-    const k = { 'adm-kind': 'kind', 'adm-sub': 'sub', 'adm-role': 'role', 'adm-status': 'status', 'adm-prod': 'prod', 'adm-licf': 'licf' }[e.target.id];
+    const k = AD_SEL[e.target.id];
     if (k) { AD[k] = e.target.value; renderList(); }
     if (e.target.name === 'kind' && e.target.closest('.acc-kind')) kindChanged();
   });
