@@ -135,7 +135,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       ${r ? `<fieldset class="acc-f"><legend>Clés de licence demandées</legend><label class="chk"><input type="checkbox" name="ap-keys" checked> Générer ${esc(itemsTxt(r.items))} (Pro Entreprise)</label>${fld('ap-dur', 'Validité des clés', sel('ap-dur', DUR, '365'))}</fieldset>` : ''}
       <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider l’entreprise</button></p></form>`, true);
   }
-  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
+  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : pid === 'archiindus' ? 'AIND' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
   async function genKeys(od, org, item, n, durationDays, label) {
     const keys = Array.from({ length: n }, () => od.generateKey(prefOf(item.productId)));
     return od.adminCreateKeys(keys, { productId: item.productId, productName: item.productName || item.productId, licenseType: item.licenseType || 'pro_entreprise', durationDays, expiresAt: null, org, label: label || '', role: '', classe: '' });
@@ -305,7 +305,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     else if (g('ok-dur')) durationDays = parseInt(g('ok-dur'), 10);
     if (K.showErrors(fm, er)) return;
     const btn = fm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Enregistrement…';
-    const pref = prod.id === 'archiplan' ? 'ARCH' : prod.id === 'archivision' ? 'AVIS' : prod.id.replace(/[^a-z]/gi, '').slice(0, 4);
+    const pref = prod.id === 'archiplan' ? 'ARCH' : prod.id === 'archivision' ? 'AVIS' : prod.id === 'archiindus' ? 'AIND' : prod.id.replace(/[^a-z]/gi, '').slice(0, 4);
     const keys = manual ? [g('ok-key')] : Array.from({ length: n }, () => od.generateKey(pref));
     try {
       const out = await od.adminCreateKeys(keys, { productId: prod.id, productName: prod.name, licenseType: g('ok-type'), durationDays, expiresAt, org: oid ? orgById(oid) : null, label: g('ok-label'), role: g('ok-role'), classe: g('ok-class') });
@@ -535,7 +535,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       const k = await (await OD()).redeemKey(v, st.auth.user);
       try { sessionStorage.removeItem(PENDING); } catch (e) { /* rien */ }
       V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Licence activée</h1><div class="panel"><p><b>${esc(k.productName)}</b> — ${esc(tLabel(k.licenseType))} est activée sur votre compte (${esc(dur(k))}).</p>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
-        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="../ArchiPlan/">Ouvrir ARCHIPLAN</a>' : ''}</p></div></div></section>`);
+        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="../ArchiPlan/">Ouvrir ARCHIPLAN</a>' : k.productId === 'archiindus' ? ' <a class="btn b4" href="../ArchiIndus/">Ouvrir ARCHIINDUS</a>' : ''}</p></div></div></section>`);
     } catch (e) { console.error('[Studio Prism] Activation de clé :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Activer'; }
   }
   /* Clé saisie avant la connexion : on reprend l'activation dès que le compte est ouvert. */

@@ -1355,56 +1355,40 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
-    match /userSecrets/{uid} {
-      allow get: if isSignedIn() && request.auth.uid == uid;
-      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
-                            && request.resource.data.keys().hasOnly(['pinHash', 'pinSalt', 'pinIter', 'updatedAt'])
-                            && isString(request.resource.data.pinHash, 20, 100)
-                            && isString(request.resource.data.pinSalt, 10, 60)
-                            && request.resource.data.pinIter is int
-                            && request.resource.data.pinIter >= 100000 && request.resource.data.pinIter <= 1000000
-                            && request.resource.data.updatedAt == request.time;
-      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    // ------------------------------------------------------------ ARCHIINDUS : cloud des projets, dossiers, partage, quotas, bibliothèque
+    //
+    // aiProjects/{id}            fiche d'un projet (propriétaire, nom, dossier, taille, miniature, accès par lien). Contenu : aiProjects/{id}/content/main.
+    // aiFolders/{id}             dossiers du propriétaire ; un dossier partagé liste ses projets (pids) et donne accès à chacun d'eux.
+    // aiShares/{cible}__{email}  partage par email : cible = id du projet, ou « F_ » + id du dossier (kind 'folder', fid).
+    // aiGrants/{cible}__{uid}    accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey de la cible.
+    // aiUsage/{uid}              stockage utilisé par un compte (octets). Quota : 10 Mo (gratuit), 50 Mo (licence ARCHIINDUS), 1 Go (administrateur).
+    //                            Chaque écriture qui change la taille d'un projet met à jour ce compteur DANS LE MÊME LOT (increment + lastPid),
+    //                            et les règles vérifient la cohérence : le compteur ne peut ni être contourné ni dépasser le quota.
+    //                            Un invité qui modifie ou crée un projet dans un dossier partagé consomme le stockage du propriétaire.
+    // aiLibrary/{uid}            bibliothèque personnelle (matériaux, composants, symboles) : son seul titulaire.
+    // Le cloud est ouvert à tous les comptes actifs (offre gratuite comprise) ; les invités doivent avoir un email vérifié.
+    // Les plafonds de dossiers (5 privés, 3 partagés) sont appliqués par l'application.
+    function aiEmail() {
+      return request.auth.token.email.lower();
     }
 
-    // ------------------------------------------------------------ tout le reste : refusé
-
-// ============================================================================================================
-// Bloc de règles Firestore « ai* » pour ARCHIINDUS (v1 publiée le 14/10/2026 ; v2 = + dossiers aiFolders et champ folderId).
-// ============================================================================================================
-// - Ce fichier n'est PAS le fichier de règles du projet. Le fichier réel est commun au site et à ArchiPlan
-//   (dépôts Studio-Prism et ArchiPlan, firebase/firestore.rules) et se termine par une règle « tout refusé ».
-// - Pour l'activer, il faudrait coller ce bloc AVANT la dernière règle « match /{document=**} » de ce fichier commun,
-//   puis publier : modification d'un service partagé, à faire seulement après relecture et validation explicite.
-// - Testé à l'émulateur Firestore (voir tests/rules/) contre le fichier de règles d'ArchiPlan (sans bloc ai*). Publication : toujours
-//   comparer d'abord les règles en ligne au fichier de base, publier uniquement les règles Firestore, relire en ligne après. Service
-//   partagé avec le site et ArchiPlan : v1 publiée le 14/10/2026, v2 (dossiers) le 15/10/2026 avec l'accord du propriétaire.
-// - Il s'appuie sur les utilitaires déjà définis dans le fichier commun : isSignedIn(), isActiveUser(), isAdmin(),
-//   isActiveAdminProfile(), isString().
-//
-// Périmètre : projets privés d'un propriétaire, dossiers privés (imbriqués), contenu, compteur de stockage.
-// Partage par email, dossiers partagés et accès par lien : NON inclus (à concevoir ensuite, sur le modèle d'ArchiPlan).
-//
-// aiProjects/{id}            fiche du projet (propriétaire, nom, taille). Contenu : aiProjects/{id}/content/main (JSON en chaîne).
-// aiFolders/{id}            dossier privé {ownerUid, name, parentId ('' = racine), createdAt, updatedAt} ; un projet y est rattaché par folderId.
-//                           Anti-boucle (dossier dans son propre sous-dossier) : contrôlé par l'application, pas par les règles.
-// aiUsage/{uid}              octets utilisés ; mis à jour DANS LE MÊME LOT que la fiche (lastPid), cohérence vérifiée.
-// Licence : licenses/{uid}_archiindus (écrite par un administrateur). Quota : 10 Mo sans licence, 50 Mo avec licence active,
-//   1 Go administrateur (mêmes valeurs qu'ArchiPlan, à confirmer pour ArchiIndus).
-// ============================================================================================================
+    function aiVerified() {
+      return request.auth.token.email_verified == true;
+    }
 
     function aiP(pid) {
       return /databases/$(database)/documents/aiProjects/$(pid);
-    }
-
-    function aiU(uid) {
-      return /databases/$(database)/documents/aiUsage/$(uid);
     }
 
     function aiF(fid) {
       return /databases/$(database)/documents/aiFolders/$(fid);
     }
 
+    function aiU(uid) {
+      return /databases/$(database)/documents/aiUsage/$(uid);
+    }
+
+    // Quota du compte uid (le propriétaire du stockage, pas forcément l'auteur de l'écriture)
     function aiQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
       let lp = /databases/$(database)/documents/licenses/$(uid + '_archiindus');
@@ -1414,6 +1398,7 @@ service cloud.firestore {
         : 10000000;
     }
 
+    // Le compteur du propriétaire a bien été mis à jour dans ce lot, de la variation de taille du projet pid
     function aiUsageOk(owner, pid, delta) {
       let before = exists(aiU(owner)) ? get(aiU(owner)).data.bytes : 0;
       return delta == 0
@@ -1421,74 +1406,102 @@ service cloud.firestore {
             && getAfter(aiU(owner)).data.bytes == before + delta);
     }
 
+    function aiShareRole(key) {
+      let sp = /databases/$(database)/documents/aiShares/$(key + '__' + aiEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function aiGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/aiGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    // Droit d'un invité sur un dossier : 'edit', 'view' ou ''
+    function aiFolderRole(fid) {
+      let f = get(aiF(fid)).data;
+      let r = aiShareRole('F_' + fid);
+      return !aiVerified() ? '' : r != '' ? r : aiGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    // Droit d'un invité sur un projet : directement, ou par le dossier (du même propriétaire) qui le contient
+    function aiGuestRole(pid, p) {
+      let r = aiShareRole(pid);
+      let viaLink = aiGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(aiF(p.folderId)) && get(aiF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? aiFolderRole(p.folderId) : '';
+      return !aiVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+
+    function aiCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || aiGuestRole(pid, p) in ['view', 'edit']);
+    }
+
+    function aiCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || aiGuestRole(pid, p) == 'edit');
+    }
+
     function aiValidProject(d) {
-      return d.keys().hasAll(['ownerUid', 'name', 'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['ownerUid', 'name', 'size', 'folderId', 'createdAt', 'updatedAt'])
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'thumb', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
         && isString(d.name, 1, 120)
-        && isString(d.get('folderId', ''), 0, 40)
-        && (d.get('folderId', '') == '' || get(aiF(d.folderId)).data.ownerUid == d.ownerUid)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
         && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
-        && d.updatedAt == request.time;
+        && isString(d.get('thumb', ''), 0, 90000)
+        && (d.get('thumb', '') == '' || d.thumb.matches('data:image/(jpeg|png|webp);base64,.*'))
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        // un projet rangé dans un dossier : dossier du même propriétaire (un ancien dossier disparu ne donne aucun accès)
+        && (d.folderId == '' || !existsAfter(aiF(d.folderId)) || getAfter(aiF(d.folderId)).data.ownerUid == d.ownerUid);
     }
 
     match /aiProjects/{pid} {
-      allow get: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid;
+      allow get: if aiCanRead(pid, resource.data);
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
       allow create: if isSignedIn() && isActiveUser()
                     && aiValidProject(request.resource.data)
-                    && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.createdAt == request.time
-                    && aiUsageOk(request.auth.uid, pid, request.resource.data.get('size', 0));
-      allow update: if isSignedIn() && isActiveUser()
-                    && resource.data.ownerUid == request.auth.uid
-                    && aiValidProject(request.resource.data)
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && aiFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(aiF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && aiUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && aiValidProject(request.resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.createdAt == resource.data.createdAt
-                    && aiUsageOk(request.auth.uid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (aiCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && aiUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
       match /content/{cid} {
-        allow get: if cid == 'main' && isSignedIn() && isActiveUser() && get(aiP(pid)).data.ownerUid == request.auth.uid;
-        allow create, update: if cid == 'main' && isSignedIn() && isActiveUser()
-                              && getAfter(aiP(pid)).data.ownerUid == request.auth.uid
+        allow get: if cid == 'main' && aiCanRead(pid, get(aiP(pid)).data);
+        allow create, update: if cid == 'main'
+                              && aiCanEdit(pid, getAfter(aiP(pid)).data)
                               && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
                               && request.resource.data.data is string
                               && request.resource.data.data.size() <= 1000000
+                              // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
                               && request.resource.data.data.size() <= getAfter(aiP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
         allow delete: if isSignedIn() && (!exists(aiP(pid)) || get(aiP(pid)).data.ownerUid == request.auth.uid || isAdmin());
       }
     }
 
-    function aiValidFolder(d, fid) {
-      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
-        && isString(d.name, 1, 80)
-        && isString(d.parentId, 0, 40) && d.parentId != fid
-        && (d.parentId == '' || get(aiF(d.parentId)).data.ownerUid == d.ownerUid)
-        && d.updatedAt == request.time;
-    }
-
-    match /aiFolders/{fid} {
-      allow get: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid;
-      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isActiveUser()
-                    && aiValidFolder(request.resource.data, fid)
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.createdAt == request.time;
-      allow update: if isSignedIn() && isActiveUser()
-                    && resource.data.ownerUid == request.auth.uid
-                    && aiValidFolder(request.resource.data, fid)
-                    && request.resource.data.ownerUid == resource.data.ownerUid
-                    && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-    }
-
     match /aiUsage/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
-      // Logique reprise de apUsage (règles publiées, ArchiPlan) : création initiale par le titulaire (lastPid vide), puis chaque variation
-      // correspond exactement à la taille du projet lastPid écrit dans le même lot, y compris à sa suppression ; jamais au-delà du quota
-      // (une baisse reste permise).
+      // écrit avec la fiche d'un projet (lastPid) : cohérence vérifiée des deux côtés ; jamais au-delà du quota (une baisse reste permise)
       allow create, update: if isSignedIn() && isActiveUser()
                             && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
                             && request.resource.data.bytes is int && request.resource.data.bytes >= 0
@@ -1498,7 +1511,9 @@ service cloud.firestore {
                                 || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
                                 || request.resource.data.bytes <= aiQuota(uid))
                             && (
+                              // première création par le titulaire (somme de ses projets existants)
                               (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              // sinon : la variation correspond exactement à la taille du projet lastPid écrit dans le même lot
                               || (request.resource.data.lastPid != ''
                                   && (existsAfter(aiP(request.resource.data.lastPid))
                                       ? (getAfter(aiP(request.resource.data.lastPid)).data.ownerUid == uid
@@ -1516,6 +1531,110 @@ service cloud.firestore {
                     && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
                     || isAdmin();
     }
+
+    function aiValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /aiFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && aiFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && aiValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      // propriétaire : tout ; invité « Modification » : seulement la liste des projets (création d'un projet dans le dossier)
+      allow update: if isSignedIn() && isActiveUser() && aiValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (aiFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function aiValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(aiF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(aiP(d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    match /aiShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == aiEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && aiValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && aiValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == aiEmail() || isAdmin());
+    }
+
+    function aiValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      let t = folder ? get(aiF(d.get('fid', '-'))).data : get(aiP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    match /aiGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && aiVerified() && aiValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /aiLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    match /userSecrets/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['pinHash', 'pinSalt', 'pinIter', 'updatedAt'])
+                            && isString(request.resource.data.pinHash, 20, 100)
+                            && isString(request.resource.data.pinSalt, 10, 60)
+                            && request.resource.data.pinIter is int
+                            && request.resource.data.pinIter >= 100000 && request.resource.data.pinIter <= 1000000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ------------------------------------------------------------ tout le reste : refusé
 
     match /{document=**} {
       allow read, write: if false;

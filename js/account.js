@@ -290,7 +290,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
 
   /* Lignes « application + nombre de licences » de la demande d'entreprise (applications du catalogue). */
   const coApps = () => { const C = window.SP && window.SP.catalog; const l = C ? C.all().filter((p) => p.category === 'application' && p.status !== 'draft' && p.status !== 'archived') : [];
-    return l.length ? l.map((p) => [p.id, p.name]) : [['archiplan', 'ARCHIPLAN'], ['architrafic', 'ARCHITRAFIC']]; };
+    return l.length ? l.map((p) => [p.id, p.name]) : [['archiplan', 'ARCHIPLAN'], ['architrafic', 'ARCHITRAFIC'], ['archiindus', 'ARCHIINDUS']]; };
   function coLicRow(i) {
     return `<div class="row co-lic"><div class="acc-f"><label for="coProd${i}">Application</label><select id="coProd${i}" name="coProd${i}" data-co-prod>${coApps().map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>` +
       `<div class="acc-f"><label for="coQty${i}">Nombre de licences</label><input id="coQty${i}" name="coQty${i}" type="number" min="1" max="500" value="1" inputmode="numeric"></div></div>`;

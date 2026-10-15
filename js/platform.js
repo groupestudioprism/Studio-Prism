@@ -164,7 +164,7 @@
   A['acc-lic-retry'] = () => accountPage();
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
-  const APP_URLS = { archiplan: new URL('../ArchiPlan/', location.href.split('#')[0]).href, architrafic: new URL('../ArchiTraffic/', location.href.split('#')[0]).href };
+  const APP_URLS = { archiplan: new URL('../ArchiPlan/', location.href.split('#')[0]).href, architrafic: new URL('../ArchiTraffic/', location.href.split('#')[0]).href, archiindus: new URL('../ArchiIndus/', location.href.split('#')[0]).href };
   /* ARCHITRAFIC : licence gratuite liée au compte (pour l'instant), affichée même sans document de licence */
   const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' }];
   function freeAppCards(lics) {

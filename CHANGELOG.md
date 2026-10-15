@@ -1,5 +1,11 @@
 # Changelog
 
+## ARCHIINDUS dans la suite Studio Prism — 2026-10-15
+
+- Liens vers l'application ARCHIINDUS (`../ArchiIndus/`) : fiche produit (`js/catalog.js`), « Mes applications » (`js/platform.js`), page de clé d'organisation (`js/orgs.js`, préfixe de clé `AIND`), choix des applications d'une demande d'entreprise (`js/account.js`, liste de repli).
+- `firebase/firestore.rules` : fichier commun régénéré avec le bloc **ARCHIINDUS** complet (collections `ai*` : projets, dossiers, partage par email ou par lien, quotas 10 Mo / 50 Mo avec licence `archiindus` / 1 Go administrateur, bibliothèque), dérivé du bloc ARCHIPLAN comme le bloc ARCHITRAFIC. Les blocs du site, d'ARCHIPLAN et d'ARCHITRAFIC sont **inchangés**. Garde-fou : `tools/check_rules.py` du dépôt ArchiIndus refuse un fichier auquel il manque un bloc. **Non publié** : à publier par le propriétaire.
+- À faire dans l'administration : créer le produit `archiindus` (catégorie Application, pôle Prism App) pour sa fiche et ses licences.
+
 ## Évolution « Gestion des comptes sans Cloud Functions (forfait Spark gratuit) » — 2026-10-10
 
 Objectif : **zéro dépense**, aucune dépendance à un déploiement de Cloud Functions (qui exige le forfait Blaze), sécurité conservée. Aucun design, menu, rôle, compte ni autre fonction du site n'est modifié. Les Cloud Functions du dossier `functions/` sont **conservées telles quelles** (version `2.0.0`), simplement non utilisées tant que `ACCOUNT_SERVER` vaut `false`. **Rien n'est déployé, aucune règle n'est publiée, aucun forfait n'est changé** par cette évolution.
