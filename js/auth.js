@@ -218,6 +218,21 @@ export function refresh() {
 }
 
 /* ------------------------------------------------------------------ inscription */
+/* L'administration ne peut pas supprimer le compte de connexion d'un autre (pas de serveur) : elle supprime le profil et laisse une trace
+ * deletedAccounts/{uid}. Si la personne se réinscrit avec la même adresse et le même mot de passe, on supprime ici l'ancien compte de
+ * connexion (connexion récente : autorisé par Firebase) pour libérer l'adresse. Renvoie true si l'adresse a été libérée. */
+async function freeDeletedAddress(email, password) {
+  let old = null;
+  try { old = (await signInWithEmailAndPassword(auth, email, password)).user; } catch (e) { return false; }
+  try {
+    const prof = await getDoc(doc(db, "users", old.uid));
+    const gone = !prof.exists() && (await getDoc(doc(db, "deletedAccounts", old.uid))).exists();
+    if (!gone) { await signOut(auth).catch(() => {}); return false; }
+    await deleteUser(old);
+    log("Adresse libérée : ancien compte supprimé par l'administration");
+    return true;
+  } catch (e) { await signOut(auth).catch(() => {}); return false; }
+}
 /* p : { firstName, lastName, email, password, accountKind: "individual"|"company",
  *       company?: { name, email, jobTitle?, phone?, website?, userRange, userLimit } } */
 export async function signUp(p) {
@@ -225,7 +240,13 @@ export async function signUp(p) {
   await setPersistence(auth, browserLocalPersistence);
   const next = waitNext();
   const task = (async () => {
-    const cred = await createUserWithEmailAndPassword(auth, p.email, p.password);
+    let cred;
+    try { cred = await createUserWithEmailAndPassword(auth, p.email, p.password); }
+    catch (err) {
+      // Adresse encore enregistrée par un compte supprimé depuis l'administration : avec le bon mot de passe, on la libère et on recrée.
+      if (!(err && err.code === "auth/email-already-in-use") || !(await freeDeletedAddress(p.email, p.password))) throw err;
+      cred = await createUserWithEmailAndPassword(auth, p.email, p.password);
+    }
     const user = cred.user;
     try {
       const batch = writeBatch(db);

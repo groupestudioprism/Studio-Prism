@@ -31,7 +31,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const ERR = {
-    'auth/email-already-in-use': 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous ou réinitialisez votre mot de passe.',
+    'auth/email-already-in-use': 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ». Si ce compte a été supprimé par Studio Prism : choisissez un nouveau mot de passe avec « Mot de passe oublié », puis connectez-vous une fois : l’adresse sera libérée et vous pourrez créer un nouveau compte.',
     'auth/invalid-email': 'Adresse e-mail invalide.',
     'auth/weak-password': 'Mot de passe trop faible : choisissez-en un plus long et plus varié.',
     'auth/invalid-credential': 'E-mail ou mot de passe incorrect.',
