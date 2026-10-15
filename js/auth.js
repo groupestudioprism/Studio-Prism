@@ -239,7 +239,8 @@ async function reclaimDeleted(email, password) {
   try { old = (await signInWithEmailAndPassword(auth, email, password)).user; } catch (e) { return null; }
   try {
     const prof = await getDoc(doc(db, "users", old.uid));
-    const gone = !prof.exists() && (await getDoc(doc(db, "deletedAccounts", old.uid))).exists();
+    // profil absent = compte supprimé (par l'administration ou par la personne), avec ou sans trace : jamais recréé automatiquement
+    const gone = !prof.exists();
     if (!gone) { await signOut(auth).catch(() => {}); return null; }
   } catch (e) { await signOut(auth).catch(() => {}); return null; }
   try { await deleteUser(old); log("Adresse libérée : ancien compte de connexion supprimé"); return { freed: true }; }
