@@ -57,7 +57,7 @@ function mount3d(el,mode,opt={}){
  cv.onpointerdown=e=>{d=1;a.auto=false;px=e.clientX;py=e.clientY;mv=0;cv.setPointerCapture(e.pointerId)};
  cv.onpointermove=e=>{if(!d)return;g.rotation.y+=(e.clientX-px)*.01;g.rotation.x+=(e.clientY-py)*.01;mv+=Math.abs(e.clientX-px)+Math.abs(e.clientY-py);px=e.clientX;py=e.clientY};
  cv.onpointerup=e=>{d=0;if(mode=='bim'&&mv<5){const b=cv.getBoundingClientRect();rc.setFromCamera({x:(e.clientX-b.left)/b.width*2-1,y:-((e.clientY-b.top)/b.height)*2+1},c);const hit=rc.intersectObjects(a.meshes.filter(m=>m.visible))[0];a.meshes.forEach(m=>m.material.emissive.setHex(0));if(hit){hit.object.material.emissive.setHex(0x113355);opt.pick&&opt.pick(hit.object.userData)}}};
- cv.onwheel=e=>{e.preventDefault();c.position.z=Math.min(14,Math.max(2.5,c.position.z+e.deltaY*.005))};
+ cv.onwheel=e=>{e.preventDefault();c.position.z=Math.min(14,Math.max(2.5,c.position.z+e.deltaY*.002))};
  a.reset=()=>{g.rotation.set(.45,0,0);c.position.z=Z};
  (function loop(){raf=requestAnimationFrame(loop);if(a.auto)g.rotation.y+=.006;r.render(s,c)})();a.dispose=()=>{cancelAnimationFrame(raf);g.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&o.material.dispose()});r.dispose();r.forceContextLoss();r.domElement.remove()};return a}
 /* ---- pages ---- */
