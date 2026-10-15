@@ -11,6 +11,13 @@ import {
 
 export const PAGE_SIZE = 50;
 
+/* Fiches client (apps) : { uid: { siret, phone, … } } — le SIRET ouvre l'usage commercial d'une licence Pro pour un particulier. */
+export async function listClientProfiles() {
+  const out = {};
+  (await getDocs(collection(db, "clientProfiles"))).docs.forEach((d) => { out[d.id] = d.data(); });
+  return out;
+}
+
 /* Utilisateurs, du plus récent au plus ancien, par pages de PAGE_SIZE. `cursor` = dernier document de la page précédente. */
 export async function listUsers(cursor = null) {
   const parts = [collection(db, "users"), orderBy("createdAt", "desc")];

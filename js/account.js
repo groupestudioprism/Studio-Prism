@@ -252,8 +252,8 @@
       `<p class="acc-h" id="h-coTier">Indicatif : il sert à préparer l’accès de votre équipe. Aucun abonnement n’est activé automatiquement.</p><p class="fe" id="e-coTier" role="alert"></p></div></div>`;
 
     const reg = `<fieldset class="acc-kind"><legend>Type de compte</legend>` +
-      `<label class="acc-card on"><input type="radio" name="kind" value="individual" checked><span><b>Particulier</b><small>Usage personnel ou indépendant</small></span></label>` +
-      `<label class="acc-card"><input type="radio" name="kind" value="company"><span><b>Entreprise</b><small>Société, équipe ou structure</small></span></label></fieldset>` +
+      `<label class="acc-card on"><input type="radio" name="kind" value="individual" checked><span><b>Particulier</b><small>Usage personnel, non commercial. Pour vendre vos réalisations : licence Pro avec un numéro SIRET (à indiquer dans votre fiche client).</small></span></label>` +
+      `<label class="acc-card"><input type="radio" name="kind" value="company"><span><b>Entreprise</b><small>Société, bureau d’études, collectivité… Compte vérifié par Studio Prism avant la première connexion.</small></span></label></fieldset>` +
       `<div class="row">${field('prenom', 'Prénom', 'text', 'given-name', { attrs: 'maxlength="80"' })}${field('nom', 'Nom', 'text', 'family-name', { attrs: 'maxlength="80"' })}</div>` +
       field('email', 'Adresse e-mail', 'email', 'email', { attrs: 'maxlength="160" inputmode="email"' }) +
       field('mdp', 'Mot de passe', 'password', 'new-password', { hint: '8 caractères minimum, avec au moins une lettre et un chiffre.' }) +
@@ -415,7 +415,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   }
 
   function usersTab(p, shell) {
-    Object.assign(AD, { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, lic: {}, licError: false, products: null, sellable: null, orgs: null }, AD_FILTERS);
+    Object.assign(AD, { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, lic: {}, licError: false, products: null, sellable: null, orgs: null, cp: null }, AD_FILTERS);
     const sel = (id, label, opts) => `<div class="acc-f"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
     V(shell(`<p class="lead">Connecté en tant que ${esc(fullName(p))}. Les comptes ci-dessous proviennent de Firebase.</p>
 <div class="adm-stats" id="adm-stats" aria-live="polite"></div>
@@ -452,6 +452,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
       AD.error = '';
       await loadLicenses(r.users);
       if (!AD.orgs) loadOrgsForFilter();
+      if (!AD.cp) { try { AD.cp = await st.admin.listClientProfiles(); } catch (e2) { AD.cp = {}; console.warn('[Studio Prism] Fiches client indisponibles :', e2); } }
     } catch (e) {
       console.error('[Studio Prism] Liste des utilisateurs :', e);
       AD.error = errMsg(e);
@@ -587,13 +588,23 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   }
 
 
+  /* Droit d'usage commercial : compte Entreprise avec Pro / Pro Entreprise, ou particulier avec Pro et un SIRET. Particulier : usage personnel. */
+  const PRO = ['pro', 'pro_entreprise'];
+  function usageOf(u) {
+    if (u.role === 'admin') return { ok: true, txt: 'Usage commercial' };
+    const pro = PRO.includes(u.subscription) || (AD.lic[u.uid] || []).some((l) => PRO.includes(l.licenseType) && licState(l) === 'active');
+    const siret = ((AD.cp || {})[u.uid] || {}).siret || '';
+    if (u.accountKind === 'company') return pro ? { ok: true, txt: 'Usage commercial' } : { ok: false, txt: 'Sans licence Pro Entreprise' };
+    if (!pro) return { ok: false, txt: 'Usage personnel' };
+    return siret ? { ok: true, txt: 'Usage commercial · SIRET ' + siret } : { ok: false, warn: true, txt: 'Pro sans SIRET : usage commercial bloqué' };
+  }
   function rowHtml(u) {
     const co = u.accountKind === 'company';
     const tr = co ? TIERS.find((t) => t.id === u.companyUserRange) : null, tier = tr ? tr.short : '—';
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     return `<tr role="row">` +
       cell('Utilisateur', `<b>${esc(fullName(u))}</b><small class="adm-mail">${esc(u.email)}</small>`) +
-      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}`) +
+      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}${AD.cp ? (x => `<small class="adm-co${x.warn ? ' adm-warn' : ''}">${esc(x.txt)}</small>`)(usageOf(u)) : ''}`) +
       cell('Abonnement', badge(SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')) +
       cell('Rôle', badge(u.role === 'admin' ? 'bd-admin' : 'bd-user', L.role[u.role] || u.role || '—')) +
       cell('Applications / Licences', licCell(u), 'adm-l') +
@@ -656,6 +667,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     modal(`<h3>Modifier le compte</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>
 <form data-f="adm-edit" data-uid="${esc(u.uid)}" novalidate>
 <label for="ed-sub">Abonnement</label><select id="ed-sub" name="ed-sub">${opts(L.sub, u.subscription)}</select>
+${u.accountKind !== 'company' && !((AD.cp || {})[u.uid] || {}).siret ? '<p class="acc-h">Particulier sans numéro SIRET : avec l’abonnement Pro, l’usage commercial reste bloqué tant que la personne n’a pas indiqué son SIRET dans sa fiche client.</p>' : ''}
 <label for="ed-role">Rôle</label><select id="ed-role" name="ed-role" ${self ? 'disabled' : ''}>${opts(L.role, u.role)}</select>
 <label for="ed-status">Statut</label><select id="ed-status" name="ed-status" ${self ? 'disabled' : ''}>${opts(u.status === 'pending' ? L.status : { active: L.status.active, suspended: L.status.suspended }, u.status)}</select>
 ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni votre propre statut.</p>' : '<p class="acc-h">Un administrateur peut consulter et modifier tous les comptes. <b>Désactivé</b> : l’utilisateur ne peut plus se connecter à Studio Prism ni accéder à ses licences ; ses données sont conservées et le compte peut être réactivé à tout moment. Ce n’est pas une suppression : son compte de connexion Firebase Authentication continue d’exister.</p>'}

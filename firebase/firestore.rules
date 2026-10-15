@@ -194,6 +194,20 @@ service cloud.firestore {
         && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
     }
 
+    // Particulier → Entreprise, à l'initiative du titulaire : son compte repasse « en attente » (validation par l'administration) et la
+    // fiche entreprise est créée dans le même lot. Jamais l'inverse, jamais pour un administrateur, rien d'autre ne change.
+    function ownerToCompanyOk(uid) {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return resource.data.status == 'active' && resource.data.get('accountKind', 'individual') == 'individual'
+        && resource.data.get('role', 'user') == 'user'
+        && changed.hasOnly(['accountKind', 'status', 'companyId', 'companyName', 'companyEmail', 'companyUserRange', 'companyUserLimit', 'jobTitle', 'updatedAt'])
+        && d.accountKind == 'company' && d.status == 'pending' && d.updatedAt == request.time
+        && isString(d.companyId, 1, 40) && isString(d.companyName, 1, 120) && isEmail(d.companyEmail)
+        && tierOk(d.companyUserRange, d.get('companyUserLimit', null)) && isString(d.get('jobTitle', ''), 0, 80)
+        && getAfter(/databases/$(database)/documents/companies/$(d.companyId)).data.ownerUid == uid;
+    }
+
     // Rattachement à un établissement par l'utilisateur lui-même : uniquement en activant une clé de cet établissement dans le
     // même lot (la clé passe « activée » à son nom ; l'établissement et son nom viennent de la clé).
     function ownerOrgJoinOk(uid) {
@@ -217,7 +231,7 @@ service cloud.firestore {
                     && (!exists(/databases/$(database)/documents/deletedAccounts/$(uid))
                         || request.resource.data.get('termsAcceptedAt', null) == request.time);
       allow update: if isSignedIn() && (
-                         (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid)))
+                         (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid) || ownerToCompanyOk(uid)))
                          || (isAdmin() && adminUpdateOk(uid))
                        );
       // Suppression : uniquement un PARTICULIER ACTIF, de son PROPRE profil (suppression de son compte, js/data.js). Jamais un
@@ -744,7 +758,8 @@ service cloud.firestore {
     function validClientProfile() {
       let d = request.resource.data;
       return d.keys().hasAll(['phone', 'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['phone', 'profile', 'company', 'address', 'postalCode', 'city', 'country', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['phone', 'profile', 'company', 'address', 'postalCode', 'city', 'country', 'siret', 'createdAt', 'updatedAt'])
+        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))   // SIRET : usage commercial d'une licence Pro
         && isString(d.phone, 6, 40)
         && isString(d.get('profile', ''), 0, 120)
         && isString(d.get('company', ''), 0, 120)
