@@ -510,8 +510,20 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const c = AD.counts;
     el.innerHTML = [['Utilisateurs', 'total'], ['Free', 'free'], ['Pro', 'pro'], ['Pro Entreprise', 'proEntreprise'], ['Administrateurs', 'admins']]
       .map(([l, k]) => `<div class="adm-stat"><span class="adm-n">${c ? c[k] : '—'}</span><span class="adm-l">${l}</span></div>`).join('');
-    const pb = document.getElementById('adm-pending'), np = c && c.pending;
-    if (pb) pb.innerHTML = np ? `<div class="panel adm-pend"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation.</p><button type="button" class="btn b1" data-a="adm-show-pending">Voir les demandes</button></div>` : '';
+    renderPending();
+  }
+
+  /* Demandes de compte Entreprise en attente : bandeau en haut de la liste, avec Valider / Refuser sur chaque demande. */
+  function renderPending() {
+    const pb = document.getElementById('adm-pending');
+    if (!pb) return;
+    const list = AD.users.filter((u) => u.status === 'pending'), np = Math.max((AD.counts && AD.counts.pending) || 0, list.length);
+    if (!np) { pb.innerHTML = ''; return; }
+    const tr = (u) => { const t = TIERS.find((x) => x.id === u.companyUserRange); return t ? t.short : ''; };
+    pb.innerHTML = `<div class="panel adm-pend"><div class="adm-pend-h"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation. Tant qu’elle n’est pas validée, la personne ne peut pas se connecter.</p></div>` +
+      (list.length ? `<ul class="adm-pend-l">${list.map((u) => `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${u.jobTitle ? ' · ' + esc(u.jobTitle) : ''}${tr(u) ? ' · ' + esc(tr(u)) + ' comptes' : ''} · demandé le ${fdate(u.createdAt)}</small></div>` +
+        `<span class="adm-pend-b"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}">Fiche</button> <button class="btn b1" data-a="adm-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="adm-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`).join('')}</ul>`
+        : `<p class="mut">Les demandes ne sont pas dans les comptes chargés : utilisez « Charger plus d’utilisateurs », ou le filtre Statut › En attente.</p>`) + `</div>`;
   }
 
   function licenseMatch(u) {
@@ -625,7 +637,6 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   }
 
   A['adm-more'] = () => loadAdmin(true);
-  A['adm-show-pending'] = () => { AD.status = 'pending'; const el = document.getElementById('adm-status'); if (el) el.value = 'pending'; renderList(); document.getElementById('adm-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   /* Validation manuelle d'un compte Entreprise : pending → active. Refus : la demande est supprimée (même suppression que « Supprimer »). */
   A['adm-approve'] = async (btn) => {
     const u = AD.users.find((x) => x.uid === btn.dataset.uid); if (!u) return;
