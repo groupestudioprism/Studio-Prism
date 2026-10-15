@@ -293,7 +293,17 @@ export async function signUp(p) {
         };
         if (c.phone) companyDoc.phone = c.phone;
         if (c.website) companyDoc.website = c.website;
+        if (c.siret) companyDoc.siret = c.siret;
+        if (c.repRole) companyDoc.repRole = c.repRole;
         batch.set(companyRef, companyDoc);
+        // demande de licences du responsable (applications et quantités) : traitée par l'administration à la validation du compte
+        if (c.items && c.items.length) {
+          batch.set(doc(collection(db, "licenseRequests")), {
+            kind: "signup", requesterUid: user.uid, requesterEmail: String(p.email).toLowerCase(), requesterName: `${p.firstName} ${p.lastName}`.trim().slice(0, 160),
+            companyId: companyRef.id, companyName: c.name, orgId: "", items: c.items, repRole: c.repRole || "", siret: c.siret || "",
+            status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+          });
+        }
         Object.assign(profile, {
           companyId: companyRef.id,
           companyName: c.name,

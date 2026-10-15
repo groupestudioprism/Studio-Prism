@@ -146,10 +146,12 @@
         ['Abonnement Studio Prism', badge(({ free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' })[p.subscription] || '', L.sub[p.subscription] || '—')]
       ])}<p class="mt2" style="margin-top:10px">Votre abonnement est géré par Studio Prism : il ne peut pas être modifié depuis cette page.</p><div id="acc-sum" class="acc-sum" aria-live="polite"></div>` +
       `<p style="margin-top:14px"><a class="btn b4 ar" href="#/abonnements">Voir tous les abonnements</a></p></section></div>` +
+      `<section class="acc-sec" id="acc-co-sec" aria-live="polite"></section>` +
       `<section class="acc-sec" aria-labelledby="s-apps"><h2 id="s-apps" class="lh">Mes applications</h2><div id="acc-apps" class="acc-apps" aria-live="polite"><p class="mut">Chargement de vos applications…</p></div></section>` +
       `<section class="acc-sec" aria-labelledby="s-lic"><div class="fiche-h"><h2 id="s-lic" class="lh">Mes licences</h2><a class="btn b4" href="#/activer">Activer une clé de licence</a></div><div id="acc-lics" aria-live="polite"><p class="mut">Chargement de vos licences…</p></div></section>` +
       securityHtml(p)));
     const key = CUR;
+    if (window.SP.companyUI) window.SP.companyUI.mount(document.getElementById('acc-co-sec'), p);
     Promise.all([loadMine(true), CATLG.load()]).then(([lics]) => { if (CUR === key) fillAccount(lics); })
       .catch((e) => {
         console.error('[Studio Prism] Licences :', e);
@@ -426,6 +428,7 @@
     err.textContent = '';
     if (!prod) er['lic-prod'] = 'Produit inexistant.';
     if (!TYPE_RE.test(g('lic-type'))) er['lic-type'] = 'Choisissez un type de licence.';
+    { const who = findUser(uid); if (g('lic-type') === 'pro_entreprise' && who && who.accountKind !== 'company' && !who.orgId) er['lic-type'] = 'Pro Entreprise est réservée aux entreprises : un particulier peut avoir la licence Pro (sans usage commercial).'; }
     if (!start || isNaN(start)) er['lic-start'] = 'Renseignez la date d’activation.';
     if (end && isNaN(end)) er['lic-end'] = 'Date d’expiration invalide.';
     else if (end && start && end <= start) er['lic-end'] = 'La date d’expiration doit être postérieure à la date d’activation.';

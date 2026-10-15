@@ -367,3 +367,6 @@
 .prod-hl li{font-size:17px}
 .pf-more{margin-top:18px}
 .adm-co.adm-warn{color:#9a5b00;font-weight:600}
+.co-mem{list-style:none;padding:0;margin:8px 0 0}
+.co-mem li{padding:8px 0;border-bottom:1px solid var(--line)}
+.co-lics .row{align-items:end}

@@ -244,16 +244,19 @@
     const other = (av ? '#/archivision/' : '#/compte/') + (up ? 'connexion' : 'inscription');
     const notice = st.auth.notice && st.auth.status !== 'in' && st.auth.status !== 'loading' ? errMsg(st.auth.notice) : '';
     const company = `<div id="co" class="acc-co" hidden><h2 class="lh">Votre entreprise</h2>` +
+      `<p class="acc-h">L’inscription d’une entreprise est faite par son <b>représentant</b> ou par le <b>responsable d’une agence, d’un service ou d’une branche</b>. Vous pourrez ensuite ajouter vos collaborateurs.</p>` +
+      `<div class="acc-f"><label for="coRole">Vous êtes</label><select id="coRole" name="coRole"><option value="">Choisir…</option><option value="representant">Représentant de l’entreprise (gérant, président, directeur…)</option><option value="responsable">Responsable d’une agence, d’un service ou d’une branche</option></select><p class="fe" id="e-coRole" role="alert"></p></div>` +
       field('coName', 'Nom de l’entreprise', 'text', 'organization', { attrs: 'maxlength="120"' }) +
+      field('coSiret', 'Numéro SIRET', 'text', 'off', { attrs: 'maxlength="17" inputmode="numeric" placeholder="14 chiffres"' }) +
       field('coEmail', 'E-mail de l’entreprise', 'email', 'off', { opt: 1, attrs: 'maxlength="160" inputmode="email"' }) +
       `<div class="row">${field('coJob', 'Votre fonction', 'text', 'organization-title', { opt: 1, attrs: 'maxlength="80"' })}${field('coPhone', 'Téléphone professionnel', 'tel', 'tel', { opt: 1, attrs: 'maxlength="30"' })}</div>` +
       field('coSite', 'Site internet', 'text', 'url', { opt: 1, attrs: 'maxlength="200" inputmode="url" placeholder="www.exemple.fr"' }) +
-      `<div class="acc-f"><label for="coTier">Nombre de comptes nécessaires</label><select id="coTier" name="coTier" aria-describedby="h-coTier e-coTier"><option value="">Choisir…</option>${TIERS.map((t) => `<option value="${t.id}">${t.label}</option>`).join('')}</select>` +
-      `<p class="acc-h" id="h-coTier">Indicatif : il sert à préparer l’accès de votre équipe. Aucun abonnement n’est activé automatiquement.</p><p class="fe" id="e-coTier" role="alert"></p></div></div>`;
+      `<h3 class="lh" style="margin-top:18px;font-size:18px">Licences demandées</h3><p class="acc-h">Pour chaque application, le nombre de licences Pro Entreprise souhaité. Studio Prism vérifie la demande puis vous délivre les clés de licence.</p>` +
+      `<div id="coLics" class="co-lics">${coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p></div>`;
 
     const reg = `<fieldset class="acc-kind"><legend>Type de compte</legend>` +
-      `<label class="acc-card on"><input type="radio" name="kind" value="individual" checked><span><b>Particulier</b><small>Usage personnel, non commercial. Pour vendre vos réalisations : licence Pro avec un numéro SIRET (à indiquer dans votre fiche client).</small></span></label>` +
-      `<label class="acc-card"><input type="radio" name="kind" value="company"><span><b>Entreprise</b><small>Société, bureau d’études, collectivité… Compte vérifié par Studio Prism avant la première connexion.</small></span></label></fieldset>` +
+      `<label class="acc-card on"><input type="radio" name="kind" value="individual" checked><span><b>Particulier</b><small>Usage personnel, non commercial, y compris avec la licence Pro.</small></span></label>` +
+      `<label class="acc-card"><input type="radio" name="kind" value="company"><span><b>Entreprise</b><small>Inscription faite par le représentant ou un responsable (agence, service, branche), avec les licences souhaitées. Vérifiée par Studio Prism.</small></span></label></fieldset>` +
       `<div class="row">${field('prenom', 'Prénom', 'text', 'given-name', { attrs: 'maxlength="80"' })}${field('nom', 'Nom', 'text', 'family-name', { attrs: 'maxlength="80"' })}</div>` +
       field('email', 'Adresse e-mail', 'email', 'email', { attrs: 'maxlength="160" inputmode="email"' }) +
       field('mdp', 'Mot de passe', 'password', 'new-password', { hint: '8 caractères minimum, avec au moins une lettre et un chiffre.' }) +
@@ -278,7 +281,44 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
 <form data-f="${up ? 'asu' : 'asi'}" novalidate>${up ? reg : log}
 <button class="btn b1" style="margin-top:14px">${up ? 'Créer mon compte' : 'Se connecter'}</button>
 <p class="fe" id="e-form" role="status" aria-live="polite">${esc(notice)}</p></form>
-<p class="mt2">${up ? 'Vous avez déjà un compte Studio Prism ?' : 'Vous n’avez pas encore de compte ?'} <a class="more" href="${other}">${up ? 'Se connecter' : 'Créer un compte'}</a></p></div></div></section>`);
+<p class="mt2">${up ? 'Vous avez déjà un compte Studio Prism ?' : 'Vous n’avez pas encore de compte ?'} <a class="more" href="${other}">${up ? 'Se connecter' : 'Créer un compte'}</a></p></div></div></section>`);    if (up && window.SP.catalog) window.SP.catalog.load().then(() => document.querySelectorAll('[data-co-prod]').forEach((sel) => {
+      const v = sel.value; sel.innerHTML = coApps().map(([id, t]) => `<option value="${esc(id)}">${esc(t)}</option>`).join(''); if ([...sel.options].some((o) => o.value === v)) sel.value = v;
+    })).catch(() => {});
+  }
+
+  /* Lignes « application + nombre de licences » de la demande d'entreprise (applications du catalogue). */
+  const coApps = () => { const C = window.SP && window.SP.catalog; const l = C ? C.all().filter((p) => p.category === 'application' && p.status !== 'draft' && p.status !== 'archived') : [];
+    return l.length ? l.map((p) => [p.id, p.name]) : [['archiplan', 'ARCHIPLAN'], ['architrafic', 'ARCHITRAFIC']]; };
+  function coLicRow(i) {
+    return `<div class="row co-lic"><div class="acc-f"><label for="coProd${i}">Application</label><select id="coProd${i}" name="coProd${i}" data-co-prod>${coApps().map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>` +
+      `<div class="acc-f"><label for="coQty${i}">Nombre de licences</label><input id="coQty${i}" name="coQty${i}" type="number" min="1" max="500" value="1" inputmode="numeric"></div></div>`;
+  }
+  A['co-lic-add'] = () => { const box = document.getElementById('coLics'); if (!box) return; const n = box.querySelectorAll('.co-lic').length; if (n >= 6) return toast('6 applications au maximum.'); box.insertAdjacentHTML('beforeend', coLicRow(n)); };
+  const tierFor = (n) => n <= 1 ? '1' : n <= 10 ? '2-10' : n <= 25 ? '11-25' : n <= 50 ? '26-50' : n <= 100 ? '51-100' : '100+';
+  /* SIRET : 14 chiffres, clé de Luhn (exception : La Poste, 356 000 000). */
+  const siretOk = (raw) => { const d = String(raw || '').replace(/\s/g, ''); if (!/^\d{14}$/.test(d)) return false; if (d.startsWith('356000000')) return true;
+    let sum = 0; for (let i = 0; i < 14; i++) { let n = +d[13 - i]; if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
+  /* Lecture de la partie « entreprise » d'un formulaire (inscription ou passage en compte Entreprise). Renvoie { company, er }. */
+  function readCompany(fm, accountEmail) {
+    const g = (id) => ((fm.elements[id] && fm.elements[id].value) || '').trim(), er = {};
+    if (!g('coRole')) er.coRole = 'Indiquez votre rôle dans l’entreprise.';
+    if (!g('coName')) er.coName = 'Renseignez le nom de l’entreprise.';
+    if (!siretOk(g('coSiret'))) er.coSiret = g('coSiret') ? 'Numéro SIRET invalide (14 chiffres).' : 'Renseignez le numéro SIRET de l’entreprise.';
+    if (g('coEmail') && !EMAIL_RE.test(g('coEmail'))) er.coEmail = 'E-mail de l’entreprise invalide.';
+    const site = normUrl(g('coSite'));
+    if (site === null) er.coSite = 'Adresse de site internet invalide.';
+    if (g('coPhone') && !/^[+(]?\d[\d\s().-]{4,28}$/.test(g('coPhone'))) er.coPhone = 'Numéro de téléphone invalide.';
+    const names = Object.fromEntries(coApps()), items = [];
+    fm.querySelectorAll('.co-lic').forEach((row) => {
+      const pid = row.querySelector('select').value, qty = parseInt(row.querySelector('input').value, 10);
+      if (!pid) return;
+      if (!(qty >= 1 && qty <= 500)) { er.coLics = 'Nombre de licences : entre 1 et 500 par application.'; return; }
+      const ex = items.find((x) => x.productId === pid); if (ex) ex.qty += qty; else items.push({ productId: pid, productName: names[pid] || pid, licenseType: 'pro_entreprise', qty });
+    });
+    if (!items.length && !er.coLics) er.coLics = 'Indiquez au moins une application.';
+    const total = items.reduce((t, x) => t + x.qty, 0), tier = TIERS.find((t) => t.id === tierFor(total));
+    return { er, company: { name: g('coName'), email: (g('coEmail') || accountEmail || '').toLowerCase(), jobTitle: g('coJob'), phone: g('coPhone'), website: site || '',
+      siret: g('coSiret').replace(/\s/g, ''), repRole: g('coRole'), items, userRange: tier.id, userLimit: tier.limit } };
   }
 
   function kindChanged() {
@@ -305,15 +345,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       if (pb) er.mdp = pb;
       if (!fm.elements.mdp2.value) er.mdp2 = 'Confirmez votre mot de passe.';
       else if (fm.elements.mdp2.value !== pw) er.mdp2 = 'Les mots de passe ne correspondent pas.';
-      if (isCo) {
-        if (!g('coName')) er.coName = 'Renseignez le nom de l’entreprise.';
-        if (g('coEmail') && !EMAIL_RE.test(g('coEmail'))) er.coEmail = 'E-mail de l’entreprise invalide.';   // facultatif : à défaut, l'e-mail du compte
-        tier = TIERS.find((t) => t.id === g('coTier'));
-        if (!tier) er.coTier = 'Choisissez le nombre de comptes nécessaires.';
-        site = normUrl(g('coSite'));
-        if (site === null) er.coSite = 'Adresse de site internet invalide.';
-        if (g('coPhone') && !/^[+(]?\d[\d\s().-]{4,28}$/.test(g('coPhone'))) er.coPhone = 'Numéro de téléphone invalide.';
-      }
+      if (isCo) { const rc = readCompany(fm, email); Object.assign(er, rc.er); tier = rc.company; }
       if (!fm.elements.cgu.checked) er.cgu = 'Acceptez les conditions pour continuer.';
     } else if (!pw) {
       er.mdp = 'Saisissez votre mot de passe.';
@@ -326,12 +358,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       const api = await loadAuth();
       if (up) {
         const payload = { firstName: g('prenom'), lastName: g('nom'), email, password: pw, accountKind: isCo ? 'company' : 'individual' };
-        if (isCo) {
-          payload.company = {
-            name: g('coName'), email: (g('coEmail') || email).toLowerCase(), jobTitle: g('coJob'), phone: g('coPhone'),
-            website: site, userRange: tier.id, userLimit: tier.limit
-          };
-        }
+        if (isCo) payload.company = tier;   // { name, email, siret, repRole, items, userRange, userLimit… } (readCompany)
         try { await api.signUp(payload); }
         catch (e2) {
           if (!(e2 && e2.code === 'app/pending')) throw e2;
@@ -588,15 +615,14 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   }
 
 
-  /* Droit d'usage commercial : compte Entreprise avec Pro / Pro Entreprise, ou particulier avec Pro et un SIRET. Particulier : usage personnel. */
-  const PRO = ['pro', 'pro_entreprise'];
+  /* Droit d'usage commercial : réservé aux entreprises (licence ou abonnement Pro Entreprise). Un particulier peut avoir la licence Pro,
+     pour un usage personnel uniquement (il ne peut pas vendre ce qu'il réalise) ; Pro Entreprise ne lui est jamais attribuée. */
   function usageOf(u) {
     if (u.role === 'admin') return { ok: true, txt: 'Usage commercial' };
-    const pro = PRO.includes(u.subscription) || (AD.lic[u.uid] || []).some((l) => PRO.includes(l.licenseType) && licState(l) === 'active');
-    const siret = ((AD.cp || {})[u.uid] || {}).siret || '';
-    if (u.accountKind === 'company') return pro ? { ok: true, txt: 'Usage commercial' } : { ok: false, txt: 'Sans licence Pro Entreprise' };
-    if (!pro) return { ok: false, txt: 'Usage personnel' };
-    return siret ? { ok: true, txt: 'Usage commercial · SIRET ' + siret } : { ok: false, warn: true, txt: 'Pro sans SIRET : usage commercial bloqué' };
+    const has = (t) => u.subscription === t || (AD.lic[u.uid] || []).some((l) => l.licenseType === t && licState(l) === 'active');
+    if (has('pro_entreprise')) return { ok: true, txt: 'Usage commercial · Pro Entreprise' };
+    if (u.accountKind === 'company') return { ok: false, txt: 'Entreprise sans licence Pro Entreprise' };
+    return { ok: false, txt: has('pro') ? 'Pro · usage personnel (pas de vente)' : 'Usage personnel' };
   }
   function rowHtml(u) {
     const co = u.accountKind === 'company';
@@ -604,7 +630,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     return `<tr role="row">` +
       cell('Utilisateur', `<b>${esc(fullName(u))}</b><small class="adm-mail">${esc(u.email)}</small>`) +
-      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}${AD.cp ? (x => `<small class="adm-co${x.warn ? ' adm-warn' : ''}">${esc(x.txt)}</small>`)(usageOf(u)) : ''}`) +
+      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}${(x => `<small class="adm-co${x.ok ? '' : ''}">${esc(x.txt)}</small>`)(usageOf(u))}`) +
       cell('Abonnement', badge(SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')) +
       cell('Rôle', badge(u.role === 'admin' ? 'bd-admin' : 'bd-user', L.role[u.role] || u.role || '—')) +
       cell('Applications / Licences', licCell(u), 'adm-l') +
@@ -667,7 +693,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     modal(`<h3>Modifier le compte</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>
 <form data-f="adm-edit" data-uid="${esc(u.uid)}" novalidate>
 <label for="ed-sub">Abonnement</label><select id="ed-sub" name="ed-sub">${opts(L.sub, u.subscription)}</select>
-${u.accountKind !== 'company' && !((AD.cp || {})[u.uid] || {}).siret ? '<p class="acc-h">Particulier sans numéro SIRET : avec l’abonnement Pro, l’usage commercial reste bloqué tant que la personne n’a pas indiqué son SIRET dans sa fiche client.</p>' : ''}
+${u.accountKind !== 'company' && !u.orgId ? '<p class="acc-h">Particulier : l’abonnement Pro reste un usage personnel (pas de vente). Pro Entreprise est réservé aux entreprises.</p>' : ''}
 <label for="ed-role">Rôle</label><select id="ed-role" name="ed-role" ${self ? 'disabled' : ''}>${opts(L.role, u.role)}</select>
 <label for="ed-status">Statut</label><select id="ed-status" name="ed-status" ${self ? 'disabled' : ''}>${opts(u.status === 'pending' ? L.status : { active: L.status.active, suspended: L.status.suspended }, u.status)}</select>
 ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni votre propre statut.</p>' : '<p class="acc-h">Un administrateur peut consulter et modifier tous les comptes. <b>Désactivé</b> : l’utilisateur ne peut plus se connecter à Studio Prism ni accéder à ses licences ; ses données sont conservées et le compte peut être réactivé à tout moment. Ce n’est pas une suppression : son compte de connexion Firebase Authentication continue d’exister.</p>'}
@@ -694,6 +720,7 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
     const u = AD.users.find((x) => x.uid === fm.dataset.uid), err = fm.querySelector('#ed-err');
     if (!u) return;
     const next = { subscription: fm.elements['ed-sub'].value, role: fm.elements['ed-role'].value, status: fm.elements['ed-status'].value };
+    if (next.subscription === 'pro_entreprise' && u.accountKind !== 'company' && !u.orgId) { fm.querySelector('#ed-err').textContent = 'Pro Entreprise est réservée aux entreprises : un particulier peut avoir l’abonnement Pro, sans usage commercial.'; return; }
     const patch = {};
     Object.keys(next).forEach((k) => { if (next[k] !== u[k]) patch[k] = next[k]; });
     if (!Object.keys(patch).length) { A.x(); return; }
@@ -720,7 +747,7 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
   window.SP.kit = {
     st, AD, L, TIERS, esc, errMsg, loadAuth, redirect, guarded, field, clearErrors, showErrors, formMsg, setBusy, pwProblem, normUrl,
     EMAIL_RE, fdate, badge, SUBCLS, fullName, typeLabel, licState, LIC_STATUS, adminGate, licCell,
-    dataMod, guardAdminChange,
+    dataMod, guardAdminChange, readCompany, coLicRow, coApps, siretOk,
     serverOn: () => !!(st.data && st.data.ACCOUNT_SERVER === true),   // mode « avec Cloud Functions » ? (faux par défaut : forfait gratuit Spark)
     renderUsers: () => { if (CUR === 'admin') renderAdmin(); },
     refreshCounts, loadLicenses, MOD

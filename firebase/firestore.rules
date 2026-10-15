@@ -85,6 +85,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') == 'active';
     }
 
+    // Responsable (représentant ou responsable de branche) d'une entreprise cliente : compte actif rattaché à cette fiche avec
+    // orgRole « responsable » (posé par l'administration à la validation). Il voit les clés et les comptes de son entreprise et
+    // demande l'ajout de personnes ; il ne crée jamais de clé ni de licence lui-même.
+    function isResponsableOf(oid) {
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return oid is string && oid != '' && me.get('status', '') == 'active' && me.get('orgRole', '') == 'responsable' && me.get('orgId', '') == oid;
+    }
+
     function isString(v, min, max) {
       return v is string && v.size() >= min && v.size() <= max;
     }
@@ -186,7 +194,7 @@ service cloud.firestore {
       return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName', 'orgRole', 'orgClass'])
         && d.updatedAt == request.time
         && isString(d.get('orgId', ''), 0, 40) && isString(d.get('orgName', ''), 0, 120)
-        && d.get('orgRole', '') in ['', 'eleve', 'enseignant'] && isString(d.get('orgClass', ''), 0, 60)
+        && d.get('orgRole', '') in ['', 'eleve', 'enseignant', 'responsable'] && isString(d.get('orgClass', ''), 0, 60)
         && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
@@ -224,7 +232,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();                               // inclut les requêtes de comptage (count)
+      allow list: if isAdmin()                                // inclut les requêtes de comptage (count)
+                  || (isSignedIn() && isResponsableOf(resource.data.get('orgId', '')));   // responsable : comptes de son entreprise
       // Compte supprimé par l'administration (trace deletedAccounts) : jamais recréé automatiquement à la connexion, mais la personne peut
       // se réinscrire explicitement (acceptation des conditions dans la même écriture) ; la trace est alors retirée dans le même lot.
       allow create: if isSignedIn() && request.auth.uid == uid && validNewUser()
@@ -267,9 +276,11 @@ service cloud.firestore {
       let d = request.resource.data;
       return d.keys().hasAll(['name', 'email', 'ownerUid', 'userRange', 'userLimit', 'subscription', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['name', 'email', 'ownerUid', 'userRange', 'userLimit', 'subscription', 'createdAt', 'updatedAt',
-                             'phone', 'website'])
+                             'phone', 'website', 'siret', 'repRole'])
         && isString(d.name, 1, 120)
         && isEmail(d.email)
+        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))
+        && d.get('repRole', '') in ['', 'representant', 'responsable']
         && d.ownerUid == request.auth.uid
         && tierOk(d.userRange, d.userLimit)
         && d.subscription == 'free'
@@ -284,7 +295,7 @@ service cloud.firestore {
     function adminCompanyUpdateOk() {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
-      return changed.hasOnly(['name', 'email', 'userRange', 'userLimit', 'subscription', 'phone', 'website', 'updatedAt'])
+      return changed.hasOnly(['name', 'email', 'userRange', 'userLimit', 'subscription', 'phone', 'website', 'siret', 'repRole', 'updatedAt'])
         && d.updatedAt == request.time
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && isString(d.name, 1, 120)
@@ -505,6 +516,7 @@ service cloud.firestore {
         && k.redeemedBy == request.auth.uid && k.status == 'redeemed' && k.redeemedAt == request.time
         && d.productId == k.productId && d.productName == k.productName && d.licenseType == k.licenseType
         && d.status == 'active' && d.activatedAt == request.time && d.get('orgId', '') == k.get('orgId', '')
+        && (k.licenseType != 'pro_entreprise' || k.get('orgId', '') != '')   // Pro Entreprise : seulement par une clé d'entreprise
         && (k.get('expiresAt', null) != null ? d.expiresAt == k.expiresAt
             : end == null ? d.expiresAt == null
             : (d.expiresAt is timestamp && d.expiresAt > end - duration.value(10, 'm') && d.expiresAt < end + duration.value(10, 'm')));
@@ -584,7 +596,7 @@ service cloud.firestore {
 
     match /licenseKeys/{kid} {
       allow get: if isSignedIn() && (isAdmin() || isActiveUser());
-      allow list: if isAdmin();
+      allow list: if isAdmin() || (isSignedIn() && isResponsableOf(resource.data.get('orgId', '')));   // responsable : clés de son entreprise
       allow create: if isAdmin() && validKey(kid) && request.resource.data.status == 'available' && request.resource.data.createdAt == request.time;
       // Administrateur : libellé, profil, classe, révocation, rétablissement (jamais le produit ni le titulaire ; le statut d'une clé activée ne change pas).
       allow update: if (isAdmin() && validKey(kid) && request.resource.data.createdAt == resource.data.createdAt
@@ -600,6 +612,38 @@ service cloud.firestore {
                         && (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time)
                         && getAfter(/databases/$(database)/documents/licenses/$(request.auth.uid + '_' + resource.data.productId)).data.get('keyId', '') == kid);
       allow delete: if isAdmin();   // suppression d'un établissement : toutes ses clés
+    }
+
+    // ------------------------------------------------------------ demandes de licences d'entreprise : licenseRequests/{id}
+    //   kind « signup » : le responsable qui inscrit son entreprise (ou passe son compte en Entreprise) demande des licences ;
+    //   kind « member » : le responsable d'une entreprise validée demande l'ajout de personnes (une clé par adresse e-mail).
+    //   L'administration accepte (fiche entreprise, clés de licence) ou refuse ; le demandeur suit l'état de ses demandes.
+    function validRequestItems(items) {
+      return items is list && items.size() >= 1 && items.size() <= 6;
+    }
+    function validLicenseRequest() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['kind', 'requesterUid', 'requesterEmail', 'items', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['kind', 'requesterUid', 'requesterEmail', 'requesterName', 'companyId', 'companyName', 'orgId', 'items',
+                             'emails', 'repRole', 'siret', 'status', 'createdAt', 'updatedAt'])
+        && d.requesterUid == request.auth.uid && d.status == 'pending'
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && isEmail(d.requesterEmail) && isString(d.get('requesterName', ''), 0, 160)
+        && isString(d.get('companyId', ''), 0, 40) && isString(d.get('companyName', ''), 0, 120) && isString(d.get('orgId', ''), 0, 40)
+        && d.get('repRole', '') in ['', 'representant', 'responsable']
+        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))
+        && validRequestItems(d.items)
+        && ((d.kind == 'signup'
+             && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') == 'pending'
+             && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('accountKind', '') == 'company')
+            || (d.kind == 'member' && isResponsableOf(d.get('orgId', ''))
+                && d.get('emails', []) is list && d.emails.size() >= 1 && d.emails.size() <= 50));
+    }
+    match /licenseRequests/{rid} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.requesterUid == request.auth.uid);
+      allow create: if isSignedIn() && validLicenseRequest();
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.requesterUid == request.auth.uid && resource.data.status == 'pending');
     }
 
     // ============================================================ CMS : pages, projets, médias

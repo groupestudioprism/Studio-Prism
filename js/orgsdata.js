@@ -68,9 +68,45 @@ export async function adminListPending() {
   return (await getDocs(query(collection(db, "users"), where("status", "==", "pending")))).docs.map((d) => ({ uid: d.id, ...d.data() }))
     .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
 }
-/* Validation : le compte devient actif et, si une fiche entreprise est donnée, il y est rattaché (même écriture). */
-export async function adminApprove(uid, org) {
-  await updateDoc(doc(db, "users", uid), { status: "active", orgId: org ? org.id : "", orgName: org ? org.name : "", orgRole: "", orgClass: "", updatedAt: serverTimestamp() });
+/* Validation : le compte devient actif et, si une fiche entreprise est donnée, il y est rattaché (même écriture) ; role « responsable »
+   pour la personne qui a inscrit l'entreprise (elle voit les clés et les comptes de son entreprise et demande l'ajout de personnes). */
+export async function adminApprove(uid, org, role) {
+  await updateDoc(doc(db, "users", uid), { status: "active", orgId: org ? org.id : "", orgName: org ? org.name : "", orgRole: org ? role || "" : "", orgClass: "", updatedAt: serverTimestamp() });
+}
+export async function adminSetResponsable(uid, on) { await updateDoc(doc(db, "users", uid), { orgRole: on ? "responsable" : "", updatedAt: serverTimestamp() }); }
+
+/* ------------------------------------------------------------------ demandes de licences d'entreprise (licenseRequests) */
+export async function adminListRequests() {
+  return rows(await getDocs(query(collection(db, "licenseRequests"), where("status", "==", "pending"))))
+    .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+}
+export async function adminCloseRequest(id, status, orgId) {
+  await updateDoc(doc(db, "licenseRequests", id), { status, ...(orgId ? { orgId } : {}), updatedAt: serverTimestamp() });
+}
+/* Responsable d'entreprise : ses clés, ses comptes, ses demandes ; demande d'ajout de personnes. */
+export const orgKeys = async (orgId) => rows(await getDocs(query(collection(db, "licenseKeys"), where("orgId", "==", orgId))));
+export const orgMembers = async (orgId) => (await getDocs(query(collection(db, "users"), where("orgId", "==", orgId)))).docs.map((d) => ({ uid: d.id, ...d.data() }));
+export const myRequests = async (uid) => rows(await getDocs(query(collection(db, "licenseRequests"), where("requesterUid", "==", uid))))
+  .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+export async function requestMembers(user, profile, emails, item) {
+  await setDoc(doc(collection(db, "licenseRequests")), {
+    kind: "member", requesterUid: user.uid, requesterEmail: String(user.email || "").toLowerCase(), requesterName: `${profile.firstName || ""} ${profile.lastName || ""}`.trim().slice(0, 160),
+    orgId: profile.orgId, companyName: profile.orgName || profile.companyName || "", items: [item], emails,
+    status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+  });
+}
+/* Particulier → Entreprise : fiche entreprise, profil « en attente » et demande de licences, dans un seul lot. */
+export async function requestCompanyConversion(user, profile, c) {
+  const b = writeBatch(db), cref = doc(collection(db, "companies"));
+  const co = { name: c.name, email: c.email, ownerUid: user.uid, userRange: c.userRange, userLimit: c.userLimit, subscription: "free", createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  if (c.phone) co.phone = c.phone; if (c.website) co.website = c.website; if (c.siret) co.siret = c.siret; if (c.repRole) co.repRole = c.repRole;
+  b.set(cref, co);
+  const up = { accountKind: "company", status: "pending", companyId: cref.id, companyName: c.name, companyEmail: c.email, companyUserRange: c.userRange, companyUserLimit: c.userLimit, updatedAt: serverTimestamp() };
+  if (c.jobTitle) up.jobTitle = c.jobTitle;
+  b.update(doc(db, "users", user.uid), up);
+  b.set(doc(collection(db, "licenseRequests")), { kind: "signup", requesterUid: user.uid, requesterEmail: String(user.email || "").toLowerCase(), requesterName: `${profile.firstName || ""} ${profile.lastName || ""}`.trim().slice(0, 160),
+    companyId: cref.id, companyName: c.name, orgId: "", items: c.items, repRole: c.repRole, siret: c.siret, status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  await b.commit();
 }
 export async function adminFindUserByEmail(email) {
   const raw = String(email).trim(), low = raw.toLowerCase();

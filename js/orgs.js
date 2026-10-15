@@ -30,7 +30,7 @@
   const pmodal = (h, wide) => { A.x(); modal(h); const m = document.querySelector('.mod'); if (m && wide) m.classList.add('mod-w'); return m; };
   const copy = async (txt) => { try { await navigator.clipboard.writeText(txt); toast('Copié dans le presse-papiers.'); } catch (e) { toast('Copie impossible : sélectionnez le texte puis Ctrl+C.'); } };
   const KS = { available: ['bd-ok', 'Disponible'], redeemed: ['bd-kind', 'Activée'], revoked: ['bd-off', 'Révoquée'] };
-  const ROLE_L = { eleve: 'Élève', enseignant: 'Enseignant' };
+  const ROLE_L = { eleve: 'Élève', enseignant: 'Enseignant', responsable: 'Responsable' };
   const TYPE_L = { etudiant: 'Étudiant', enseignant: 'Enseignant' };
   const tLabel = (t) => TYPE_L[t] || typeLabel(t);
   const keyBadge = (k) => badge(KS[k.status]?.[0] || 'bd-off', KS[k.status]?.[1] || k.status);
@@ -54,7 +54,7 @@
   };
   const segOfKind = (k) => (SEG.scol.kinds.includes(k) ? 'scol' : 'ent');
   const segOfOrg = (oid) => { const o = oid && O.orgs.find((x) => x.id === oid); return o ? segOfKind(o.kind) : O.seg; };
-  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '', seg: 'scol', pending: [], showPending: false };
+  const O = { orgs: [], keys: [], prods: [], offers: [], busy: false, err: '', q: '', seg: 'scol', pending: [], requests: [], showPending: false };
 
   function orgsTab(seg, p, shell) {
     const S = SEG[seg]; O.seg = seg; O.q = ''; O.showPending = !!window.SP_OPEN_PENDING; window.SP_OPEN_PENDING = false;
@@ -70,7 +70,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   async function loadOrgs() {
     try {
       const [od, pd] = await Promise.all([OD(), PD()]);
-      [O.orgs, O.keys, O.prods, O.offers, O.pending] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => [])]);
+      [O.orgs, O.keys, O.prods, O.offers, O.pending, O.requests] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => []), od.adminListRequests().catch(() => [])]);
       O.err = '';
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
     renderOrgs();
@@ -99,46 +99,96 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     const fk = document.getElementById('org-free-keys');
     if (fk) fk.innerHTML = keyTable(kOf('').filter((k) => m(k.key) || m(k.label) || m(k.redeemedEmail) || m(k.productName)), '');
   }
-  /* ---- Entreprise : demandes de compte en attente (inscription « Entreprise » sur le site) ---- */
+  /* ---- Entreprise : demandes en attente ----
+     1) inscriptions d'entreprise (compte « en attente ») avec la demande de licences du responsable (licenseRequests kind « signup ») ;
+     2) demandes d'ajout de personnes par le responsable d'une entreprise validée (kind « member »). */
+  const ROLE_REP = { representant: 'Représentant de l’entreprise', responsable: 'Responsable d’agence, de service ou de branche' };
+  const reqOf = (uid) => O.requests.find((r) => r.kind === 'signup' && r.requesterUid === uid);
+  const itemsTxt = (items) => (items || []).map((x) => `${x.qty} × ${x.productName || x.productId}`).join(', ');
+  const DUR = [['365', '1 an après activation'], ['730', '2 ans après activation'], ['1095', '3 ans après activation'], ['', 'Sans limite']];
   function renderPending() {
-    const n = O.pending.length, btn = document.getElementById('org-pend-btn'), box = document.getElementById('org-pending');
+    const members = O.requests.filter((r) => r.kind === 'member');
+    const n = O.pending.length + members.length, btn = document.getElementById('org-pend-btn'), box = document.getElementById('org-pending');
     if (btn) { btn.innerHTML = `En attente${n ? ` <span class="org-pend-n">${n}</span>` : ''}`; btn.setAttribute('aria-expanded', String(!!O.showPending)); btn.classList.toggle('on', !!O.showPending); }
     if (!box) return;
     if (!O.showPending) { box.innerHTML = ''; return; }
-    const tierTxt = (u) => (u.companyUserLimit ? `jusqu’à ${u.companyUserLimit} comptes` : u.companyUserRange === '100+' ? 'plus de 100 comptes' : '');
-    box.innerHTML = `<div class="panel adm-pend"><h3 class="lh" style="margin:0 0 4px">Demandes de compte entreprise</h3><p class="mut">Ces comptes ont été créés sur le site avec le profil « Entreprise ». Ils ne peuvent pas se connecter tant qu’ils ne sont pas validés.</p>` +
-      (n ? `<ul class="adm-pend-l">${O.pending.map((u) => `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${u.jobTitle ? ' · ' + esc(u.jobTitle) : ''}${tierTxt(u) ? ' · ' + esc(tierTxt(u)) : ''} · demandé le ${esc(fdate(u.createdAt))}</small></div>` +
-        `<span class="adm-pend-b"><button class="btn b1" data-a="org-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`).join('')}</ul>`
-        : '<p style="margin-top:10px">Aucune demande en attente.</p>') + '</div>';
+    box.innerHTML = `<div class="panel adm-pend"><h3 class="lh" style="margin:0 0 4px">Inscriptions d’entreprise</h3><p class="mut">Demandes faites par le représentant ou un responsable de l’entreprise. Le compte ne peut pas se connecter tant qu’il n’est pas validé ; à la validation, la fiche entreprise est créée et les clés de licence demandées sont générées.</p>` +
+      (O.pending.length ? `<ul class="adm-pend-l">${O.pending.map((u) => { const r = reqOf(u.uid); return `<li><div><b>${esc(u.companyName || '—')}</b>` +
+        `<small>${esc(fullName(u))} · ${esc(u.email)}${r && r.repRole ? ' · ' + esc(ROLE_REP[r.repRole] || r.repRole) : ''}${u.jobTitle ? ' · ' + esc(u.jobTitle) : ''}</small>` +
+        `<small>${r && r.siret ? 'SIRET ' + esc(r.siret) + ' · ' : ''}${r ? 'Licences demandées : ' + esc(itemsTxt(r.items)) : 'Aucune demande de licence'} · le ${esc(fdate(u.createdAt))}</small></div>` +
+        `<span class="adm-pend-b"><button class="btn b1" data-a="org-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`; }).join('')}</ul>`
+        : '<p style="margin-top:10px">Aucune inscription en attente.</p>') +
+      `<h3 class="lh" style="margin:22px 0 4px">Ajouts de personnes demandés</h3><p class="mut">Le responsable d’une entreprise demande une licence pour des collaborateurs. Accepter génère une clé par adresse, à transmettre.</p>` +
+      (members.length ? `<ul class="adm-pend-l">${members.map((r) => `<li><div><b>${esc(r.companyName || '—')}</b><small>Demandé par ${esc(r.requesterName || r.requesterEmail)} · ${esc(itemsTxt(r.items).replace(/^\d+ × /, ''))} · le ${esc(fdate(r.createdAt))}</small><small>${esc((r.emails || []).join(', '))}</small></div>` +
+        `<span class="adm-pend-b"><button class="btn b1" data-a="org-req-ok" data-id="${esc(r.id)}">Accepter</button> <button class="btn btn-danger" data-a="org-req-no" data-id="${esc(r.id)}">Refuser</button></span></li>`).join('')}</ul>`
+        : '<p style="margin-top:10px">Aucune demande d’ajout.</p>') + '</div>';
   }
   const pendById = (uid) => O.pending.find((u) => u.uid === uid);
   function approveForm(uid) {
     const u = pendById(uid); if (!u) return;
-    const ents = O.orgs.filter((o) => segOfKind(o.kind) === 'ent'), same = ents.find((o) => String(o.name).trim().toLowerCase() === String(u.companyName || '').trim().toLowerCase());
-    pmodal(`<h3>Valider la demande de ${esc(u.companyName || fullName(u))}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p><form data-f="org-approve" data-uid="${esc(uid)}">
+    const r = reqOf(uid), ents = O.orgs.filter((o) => segOfKind(o.kind) === 'ent'), same = ents.find((o) => String(o.name).trim().toLowerCase() === String(u.companyName || '').trim().toLowerCase());
+    pmodal(`<h3>Valider ${esc(u.companyName || fullName(u))}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}${r && r.repRole ? ' · ' + esc(ROLE_REP[r.repRole] || '') : ''}${r && r.siret ? ' · SIRET ' + esc(r.siret) : ''}</p><form data-f="org-approve" data-uid="${esc(uid)}">
       <fieldset class="acc-f"><legend>Fiche entreprise</legend>
-      ${same ? '' : `<label class="chk"><input type="radio" name="ap-mode" value="new" checked> Créer la fiche entreprise « ${esc(u.companyName || '')} » et y rattacher le compte</label>`}
-      ${ents.length ? `<label class="chk"><input type="radio" name="ap-mode" value="existing"${same ? ' checked' : ''}> Rattacher à une entreprise existante</label>${sel('ap-org', ents.map((o) => [o.id, o.name]), same ? same.id : ents[0].id)}` : ''}
-      <label class="chk"><input type="radio" name="ap-mode" value="none"> Valider sans rattacher à une fiche</label></fieldset>
-      <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider le compte</button></p></form>`);
+      ${same ? '' : `<label class="chk"><input type="radio" name="ap-mode" value="new" checked> Créer la fiche entreprise « ${esc(u.companyName || '')} »</label>`}
+      ${ents.length ? `<label class="chk"><input type="radio" name="ap-mode" value="existing"${same ? ' checked' : ''}> Rattacher à une entreprise existante (autre agence ou branche)</label>${sel('ap-org', ents.map((o) => [o.id, o.name]), same ? same.id : ents[0].id)}` : ''}</fieldset>
+      <p class="mut" style="margin-top:8px">${esc(fullName(u))} devient <b>responsable</b> de cette entreprise : il voit ses clés et ses collaborateurs, et peut demander l’ajout de personnes.</p>
+      ${r ? `<fieldset class="acc-f"><legend>Clés de licence demandées</legend><label class="chk"><input type="checkbox" name="ap-keys" checked> Générer ${esc(itemsTxt(r.items))} (Pro Entreprise)</label>${fld('ap-dur', 'Validité des clés', sel('ap-dur', DUR, '365'))}</fieldset>` : ''}
+      <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider l’entreprise</button></p></form>`, true);
+  }
+  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
+  async function genKeys(od, org, item, n, durationDays, label) {
+    const keys = Array.from({ length: n }, () => od.generateKey(prefOf(item.productId)));
+    return od.adminCreateKeys(keys, { productId: item.productId, productName: item.productName || item.productId, licenseType: item.licenseType || 'pro_entreprise', durationDays, expiresAt: null, org, label: label || '', role: '', classe: '' });
+  }
+  function keysResult(title, org, list) {
+    pmodal(`<h3>${esc(title)}</h3><p class="mut">${esc(org.name)} · les clés sont aussi visibles par le responsable dans son espace « Mon entreprise ». Chaque personne crée son compte Studio Prism puis saisit sa clé.</p>
+      <textarea id="ok-out" readonly rows="${Math.min(14, list.length + 1)}" style="width:100%;font-family:monospace">${esc(list.join('\n'))}</textarea>
+      <p style="margin-top:10px"><button class="btn b1" data-a="org-copy-out">Copier</button> <button class="btn b4" data-a="org-open" data-org="${esc(org.id)}">Voir la fiche entreprise</button></p>`, true);
   }
   async function submitApprove(fm) {
-    const u = pendById(fm.dataset.uid), err = fm.querySelector('#ap-err'), btn = fm.querySelector('button[type=submit]'), mode = (fm.querySelector('[name=ap-mode]:checked') || {}).value || 'none';
-    if (!u) return; btn.disabled = true; err.textContent = '';
+    const u = pendById(fm.dataset.uid), err = fm.querySelector('#ap-err'), btn = fm.querySelector('button[type=submit]'), mode = (fm.querySelector('[name=ap-mode]:checked') || {}).value || 'new';
+    if (!u) return; const r = reqOf(u.uid); btn.disabled = true; btn.textContent = 'Validation…'; err.textContent = '';
     try {
       const od = await OD(); let org = null;
+      const total = r ? (r.items || []).reduce((t, x) => t + (x.qty || 0), 0) : 0;
       if (mode === 'existing') org = orgById(fm.elements['ap-org'].value);
-      if (mode === 'new') {
-        const id = await od.saveOrg({ name: (u.companyName || fullName(u)).slice(0, 120), kind: 'entreprise', email: String(u.companyEmail || u.email || '').toLowerCase(), contactName: fullName(u), seats: Math.min(10000, Math.max(1, u.companyUserLimit || 10)), notes: 'Créée à la validation de la demande de compte de ' + u.email, status: 'active' }, null);
-        org = { id, name: (u.companyName || fullName(u)).slice(0, 120) };
+      else {
+        const name = (u.companyName || fullName(u)).slice(0, 120);
+        const id = await od.saveOrg({ name, kind: 'entreprise', siret: (r && r.siret) || '', email: String(u.companyEmail || u.email || '').toLowerCase(), contactName: fullName(u), seats: Math.min(10000, Math.max(1, total || u.companyUserLimit || 1)), notes: `Inscrite par ${fullName(u)} (${u.email})${r && r.repRole ? ', ' + (ROLE_REP[r.repRole] || '') : ''}.`, status: 'active' }, null);
+        org = { id, name };
       }
-      await od.adminApprove(u.uid, org);
-      A.x(); await loadOrgs(); toast(`Compte validé : ${u.email}${org ? ' · rattaché à ' + org.name : ''}. La personne peut maintenant se connecter.`);
-    } catch (e) { console.error('[Studio Prism] Validation :', e); err.textContent = errMsg(e); btn.disabled = false; }
+      await od.adminApprove(u.uid, org, 'responsable');
+      const out = [];
+      if (r && fm.elements['ap-keys'] && fm.elements['ap-keys'].checked) {
+        const dur = fm.elements['ap-dur'].value ? parseInt(fm.elements['ap-dur'].value, 10) : null;
+        for (const it of r.items || []) (await genKeys(od, org, it, it.qty, dur, '')).forEach((k) => out.push(`${k.key}  ·  ${it.productName || it.productId}`));
+      }
+      if (r) await od.adminCloseRequest(r.id, 'accepted', org.id);
+      await loadOrgs();
+      toast(`Entreprise validée : ${org.name}. ${fullName(u)} peut se connecter.`);
+      if (out.length) keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} Pro Entreprise générée${out.length > 1 ? 's' : ''}`, org, out); else A.x();
+    } catch (e) { console.error('[Studio Prism] Validation :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Valider l’entreprise'; }
   }
   function refuseForm(uid) {
     const u = pendById(uid); if (!u) return;
     pmodal(`<h3>Refuser la demande de ${esc(u.companyName || fullName(u))} ?</h3><p>Le compte en attente (${esc(u.email)}) et sa fiche d’inscription sont supprimés. L’adresse e-mail sera libérée à sa prochaine tentative de connexion.</p><p class="mut">Action définitive.</p><p class="fe" id="rf-err" role="alert"></p><p><button class="btn btn-danger" data-a="org-refuse-ok" data-uid="${esc(uid)}">Refuser et supprimer la demande</button></p>`);
+  }
+  /* Ajout de personnes : une clé par adresse, au nom de l'entreprise, libellée avec l'adresse. */
+  function memberForm(id) {
+    const r = O.requests.find((x) => x.id === id); if (!r) return; const it = (r.items || [])[0] || {};
+    pmodal(`<h3>Ajouter ${(r.emails || []).length} personne${(r.emails || []).length > 1 ? 's' : ''} à ${esc(r.companyName || '')}</h3><p class="mut">${esc(it.productName || it.productId || '')} · Pro Entreprise · une clé par adresse :</p><p>${(r.emails || []).map(esc).join('<br>')}</p>
+      <form data-f="org-req-ok" data-id="${esc(id)}">${fld('rq-dur', 'Validité des clés', sel('rq-dur', DUR, '365'))}<p class="fe" id="rq-err" role="alert"></p><p><button class="btn b1" type="submit">Générer les clés</button></p></form>`);
+  }
+  async function submitMember(fm) {
+    const r = O.requests.find((x) => x.id === fm.dataset.id), err = fm.querySelector('#rq-err'), btn = fm.querySelector('button[type=submit]');
+    if (!r) return; const org = orgById(r.orgId); if (!org) { err.textContent = 'Fiche entreprise introuvable.'; return; }
+    btn.disabled = true; btn.textContent = 'Génération…';
+    try {
+      const od = await OD(), it = (r.items || [])[0] || {}, dur = fm.elements['rq-dur'].value ? parseInt(fm.elements['rq-dur'].value, 10) : null, out = [];
+      for (const em of r.emails || []) { const k = (await genKeys(od, org, it, 1, dur, em))[0]; out.push(`${em}  →  ${k.key}`); }
+      await od.adminCloseRequest(r.id, 'accepted');
+      await loadOrgs(); keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} générée${out.length > 1 ? 's' : ''}`, org, out);
+    } catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Générer les clés'; }
   }
   function keyTable(ks, oid) {
     const S = SEG[segOfOrg(oid)];
@@ -194,7 +244,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
         <td data-label="Profil"><div class="adm-v">${esc(ROLE_L[u.orgRole] || '—')}${u.orgClass ? `<small>${esc(u.orgClass)}</small>` : ''}</div></td>
         <td data-label="Licences"><div class="adm-v">${FO.lics.filter((l) => l.userId === u.uid).map((l) => `${esc(l.productName)} — ${esc(tLabel(l.licenseType))}${l.expiresAt ? ` <small>jusqu’au ${esc(fdate(l.expiresAt))}</small>` : ''}`).join('<br>') || '<span class="mut">Aucune</span>'}</div></td>
         <td data-label="Statut"><div class="adm-v">${badge(u.status === 'active' ? 'bd-ok' : 'bd-off', u.status === 'active' ? 'Actif' : 'Désactivé')}</div></td>
-        <td class="adm-act"><button class="btn b4" data-a="org-detach" data-uid="${esc(u.uid)}" data-org="${esc(id)}">Détacher</button></td></tr>`).join('')}</tbody></table></div>`
+        <td class="adm-act">${!S.roles ? `<button class="btn b4" data-a="org-resp" data-uid="${esc(u.uid)}" data-org="${esc(id)}" data-on="${u.orgRole === 'responsable' ? '' : '1'}">${u.orgRole === 'responsable' ? 'Retirer responsable' : 'Nommer responsable'}</button> ` : ''}<button class="btn b4" data-a="org-detach" data-uid="${esc(u.uid)}" data-org="${esc(id)}">Détacher</button></td></tr>`).join('')}</tbody></table></div>`
       : `<p class="mut">${FO.mem.length ? 'Aucun compte pour ce filtre.' : `Aucun compte rattaché pour le moment. Les personnes qui activent une clé de ${S.roles ? 'cet établissement' : 'cette entreprise'} apparaissent ici.`}</p>`;
   }
 
@@ -319,6 +369,9 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     'org-reload': () => loadOrgs(),
     'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
     'org-approve': (b) => approveForm(b.dataset.uid),
+    'org-req-ok': (b) => memberForm(b.dataset.id),
+    'org-req-no': async (b) => { b.disabled = true; try { await (await OD()).adminCloseRequest(b.dataset.id, 'refused'); await loadOrgs(); toast('Demande refusée.'); } catch (e) { toast(errMsg(e)); b.disabled = false; } },
+    'org-resp': async (b) => { b.disabled = true; try { await (await OD()).adminSetResponsable(b.dataset.uid, b.dataset.on === '1'); toast(b.dataset.on === '1' ? 'Responsable nommé.' : 'Responsable retiré.'); openOrg(b.dataset.org); } catch (e) { toast(errMsg(e)); b.disabled = false; } },
     'org-refuse': (b) => refuseForm(b.dataset.uid),
     'org-refuse-ok': async (b) => { const u = pendById(b.dataset.uid); if (!u) return; b.disabled = true; b.textContent = 'Suppression…';
       try { const d = await K.dataMod(); await (K.serverOn() ? d.deleteUserByAdmin(u.uid, u.email) : d.deleteUserNoServer(u.uid, u.email)); A.x(); await loadOrgs(); toast('Demande refusée : ' + u.email); }
@@ -347,10 +400,13 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   function refreshOpen(b) { const oid = b.closest('.mod') ? (O.keys.find((k) => k.id === b.dataset.id)?.orgId || '') : null; if (oid) openOrg(oid); }
 
   document.addEventListener('submit', async (e) => {
-    const f = e.target.dataset && e.target.dataset.f; if (!f || f.indexOf('org-') !== 0 && f !== 'key-redeem') return;
+    const f = e.target.dataset && e.target.dataset.f; if (!f || f.indexOf('org-') !== 0 && f.indexOf('co-') !== 0 && f !== 'key-redeem') return;
     e.preventDefault();
     if (f === 'org-form') submitOrg(e.target);
     else if (f === 'org-approve') submitApprove(e.target);
+    else if (f === 'org-req-ok') submitMember(e.target);
+    else if (f === 'co-convert') submitConvert(e.target);
+    else if (f === 'co-add') submitAdd(e.target);
     else if (f === 'org-keys') submitKeys(e.target);
     else if (f === 'org-label') { const fm = e.target; try { await (await OD()).adminSetKeyLabel(fm.dataset.id, fm.elements.kl.value, fm.elements.kr ? fm.elements.kr.value : '', fm.elements.kc ? fm.elements.kc.value.trim() : ''); await loadOrgs(); if (fm.dataset.org) openOrg(fm.dataset.org); else A.x(); } catch (x) { toast(errMsg(x)); } }
     else if (f === 'org-attach') {
@@ -378,6 +434,74 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     if (e.target.id === 'org-fclass') { FO.classe = e.target.value; renderFiche(); return; }
     if (e.target.id === 'ok-role') { const t = document.getElementById('ok-type'), v = { eleve: 'etudiant', enseignant: 'enseignant' }[e.target.value]; if (t && v && [...t.options].some((o) => o.value === v)) t.value = v; return; }
     if (e.target.id === 'ok-prod') { const t = document.getElementById('ok-type'); if (t) t.innerHTML = typesFor(e.target.value).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(''); } });
+
+  /* ================================================================== MON COMPTE : ESPACE ENTREPRISE
+     - responsable d'une entreprise validée : clés de licence, collaborateurs, demandes d'ajout de personnes (validées par Studio Prism) ;
+     - particulier : demande de passage en compte Entreprise (représentant ou responsable, SIRET, licences souhaitées). */
+  const RQ_ST = { pending: ['bd-pend', 'En attente'], accepted: ['bd-ok', 'Acceptée'], refused: ['bd-off', 'Refusée'] };
+  async function mountCompany(el, p) {
+    if (!el) return;
+    const user = st.auth.user;
+    if (p.orgRole === 'responsable' && p.orgId) {
+      el.innerHTML = '<p class="mut">Chargement de votre entreprise…</p>';
+      try {
+        const od = await OD();
+        const [keys, mem, reqs] = await Promise.all([od.orgKeys(p.orgId), od.orgMembers(p.orgId), od.myRequests(user.uid)]);
+        const apps = [...new Map(keys.map((k) => [k.productId, k.productName])).entries()];
+        const opts = (apps.length ? apps : K.coApps()).map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+        keys.sort((a, b) => String(a.status).localeCompare(String(b.status)) || String(a.label).localeCompare(String(b.label)));
+        el.innerHTML = `<div class="fiche-h"><h2 class="lh" id="s-co">Mon entreprise · ${esc(p.orgName || p.companyName || '')}</h2></div>
+          <p class="mt2">Vous êtes <b>responsable</b> de cette entreprise. Les clés ci-dessous sont celles de votre entreprise : transmettez-les à vos collaborateurs ; chacun crée son compte Studio Prism puis saisit sa clé (Mon compte › Activer une clé de licence, ou dans l’application).</p>
+          <h3 class="lh" style="margin-top:18px;font-size:18px">Clés de licence (${keys.length})</h3>
+          ${keys.length ? `<div class="adm-tw"><table class="adm-t"><thead><tr><th>Clé</th><th>Application</th><th>Pour</th><th>Statut</th><th></th></tr></thead><tbody>${keys.map((k) => `<tr><td data-label="Clé"><code class="kcode">${esc(k.key)}</code></td><td data-label="Application">${esc(k.productName)}</td><td data-label="Pour">${esc(k.label || '—')}</td>
+            <td data-label="Statut">${k.status === 'redeemed' ? badge('bd-kind', 'Activée') + `<small> ${esc(k.redeemedEmail || '')}</small>` : keyBadge(k)}</td><td class="adm-act">${k.status === 'available' ? `<button class="btn b4" data-a="org-key-copy" data-k="${esc(k.key)}">Copier</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Aucune clé pour le moment : elles apparaissent ici dès que Studio Prism valide une demande.</p>'}
+          <h3 class="lh" style="margin-top:22px;font-size:18px">Collaborateurs (${mem.length})</h3>
+          ${mem.length ? `<ul class="co-mem">${mem.map((u) => `<li><b>${esc(fullName(u))}</b> <span class="mut">${esc(u.email)}</span>${u.orgRole === 'responsable' ? ' ' + badge('bd-kind', 'Responsable') : ''}</li>`).join('')}</ul>` : '<p class="mut">Aucun collaborateur rattaché pour le moment.</p>'}
+          <h3 class="lh" style="margin-top:22px;font-size:18px">Ajouter des personnes</h3>
+          <form data-f="co-add" class="panel" novalidate><div class="acc-f"><label for="co-mails">Adresses e-mail <span class="mut">(une par ligne)</span></label><textarea id="co-mails" rows="3" maxlength="4000" placeholder="prenom.nom@entreprise.fr"></textarea></div>
+            <div class="acc-f"><label for="co-app">Application</label><select id="co-app">${opts}</select></div>
+            <p class="acc-h">Chaque ajout est vérifié par Studio Prism, qui délivre ensuite une clé de licence Pro Entreprise par personne ; elle apparaîtra dans la liste ci-dessus.</p>
+            <p class="fe" id="co-err" role="alert"></p><p><button class="btn b1" type="submit">Envoyer la demande</button></p></form>
+          ${reqs.length ? `<h3 class="lh" style="margin-top:22px;font-size:18px">Mes demandes</h3><ul class="co-mem">${reqs.map((r) => `<li>${badge(RQ_ST[r.status]?.[0] || '', RQ_ST[r.status]?.[1] || r.status)} ${r.kind === 'member' ? `Ajout de ${esc((r.emails || []).join(', '))}` : `Inscription : ${esc((r.items || []).map((x) => x.qty + ' × ' + (x.productName || x.productId)).join(', '))}`} <span class="mut">· ${esc(fdate(r.createdAt))}</span></li>`).join('')}</ul>` : ''}`;
+        el.dataset.org = p.orgId;
+      } catch (e) { el.innerHTML = `<p class="fe" style="display:block">${esc(errMsg(e))}</p>`; }
+      return;
+    }
+    if (p.accountKind !== 'company' && !p.orgId) {
+      el.innerHTML = `<div class="panel"><h2 class="lh" style="font-size:20px">Votre activité est une entreprise ?</h2><p class="mt2">Le représentant de l’entreprise, ou le responsable d’une agence, d’un service ou d’une branche, peut demander un compte Entreprise avec les licences Pro Entreprise souhaitées. Studio Prism vérifie la demande ; en attendant, votre compte est mis en attente (vos projets sont conservés).</p><p style="margin-top:12px"><button class="btn b4" data-a="co-convert">Demander un compte Entreprise</button></p></div>`;
+      return;
+    }
+    el.innerHTML = '';
+  }
+  A['co-convert'] = () => {
+    const f = K.field;
+    pmodal(`<h3>Demander un compte Entreprise</h3><form data-f="co-convert" novalidate>
+      <div class="acc-f"><label for="coRole">Vous êtes</label><select id="coRole" name="coRole"><option value="">Choisir…</option><option value="representant">Représentant de l’entreprise (gérant, président, directeur…)</option><option value="responsable">Responsable d’une agence, d’un service ou d’une branche</option></select><p class="fe" id="e-coRole" role="alert"></p></div>
+      ${f('coName', 'Nom de l’entreprise', 'text', 'organization', { attrs: 'maxlength="120"' })}${f('coSiret', 'Numéro SIRET', 'text', 'off', { attrs: 'maxlength="17" inputmode="numeric" placeholder="14 chiffres"' })}
+      ${f('coEmail', 'E-mail de l’entreprise', 'email', 'off', { opt: 1, attrs: 'maxlength="160"' })}<div class="row">${f('coJob', 'Votre fonction', 'text', 'organization-title', { opt: 1, attrs: 'maxlength="80"' })}${f('coPhone', 'Téléphone professionnel', 'tel', 'tel', { opt: 1, attrs: 'maxlength="30"' })}</div>
+      <h4 style="margin-top:12px">Licences demandées</h4><div id="coLics" class="co-lics">${K.coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p>
+      <p class="fe" id="cv-err" role="alert"></p><p><button class="btn b1" type="submit">Envoyer la demande</button></p></form>`, true);
+  };
+  async function submitConvert(fm) {
+    K.clearErrors(); const a = st.auth, rc = K.readCompany(fm, a.user.email);
+    if (K.showErrors(fm, rc.er)) return;
+    const btn = fm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Envoi…';
+    try { await (await OD()).requestCompanyConversion(a.user, a.profile, rc.company); A.x(); toast('Demande envoyée : votre compte est en attente de validation.'); }
+    catch (e) { fm.querySelector('#cv-err').textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
+  }
+  async function submitAdd(fm) {
+    const err = fm.querySelector('#co-err'), btn = fm.querySelector('button[type=submit]'), p = st.auth.profile;
+    const mails = [...new Set(fm.elements['co-mails'].value.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean))];
+    err.textContent = '';
+    if (!mails.length) { err.textContent = 'Saisissez au moins une adresse e-mail.'; return; }
+    const bad = mails.filter((m) => !K.EMAIL_RE.test(m)); if (bad.length) { err.textContent = 'Adresse(s) invalide(s) : ' + bad.join(', '); return; }
+    if (mails.length > 50) { err.textContent = '50 adresses au maximum par demande.'; return; }
+    const sel = fm.elements['co-app'], item = { productId: sel.value, productName: sel.options[sel.selectedIndex].text, licenseType: 'pro_entreprise', qty: mails.length };
+    btn.disabled = true; btn.textContent = 'Envoi…';
+    try { await (await OD()).requestMembers(st.auth.user, p, mails, item); toast('Demande envoyée à Studio Prism.'); mountCompany(document.getElementById('acc-co-sec'), p); }
+    catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
+  }
+  window.SP.companyUI = { mount: mountCompany };
 
   /* ================================================================== UTILISATEUR : ACTIVER UNE CLÉ */
   const PENDING = 'sp.pendingKey';
