@@ -165,6 +165,7 @@ async function readProfile(user) {
   const missing = ["firstName", "lastName", "email", "accountKind", "subscription", "role", "status"].filter((k) => data[k] == null);
   log(`Firestore profile read success — status=${data.status} role=${data.role} subscription=${data.subscription}` +
       (missing.length ? ` — CHAMPS ABSENTS : ${missing.join(", ")}` : ""));
+  if (data.status === "pending") throw appError("app/pending");
   if (data.status !== "active" && data.status !== "suspended") throw appError("app/profile-invalid");
   if (data.status !== "active") throw appError("app/suspended");
   return { uid: user.uid, ...data };
@@ -182,7 +183,7 @@ async function loadProfile(user) {
     log("profile state emitted");
   } catch (err) {
     if (mine !== seq) return;
-    if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted") return forceOut(err.code);
+    if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted" || err.code === "app/pending") return forceOut(err.code);
     console.error("[Studio Prism] Lecture du profil impossible :", err);
     emit({ status: "error", user: { uid: user.uid, email: user.email }, profile: null, notice: err.code || "unknown" });
   }
@@ -235,7 +236,7 @@ export async function signUp(p) {
         accountKind: p.accountKind,
         subscription: "free",   // une entreprise ne reçoit PAS Pro Entreprise automatiquement
         role: "user",
-        status: "active",
+        status: p.accountKind === "company" ? "pending" : "active",   // compte Entreprise : validé à la main par l'administration
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
@@ -325,7 +326,7 @@ export async function signIn({ email, password, remember }) {
     log(`signIn failed: ${err.code || "unknown"}${err.step ? ` (étape ${err.step})` : ""}`);
     if (user) {
       // Authentification OK mais profil inutilisable : on referme la session Firebase.
-      if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted") pendingNotice = err.code;
+      if (err.code === "app/profile-missing" || err.code === "app/suspended" || err.code === "app/account-deleted" || err.code === "app/pending") pendingNotice = err.code;
       await signOut(auth).catch(() => {});
     }
     throw err;

@@ -153,7 +153,9 @@ service cloud.firestore {
         && d.email.lower() == request.auth.token.email.lower()
         && d.subscription == 'free'
         && d.role == 'user'
-        && d.status == 'active'
+        // Particulier : actif tout de suite. Entreprise : « pending » (en attente) jusqu'à la validation manuelle par un administrateur ;
+        // un compte en attente n'est pas actif (isActiveUser) : il ne lit ni licences ni entreprise et ne modifie rien.
+        && ((d.accountKind == 'individual' && d.status == 'active') || (d.accountKind == 'company' && d.status == 'pending'))
         && d.createdAt == request.time
         && d.updatedAt == request.time
         && d.lastLogin == request.time
@@ -188,7 +190,7 @@ service cloud.firestore {
         && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
-        && d.status in ['active', 'suspended']
+        && d.status in ['active', 'suspended']                 // validation d'un compte en attente : pending → active (ou suspended)
         && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
     }
 

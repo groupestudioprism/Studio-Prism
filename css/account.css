@@ -329,3 +329,8 @@
 .seg-f button{border:0;background:transparent;border-radius:7px;padding:6px 12px;font:600 13.5px Inter,system-ui,sans-serif;cursor:pointer;color:var(--mut)}
 .seg-f button.on{background:var(--nuit,#071B55);color:#fff}.seg-f small{opacity:.7;margin-left:3px}
 .org-fc{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin:0}.org-fc select{height:36px;border-radius:8px;border:1px solid var(--line);padding:0 8px;font:inherit;font-weight:400}
+
+/* comptes Entreprise en attente de validation */
+.bd-pend{background:#FFF4D6;color:#7A5200;border-color:#F0D58A}
+.adm-pend{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 16px;border-left:4px solid #E0A800}
+.adm-pend p{margin:0}

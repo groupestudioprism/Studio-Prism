@@ -20,7 +20,7 @@
     kind: { individual: 'Particulier', company: 'Entreprise' },
     sub: { free: 'Free', pro: 'Pro', pro_entreprise: 'Pro Entreprise' },
     role: { user: 'Utilisateur', admin: 'Administrateur' },
-    status: { active: 'Actif', suspended: 'Désactivé' }   // « suspended » = valeur enregistrée dans Firestore (inchangée) ; « Désactivé » = libellé affiché
+    status: { active: 'Actif', pending: 'En attente', suspended: 'Désactivé' }   // « suspended » = valeur enregistrée dans Firestore (inchangée) ; « Désactivé » = libellé affiché
   };
   const TIERS = SUBSCRIPTION_CONFIG.plans.PRO_ENTREPRISE.tiers;
   const AUTH_ROUTES = new Set(['compte/connexion', 'compte/inscription', 'archivision/connexion', 'archivision/inscription']);
@@ -43,6 +43,7 @@
     'auth/user-disabled': 'Ce compte a été désactivé. Contactez Studio Prism.',
     'auth/operation-not-allowed': 'La connexion par e-mail et mot de passe n’est pas activée pour ce projet Firebase.',
     'app/suspended': 'Ce compte est désactivé. Contactez Studio Prism pour le réactiver.',
+    'app/pending': 'Votre compte entreprise est en attente de validation par Studio Prism. Vous recevrez une réponse rapidement ; vous pourrez ensuite vous connecter avec ce mot de passe.',
     'app/profile-missing': 'Votre profil Studio Prism est introuvable. Contactez Studio Prism.',
     'app/account-deleted': 'Ce compte a été supprimé par Studio Prism. Vous pouvez créer un nouveau compte avec la même adresse e-mail.',
     'app/timeout': 'Le service met trop de temps à répondre. Réessayez.',
@@ -331,7 +332,14 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
             website: site, userRange: tier.id, userLimit: tier.limit
           };
         }
-        await api.signUp(payload);
+        try { await api.signUp(payload); }
+        catch (e2) {
+          if (!(e2 && e2.code === 'app/pending')) throw e2;
+          // Compte Entreprise : créé, mais en attente de validation manuelle (aucune connexion avant l'accord de Studio Prism).
+          formMsg('Demande envoyée. Votre compte entreprise doit être validé par Studio Prism avant la première connexion : nous revenons vers vous rapidement.', true);
+          toast('Demande de compte entreprise envoyée.');
+          return;
+        }
         toast('Compte créé. Bienvenue chez Studio Prism !');
       } else {
         await api.signIn({ email, password: pw, remember: fm.elements.rm.checked });
@@ -411,11 +419,12 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     const sel = (id, label, opts) => `<div class="acc-f"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
     V(shell(`<p class="lead">Connecté en tant que ${esc(fullName(p))}. Les comptes ci-dessous proviennent de Firebase.</p>
 <div class="adm-stats" id="adm-stats" aria-live="polite"></div>
+<div id="adm-pending" aria-live="polite"></div>
 <div class="panel adm-bar"><div class="acc-f adm-q"><label for="adm-q">Rechercher</label><input id="adm-q" type="search" placeholder="Nom, prénom, e-mail ou entreprise" autocomplete="off"></div>
 ${sel('adm-kind', 'Compte', [['', 'Tous'], ['individual', 'Particulier'], ['company', 'Entreprise']])}
 ${sel('adm-sub', 'Abonnement', [['', 'Tous'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
 ${sel('adm-role', 'Rôle', [['', 'Tous'], ['user', 'Utilisateur'], ['admin', 'Administrateur']])}
-${sel('adm-status', 'Statut', [['', 'Tous'], ['active', 'Actif'], ['suspended', 'Désactivé']])}
+${sel('adm-status', 'Statut', [['', 'Tous'], ['pending', 'En attente'], ['active', 'Actif'], ['suspended', 'Désactivé']])}
 ${sel('adm-prod', 'Application', [['', 'Toutes']])}
 ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none', 'Sans licence'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
 ${sel('adm-org', 'Rattachement', [['', 'Tous'], ['scol', 'Scolaire (tous)'], ['ent', 'Entreprise (toutes)'], ['none', 'Aucun rattachement']])}
@@ -501,6 +510,8 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const c = AD.counts;
     el.innerHTML = [['Utilisateurs', 'total'], ['Free', 'free'], ['Pro', 'pro'], ['Pro Entreprise', 'proEntreprise'], ['Administrateurs', 'admins']]
       .map(([l, k]) => `<div class="adm-stat"><span class="adm-n">${c ? c[k] : '—'}</span><span class="adm-l">${l}</span></div>`).join('');
+    const pb = document.getElementById('adm-pending'), np = c && c.pending;
+    if (pb) pb.innerHTML = np ? `<div class="panel adm-pend"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation.</p><button type="button" class="btn b1" data-a="adm-show-pending">Voir les demandes</button></div>` : '';
   }
 
   function licenseMatch(u) {
@@ -583,8 +594,8 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
       cell('Comptes demandés', esc(tier), 'adm-d') +
       cell('Créé le', fdate(u.createdAt), 'adm-d') +
       cell('Dernière connexion', fdate(u.lastLogin, true), 'adm-d') +
-      cell('Statut', badge(u.status === 'active' ? 'bd-ok' : 'bd-off', L.status[u.status] || u.status || '—')) +
-      `<td role="cell" class="adm-act"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}" aria-label="Ouvrir la fiche de ${esc(fullName(u))}">Fiche</button> <button class="btn b4" data-a="adm-edit" data-uid="${esc(u.uid)}" aria-label="Modifier le compte de ${esc(fullName(u))}">Modifier</button>${u.role !== 'admin' && !(st.auth.user && st.auth.user.uid === u.uid) ? ` <button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(u.uid)}" aria-label="Supprimer le compte de ${esc(fullName(u))}">Supprimer</button>` : ''}</td></tr>`;
+      cell('Statut', badge(u.status === 'active' ? 'bd-ok' : u.status === 'pending' ? 'bd-pend' : 'bd-off', L.status[u.status] || u.status || '—')) +
+      `<td role="cell" class="adm-act">${u.status === 'pending' ? `<button class="btn b1" data-a="adm-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="adm-refuse" data-uid="${esc(u.uid)}">Refuser</button> ` : ''}<button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}" aria-label="Ouvrir la fiche de ${esc(fullName(u))}">Fiche</button> <button class="btn b4" data-a="adm-edit" data-uid="${esc(u.uid)}" aria-label="Modifier le compte de ${esc(fullName(u))}">Modifier</button>${u.role !== 'admin' && !(st.auth.user && st.auth.user.uid === u.uid) ? ` <button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(u.uid)}" aria-label="Supprimer le compte de ${esc(fullName(u))}">Supprimer</button>` : ''}</td></tr>`;
   }
 
   function renderAdmin() {
@@ -614,6 +625,15 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   }
 
   A['adm-more'] = () => loadAdmin(true);
+  A['adm-show-pending'] = () => { AD.status = 'pending'; const el = document.getElementById('adm-status'); if (el) el.value = 'pending'; renderList(); document.getElementById('adm-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  /* Validation manuelle d'un compte Entreprise : pending → active. Refus : la demande est supprimée (même suppression que « Supprimer »). */
+  A['adm-approve'] = async (btn) => {
+    const u = AD.users.find((x) => x.uid === btn.dataset.uid); if (!u) return;
+    btn.disabled = true;
+    try { await st.admin.updateUser(u, { status: 'active' }); u.status = 'active'; renderAdmin(); refreshCounts(); toast(`Compte entreprise validé : ${u.email}. La personne peut maintenant se connecter.`); }
+    catch (e) { console.error('[Studio Prism] Validation :', e); toast(errMsg(e)); btn.disabled = false; }
+  };
+  A['adm-refuse'] = (btn) => { if (A['adm-del-user']) A['adm-del-user'](btn); };   // refus = suppression de la demande (confirmation demandée)
   A['adm-retry'] = () => { AD.error = ''; loadAdmin(false); };
   A['acc-retry'] = async () => { try { if (st.api) await st.api.refresh(); else { await loadAuth(); } } catch (e) { route(); } };
   A['adm-reset'] = () => {
@@ -631,7 +651,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
 <form data-f="adm-edit" data-uid="${esc(u.uid)}" novalidate>
 <label for="ed-sub">Abonnement</label><select id="ed-sub" name="ed-sub">${opts(L.sub, u.subscription)}</select>
 <label for="ed-role">Rôle</label><select id="ed-role" name="ed-role" ${self ? 'disabled' : ''}>${opts(L.role, u.role)}</select>
-<label for="ed-status">Statut</label><select id="ed-status" name="ed-status" ${self ? 'disabled' : ''}>${opts(L.status, u.status)}</select>
+<label for="ed-status">Statut</label><select id="ed-status" name="ed-status" ${self ? 'disabled' : ''}>${opts(u.status === 'pending' ? L.status : { active: L.status.active, suspended: L.status.suspended }, u.status)}</select>
 ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni votre propre statut.</p>' : '<p class="acc-h">Un administrateur peut consulter et modifier tous les comptes. <b>Désactivé</b> : l’utilisateur ne peut plus se connecter à Studio Prism ni accéder à ses licences ; ses données sont conservées et le compte peut être réactivé à tout moment. Ce n’est pas une suppression : son compte de connexion Firebase Authentication continue d’exister.</p>'}
 <p class="fe" id="ed-err" role="alert"></p>
 <p style="margin-top:14px"><button class="btn b1" type="submit">Enregistrer</button></p></form>`);

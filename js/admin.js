@@ -28,14 +28,15 @@ export async function listUsers(cursor = null) {
 export async function countUsers() {
   const count = (...constraints) =>
     getCountFromServer(query(collection(db, "users"), ...constraints)).then((s) => s.data().count);
-  const [total, free, pro, proEntreprise, admins] = await Promise.all([
+  const [total, free, pro, proEntreprise, admins, pending] = await Promise.all([
     count(),
     count(where("subscription", "==", "free")),
     count(where("subscription", "==", "pro")),
     count(where("subscription", "==", "pro_entreprise")),
-    count(where("role", "==", "admin"))
+    count(where("role", "==", "admin")),
+    count(where("status", "==", "pending")).catch(() => 0)   // comptes Entreprise en attente de validation
   ]);
-  return { total, free, pro, proEntreprise, admins };
+  return { total, free, pro, proEntreprise, admins, pending };
 }
 
 /* Nombre d'administrateurs ACTIFS (role = admin ET status = active), calculé côté serveur Google. Sert à refuser la désactivation ou
