@@ -124,12 +124,14 @@
     navTo({ from: prev });
   }
 
+  const K_PIN = () => window.SP && window.SP.kit && window.SP.kit.pinGate;
   function onAuth(a) {
     const prev = st.auth.status;
     st.auth = a;
     if (a.status === 'loading' && prev === 'loading') return;
     chrome();
     patchView();
+    if (a.status === 'in' && K_PIN()) K_PIN()(a);
     if (a.status === 'in' && AUTH_ROUTES.has(CUR)) return redirect(spHome(a.profile));
     if (guarded(CUR)) {
       if (prev === 'in' && a.status !== 'in' && a.status !== 'loading') return redirect('#/');
@@ -356,6 +358,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     formMsg('', false);
     try {
       const api = await loadAuth();
+      window.SP.pwLogin = true;   // connexion par mot de passe : pas de code PIN demandé ensuite dans cet onglet
       if (up) {
         const payload = { firstName: g('prenom'), lastName: g('nom'), email, password: pw, accountKind: isCo ? 'company' : 'individual' };
         if (isCo) payload.company = tier;   // { name, email, siret, repRole, items, userRange, userLimit… } (readCompany)
@@ -373,6 +376,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
         toast('Connexion réussie.');
       }
     } catch (e) {
+      window.SP.pwLogin = false;
       formMsg(errMsg(e), false);
       if (!up) fm.querySelectorAll('[type=password]').forEach((x) => { x.value = ''; });
     } finally {

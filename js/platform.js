@@ -152,6 +152,7 @@
       securityHtml(p)));
     const key = CUR;
     if (window.SP.companyUI) window.SP.companyUI.mount(document.getElementById('acc-co-sec'), p);
+    if (K.pinState && st.auth.user) K.pinState(st.auth.user.uid, document.getElementById('pin-state'));
     Promise.all([loadMine(true), CATLG.load()]).then(([lics]) => { if (CUR === key) fillAccount(lics); })
       .catch((e) => {
         console.error('[Studio Prism] Licences :', e);
@@ -208,7 +209,9 @@
       `<form data-f="acc-pw" novalidate>${field('pw0', 'Mot de passe actuel', 'password', 'current-password')}${field('pw1', 'Nouveau mot de passe', 'password', 'new-password', { hint: '8 caractères minimum, avec au moins une lettre et un chiffre.' })}${field('pw2', 'Confirmation du nouveau mot de passe', 'password', 'new-password')}` +
       `<button class="btn b1" style="margin-top:12px">Modifier mon mot de passe</button><p class="fe" id="pw-msg" role="status" aria-live="polite"></p></form></div>` +
       `<div><h3 class="acc-h3">Autres actions</h3><p class="mt2">Mot de passe oublié ou changé depuis un autre appareil : recevez un lien de réinitialisation sur ${esc(p.email)}.</p>` +
-      `<p><button class="btn b4" data-a="acc-reset">Réinitialiser par e-mail</button><button class="btn b4" data-a="logout">Se déconnecter</button></p></div></div>` +
+      `<p><button class="btn b4" data-a="acc-reset">Réinitialiser par e-mail</button><button class="btn b4" data-a="logout">Se déconnecter</button></p>` +
+      `<h3 class="acc-h3" style="margin-top:18px">Code PIN</h3><p class="mt2">Code à 6 chiffres, commun au site, à ARCHIPLAN et à ARCHITRAFIC : il protège votre compte quand une session reste ouverte et confirme la suppression du compte. État : <b id="pin-state">…</b></p>` +
+      `<p><button class="btn b4" data-a="pin-set">Choisir ou modifier mon code PIN</button></p></div></div>` +
       `<div class="acc-dz"><h3 class="acc-h3">Supprimer mon compte</h3><p class="mt2">Supprime définitivement votre compte de connexion, votre profil et vos licences. Cette action est irréversible.</p>` +
       `<p><button class="btn btn-danger" data-a="acc-del">Supprimer mon compte</button></p></div></section>`;
   }

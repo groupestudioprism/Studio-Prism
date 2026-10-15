@@ -370,3 +370,14 @@
 .co-mem{list-style:none;padding:0;margin:8px 0 0}
 .co-mem li{padding:8px 0;border-bottom:1px solid var(--line)}
 .co-lics .row{align-items:end}
+/* « Afficher » sur les mots de passe */
+.pw-wrap{position:relative;display:block}
+.pw-wrap input{padding-right:96px}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--card,#fff);color:var(--ink);font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.pw-eye:hover{border-color:var(--cyan)}
+.pw-eye:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+/* verrou par code PIN */
+html.pl-open{overflow:hidden}
+.pinlock{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(7,27,85,.72);backdrop-filter:blur(6px)}
+.pinlock .pl-box{width:100%;max-width:420px}
+.pinlock #pl-pin{letter-spacing:.4em;font-size:20px;text-align:center}
