@@ -21,7 +21,7 @@
   'use strict';
 
   const BASE = document.currentScript ? document.currentScript.src : location.href;
-  const MOD = (n) => new URL(n, BASE).href;
+  const MOD = (n) => { const u = new URL(n, BASE); u.search = new URL(BASE).search; return u.href; };
   const EMBED = /(^|[?&])cmsembed=1(&|$)/.test(location.search);
   const API = window.SP = window.SP || {};
 

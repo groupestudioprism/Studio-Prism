@@ -13,7 +13,7 @@
   'use strict';
 
   const BASE = document.currentScript ? document.currentScript.src : location.href;
-  const MOD = (name) => new URL(name, BASE).href;
+  const MOD = (name) => { const u = new URL(name, BASE); u.search = new URL(BASE).search; return u.href; };   // même version (?v=) que la page : pas de vieux fichier en cache
 
   /* ------------------------------------------------------------------ libellés & utilitaires */
   const L = {
