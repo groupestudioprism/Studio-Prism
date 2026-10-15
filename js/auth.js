@@ -12,7 +12,7 @@
 import {
   auth, db, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
   sendPasswordResetEmail, setPersistence, browserLocalPersistence, browserSessionPersistence,
-  updateProfile, deleteUser, doc, collection, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp
+  updateProfile, deleteUser, doc, collection, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, onSnapshot
 } from "./firebase.js";
 
 /* status : "loading" (état inconnu) | "out" | "in" | "error" (connecté mais profil illisible) */
@@ -48,8 +48,25 @@ let markReady;
 const ready = new Promise((resolve) => { markReady = resolve; });
 const whenReady = () => Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 10000))]);
 
+/* Surveillance du profil pendant la session : si l'administration supprime, désactive ou remet en attente le compte, la personne est
+ * déconnectée tout de suite avec un message clair (au lieu d'erreurs « accès refusé » en naviguant). */
+let unwatch = null, watchedUid = "";
+function watchProfile(uid) {
+  if (watchedUid === uid && unwatch) return;
+  stopWatch(); watchedUid = uid;
+  try {
+    unwatch = onSnapshot(doc(db, "users", uid), (snap) => {
+      if (!auth.currentUser || auth.currentUser.uid !== uid) return;
+      const d = snap.exists() ? snap.data() : null;
+      const code = !d ? "app/account-deleted" : d.status === "suspended" ? "app/suspended" : d.status === "pending" ? "app/pending" : d.status !== "active" ? "app/profile-invalid" : "";
+      if (code) { log(`Profil modifié pendant la session → ${code}`); stopWatch(); forceOut(code); }
+    }, () => {});
+  } catch (e) { unwatch = null; }
+}
+function stopWatch() { if (unwatch) { try { unwatch(); } catch (e) { /* rien */ } } unwatch = null; watchedUid = ""; }
 function emit(next) {
   state = next;
+  if (next.status === "in" && next.user) watchProfile(next.user.uid); else if (next.status === "out") stopWatch();
   if (next.status !== "loading") markReady();
   listeners.forEach((fn) => {
     try { fn(state); } catch (e) { console.error(e); }
@@ -149,17 +166,10 @@ async function readProfile(user) {
       try { await user.delete(); } catch (e) { log(`auth delete: ${e.code || e}`); }
       throw appError("app/account-deleted");
     }
-    // Compte Authentication sans profil Firestore (créé depuis la console, ou avant Firestore) : profil créé automatiquement.
-    log("Firestore: profil absent → création automatique du profil par défaut (user / free / active)");
-    try {
-      snap = await withTimeout(ensureProfile(user, ref), FIRESTORE_TIMEOUT_MS, "app/firestore-timeout");
-    } catch (err) {
-      log(`Firestore profile creation error: ${err.code || "unknown"} / ${err.message || err}`);
-      if (!err.step) err.step = "firestore";
-      throw err;
-    }
-    log(`Firestore profile created, exists: ${snap.exists()}`);
-    if (!snap.exists()) throw appError("app/profile-missing");
+    // Profil absent sans trace : jamais recréé automatiquement (un compte supprimé ne doit pas « revenir » tout seul). Le profil
+    // n'est créé que par une inscription explicite (ou par l'administration). La personne est déconnectée avec un message clair.
+    log("Firestore: profil absent → aucune recréation automatique");
+    throw appError("app/account-deleted");
   }
   const data = snap.data();
   const missing = ["firstName", "lastName", "email", "accountKind", "subscription", "role", "status"].filter((k) => data[k] == null);
