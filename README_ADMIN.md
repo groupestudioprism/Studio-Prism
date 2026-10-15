@@ -241,3 +241,12 @@ Sans serveur, un administrateur ne peut pas créer le compte de connexion d'une 
 - **Le compte d'un autre utilisateur** : la suppression **définitive** est **indisponible** sans serveur privilégié (explication affichée par **Pourquoi ?**). À la place : **désactiver** le compte. Pour le supprimer réellement : Console Firebase → *Authentication → Utilisateurs* → ⋮ → *Supprimer le compte*, puis supprimer `users/{uid}` et ses `licenses/{uid}_…` dans *Firestore* (gratuit, manuel).
 - **Son propre compte** : *Mon compte → Supprimer mon compte* (utilisateur individuel) : mot de passe redemandé, confirmation, puis suppression de ses licences, de son profil et de son compte de connexion. Les comptes **entreprise** et **administrateur** ne se suppriment pas eux-mêmes : « Contactez Studio Prism ».
 - Supprimer un profil Firestore **sans** supprimer le compte de connexion ne supprime pas le compte (le site recréerait un profil vierge à la prochaine connexion) : le site ne le propose donc pas.
+
+## Téléchargements (APK ArchiVision)
+
+Administration → **Téléchargements** (et l'encart « Version Android » de la page ArchiVision, visible des seuls administrateurs).
+
+- **Télécharger l'APK** → fenêtre de confirmation → **Autoriser le téléchargement** : le fichier `ArchiVision.apk` s'enregistre directement sur l'appareil (plus de passage par Google Drive). Sur Android, l'ouvrir depuis les téléchargements et autoriser « Installer des applis inconnues » si demandé.
+- Le fichier est hébergé dans les **Releases GitHub** du dépôt `groupestudioprism/ArchiVision` ; le site affiche tout seul la dernière version, sa date et sa taille.
+- **Publier une nouvelle version** : GitHub → `groupestudioprism/ArchiVision` → *Releases* → *Draft a new release* → tag `v1.0.1` (par exemple) → glisser l'APK **nommé exactement `ArchiVision.apk`** → *Publish release*. Rien à modifier sur le site.
+- ⚠ Un fichier de Release d'un dépôt public est téléchargeable par quiconque a le lien. Le bouton n'est montré qu'aux administrateurs ; l'app reste protégée par la connexion Studio Prism et la licence ARCHIVISION.
