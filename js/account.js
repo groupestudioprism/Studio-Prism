@@ -31,7 +31,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const ERR = {
-    'auth/email-already-in-use': 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ». Si ce compte a été supprimé par Studio Prism : choisissez un nouveau mot de passe avec « Mot de passe oublié », puis connectez-vous une fois : l’adresse sera libérée et vous pourrez créer un nouveau compte.',
+    'auth/email-already-in-use': 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ». Si ce compte a été supprimé par Studio Prism : recréez-le avec le même mot de passe qu’avant ; si vous ne l’avez plus, choisissez-en un nouveau avec « Mot de passe oublié », puis recréez le compte avec ce mot de passe.',
     'auth/invalid-email': 'Adresse e-mail invalide.',
     'auth/weak-password': 'Mot de passe trop faible : choisissez-en un plus long et plus varié.',
     'auth/invalid-credential': 'E-mail ou mot de passe incorrect.',
@@ -45,7 +45,7 @@
     'app/suspended': 'Ce compte est désactivé. Contactez Studio Prism pour le réactiver.',
     'app/pending': 'Votre compte entreprise est en attente de validation par Studio Prism. Vous recevrez une réponse rapidement ; vous pourrez ensuite vous connecter avec ce mot de passe.',
     'app/profile-missing': 'Votre profil Studio Prism est introuvable. Contactez Studio Prism.',
-    'app/account-deleted': 'Ce compte a été supprimé par Studio Prism. Vous pouvez créer un nouveau compte avec la même adresse e-mail.',
+    'app/account-deleted': 'Ce compte a été supprimé par Studio Prism. Pour revenir, créez un compte avec la même adresse e-mail et le même mot de passe (mot de passe oublié ? Utilisez d’abord « Mot de passe oublié »).',
     'app/timeout': 'Le service met trop de temps à répondre. Réessayez.',
     'app/auth-timeout': 'Firebase Authentication ne répond pas (délai dépassé). Vérifiez votre connexion internet et les éventuels bloqueurs de contenus, puis réessayez.',
     'app/firestore-timeout': 'Authentification réussie, mais la lecture de votre profil (Firestore) ne répond pas : délai de 15 secondes dépassé. Vérifiez que la base Firestore est créée dans le projet Firebase et que le navigateur peut joindre firestore.googleapis.com (réseau, bloqueur de contenus).',

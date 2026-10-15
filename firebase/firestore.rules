@@ -211,8 +211,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();                               // inclut les requêtes de comptage (count)
+      // Compte supprimé par l'administration (trace deletedAccounts) : jamais recréé automatiquement à la connexion, mais la personne peut
+      // se réinscrire explicitement (acceptation des conditions dans la même écriture) ; la trace est alors retirée dans le même lot.
       allow create: if isSignedIn() && request.auth.uid == uid && validNewUser()
-                    && !exists(/databases/$(database)/documents/deletedAccounts/$(uid));   // compte supprimé par l'administration : jamais recréé
+                    && (!exists(/databases/$(database)/documents/deletedAccounts/$(uid))
+                        || request.resource.data.get('termsAcceptedAt', null) == request.time);
       allow update: if isSignedIn() && (
                          (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid)))
                          || (isAdmin() && adminUpdateOk(uid))
@@ -232,6 +235,8 @@ service cloud.firestore {
     // Trace d'un compte supprimé par l'administration (empêche la recréation automatique du profil à la connexion suivante).
     match /deletedAccounts/{uid} {
       allow read, delete: if isAdmin();
+      // la personne elle-même, quand elle se réinscrit : seulement dans le lot qui recrée son profil
+      allow delete: if isSignedIn() && request.auth.uid == uid && existsAfter(/databases/$(database)/documents/users/$(uid));
       allow get: if isSignedIn() && request.auth.uid == uid;   // la personne supprimée l'apprend à sa reconnexion
       allow create, update: if isAdmin() && request.auth.uid != uid
                             && request.resource.data.keys().hasOnly(['email', 'name', 'deletedAt', 'by'])

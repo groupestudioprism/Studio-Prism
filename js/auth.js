@@ -219,19 +219,21 @@ export function refresh() {
 
 /* ------------------------------------------------------------------ inscription */
 /* L'administration ne peut pas supprimer le compte de connexion d'un autre (pas de serveur) : elle supprime le profil et laisse une trace
- * deletedAccounts/{uid}. Si la personne se réinscrit avec la même adresse et le même mot de passe, on supprime ici l'ancien compte de
- * connexion (connexion récente : autorisé par Firebase) pour libérer l'adresse. Renvoie true si l'adresse a été libérée. */
-async function freeDeletedAddress(email, password) {
+ * deletedAccounts/{uid}. Quand la personne se réinscrit avec la même adresse et le même mot de passe, on reprend ce compte :
+ *   - si Firebase accepte de le supprimer, l'adresse est libérée et un compte neuf est créé ({ freed: true }) ;
+ *   - sinon, le même compte de connexion reçoit un profil neuf (les règles l'autorisent pour une inscription explicite, avec acceptation
+ *     des conditions, et la trace est retirée dans le même lot) ({ user }).
+ * Renvoie null si l'adresse appartient à un compte actif ou si le mot de passe ne correspond pas. */
+async function reclaimDeleted(email, password) {
   let old = null;
-  try { old = (await signInWithEmailAndPassword(auth, email, password)).user; } catch (e) { return false; }
+  try { old = (await signInWithEmailAndPassword(auth, email, password)).user; } catch (e) { return null; }
   try {
     const prof = await getDoc(doc(db, "users", old.uid));
     const gone = !prof.exists() && (await getDoc(doc(db, "deletedAccounts", old.uid))).exists();
-    if (!gone) { await signOut(auth).catch(() => {}); return false; }
-    await deleteUser(old);
-    log("Adresse libérée : ancien compte supprimé par l'administration");
-    return true;
-  } catch (e) { await signOut(auth).catch(() => {}); return false; }
+    if (!gone) { await signOut(auth).catch(() => {}); return null; }
+  } catch (e) { await signOut(auth).catch(() => {}); return null; }
+  try { await deleteUser(old); log("Adresse libérée : ancien compte de connexion supprimé"); return { freed: true }; }
+  catch (e) { log(`Ancien compte non supprimable (${e.code || e}) : il est repris avec un profil neuf`); return { user: old }; }
 }
 /* p : { firstName, lastName, email, password, accountKind: "individual"|"company",
  *       company?: { name, email, jobTitle?, phone?, website?, userRange, userLimit } } */
@@ -240,14 +242,16 @@ export async function signUp(p) {
   await setPersistence(auth, browserLocalPersistence);
   const next = waitNext();
   const task = (async () => {
-    let cred;
-    try { cred = await createUserWithEmailAndPassword(auth, p.email, p.password); }
+    let user = null, reused = false;
+    try { user = (await createUserWithEmailAndPassword(auth, p.email, p.password)).user; }
     catch (err) {
-      // Adresse encore enregistrée par un compte supprimé depuis l'administration : avec le bon mot de passe, on la libère et on recrée.
-      if (!(err && err.code === "auth/email-already-in-use") || !(await freeDeletedAddress(p.email, p.password))) throw err;
-      cred = await createUserWithEmailAndPassword(auth, p.email, p.password);
+      // Adresse encore enregistrée par un compte supprimé depuis l'administration : avec le bon mot de passe, on la reprend.
+      if (!(err && err.code === "auth/email-already-in-use")) throw err;
+      const r = await reclaimDeleted(p.email, p.password);
+      if (!r) throw err;
+      if (r.freed) user = (await createUserWithEmailAndPassword(auth, p.email, p.password)).user;
+      else { user = r.user; reused = true; }
     }
-    const user = cred.user;
     try {
       const batch = writeBatch(db);
       const profile = {
@@ -289,11 +293,13 @@ export async function signUp(p) {
         if (c.jobTitle) profile.jobTitle = c.jobTitle;
       }
       batch.set(doc(db, "users", user.uid), profile);
+      if (reused) batch.delete(doc(db, "deletedAccounts", user.uid));   // compte repris : la trace de suppression disparaît avec le nouveau profil
       await batch.commit();
       updateProfile(user, { displayName: `${p.firstName} ${p.lastName}` }).catch(() => {});
     } catch (err) {
       // Profil non enregistré : on annule la création du compte pour que l'utilisateur puisse réessayer proprement.
-      await deleteUser(user).catch(() => signOut(auth).catch(() => {}));
+      if (reused) await signOut(auth).catch(() => {});
+      else await deleteUser(user).catch(() => signOut(auth).catch(() => {}));
       throw err;
     }
   })();
