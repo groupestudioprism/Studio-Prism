@@ -227,7 +227,7 @@
 
   function projectCard(p) {
     const img = imgUrl(p.image);
-    return `<a class="card pcard cms-pc" href="#/projets/${esc(p.id)}" data-cms-pid="${esc(p.id)}"><div class="im pim ia${img ? ' pim-i' : ''}" aria-hidden="true">${img ? `<img src="${esc(img)}" alt="" loading="lazy" decoding="async">` : `<span class="pim-ph">${initial(p.title)}</span>`}</div>` +
+    return `<a class="card pcard cms-pc" href="#/projets/${esc(p.id)}" data-cms-pid="${esc(p.id)}"><div class="im pim ia${img ? ' pim-i' : ''}" aria-hidden="true">${img ? `<img src="${esc(spImg(img))}" alt="" loading="lazy" decoding="async">` : `<span class="pim-ph">${initial(p.title)}</span>`}</div>` +
       `<div class="t">${p.year ? `<span class="tag">${esc(p.year)}</span>` : ''}${(p.tags || []).slice(0, 3).map((t) => `<span class="tag">${esc(str(t, 30))}</span>`).join('')}<h3>${esc(p.title)}</h3>${p.summary ? `<p class="pc-d">${esc(p.summary)}</p>` : ''}</div></a>`;
   }
 
@@ -256,7 +256,7 @@
       V(`<section class="pg cms-proj"><div class="w"><p class="crumb"><a href="#/projets">Réalisations</a> / ${esc(p.title)}</p>` +
         `${p.year || (p.tags || []).length ? `<p class="cms-tags">${p.year ? `<span class="tag">${esc(p.year)}</span>` : ''}${(p.tags || []).map((t) => `<span class="tag">${esc(str(t, 30))}</span>`).join('')}</p>` : ''}` +
         `<h1>${esc(p.title)}</h1>${p.summary ? `<p class="lead">${esc(p.summary)}</p>` : ''}` +
-        `${img ? `<figure class="cms-fig"><img src="${esc(img)}" alt="${esc(mediaAlt(p.image) || '')}" loading="lazy" decoding="async"></figure>` : ''}` +
+        `${img ? `<figure class="cms-fig"><img src="${esc(spImg(img))}" alt="${esc(mediaAlt(p.image) || '')}" loading="lazy" decoding="async"></figure>` : ''}` +
         `${paras(p.description)}` +
         `${prod ? `<h2 class="cms-h2">Produit associé</h2><div class="g cms-g">${window.SP.catalog.pcard(prod)}</div>` : ''}` +
         `<p class="cms-act">${link ? `<a class="btn b1" href="${esc(link)}"${extAttr(link)}>En savoir plus</a>` : ''}<a class="btn b4" href="#/projets">Toutes les réalisations</a></p></div></section>`);
@@ -281,7 +281,7 @@
     const u = imgUrl(src);
     if (!u) return '';
     const a = typeof alt === 'string' && alt.trim() ? alt.trim().slice(0, 200) : mediaAlt(src);
-    return `<img${cls ? ` class="${cls}"` : ''} src="${esc(u)}" alt="${esc(a)}" loading="lazy" decoding="async">`;
+    return `<img${cls ? ` class="${cls}"` : ''} src="${esc(spImg(u))}" alt="${esc(a)}" loading="lazy" decoding="async">`;
   };
   const head = (x, dark) => `${x.kicker ? `<div class="k">${esc(str(x.kicker, 60))}</div>` : ''}${x.title ? `<h2 class="cms-h">${esc(str(x.title, 120))}</h2>` : ''}${x.intro ? paras(str(x.intro, 600), 'cms-intro' + (dark ? ' cms-lt' : '')) : ''}`;
   const items = (x, max) => (Array.isArray(x.items) ? x.items.filter(isMap).slice(0, max) : []);

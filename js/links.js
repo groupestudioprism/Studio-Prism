@@ -1,3 +1,10 @@
+/* Images du site : version WebP de mêmes dimensions (≈ 10× plus légère, différence invisible) quand elle existe ;
+   sinon l'image d'origine. Les chemins enregistrés dans Firestore restent inchangés. */
+window.spImg = function (u) {
+  if (typeof u !== 'string') return u;
+  return u.replace(/(^|\/)assets\/img\/(ArchiPlan\.png|ArchiTraffic\.jpg|archivision\.jpg|prism-3d\.jpg|prism-app\.jpg|prism-game\.jpg)(\?.*)?$/,
+    (m, a, f, q) => a + 'assets/img/' + f.replace(/\.(png|jpg)$/, '.webp') + (q || ''));
+};
 /* Studio Prism — liens vers l'ancienne adresse du site (kmauger18.github.io) : redirigés vers le site actuel (groupestudioprism).
  * Les contenus enregistrés dans Firestore (pages, produits, projets) peuvent encore contenir l'ancienne adresse : on la corrige à
  * l'affichage, pour tous les visiteurs, sans toucher aux données. Un lien vers une page du site devient un lien interne (#/…). */

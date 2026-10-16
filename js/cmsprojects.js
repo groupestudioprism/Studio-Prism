@@ -80,7 +80,7 @@
     if (!list.length) { box.innerHTML = '<div class="panel"><p>Aucun projet ne correspond à ces filtres.</p></div>'; return; }
     box.innerHTML = `<div class="cmsa-list">${list.map((p) => {
       const u = p.image ? X.refUrl(p.image) : '';
-      return `<div class="cmsa-row"><div class="cmsa-th" style="width:56px;height:56px;flex:none;border-radius:8px;overflow:hidden;background:var(--soft)">${u ? `<img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:cover" loading="lazy">` : ''}</div>` +
+      return `<div class="cmsa-row"><div class="cmsa-th" style="width:56px;height:56px;flex:none;border-radius:8px;overflow:hidden;background:var(--soft)">${u ? `<img src="${esc(spImg(u))}" alt="" style="width:100%;height:100%;object-fit:cover" loading="lazy">` : ''}</div>` +
         `<div class="cmsa-t"><b>${esc(p.title)}</b><small>#/projets/${esc(p.id)}${p.year ? ' · ' + esc(p.year) : ''}${(p.tags || []).length ? ' · ' + esc((p.tags || []).join(', ')) : ''}${p.productId ? ' · produit : ' + esc(p.productId) : ''}</small></div>` +
         `<div class="cmsa-act"><span class="cmsa-b ${CLS[p.status] || 'df'}">${LABEL[p.status] || esc(p.status)}</span>${p.featured ? ' <span class="cmsa-b">Mis en avant</span>' : ''}</div><div class="cmsa-act">${actions(p)}</div></div>`;
     }).join('')}</div>`;

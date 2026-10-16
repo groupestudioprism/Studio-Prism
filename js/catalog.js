@@ -260,7 +260,7 @@
 
   function visual(p) {
     const img = picUrl(p.image) || (!(typeof ART !== 'undefined' && ART[p.name]) && picUrl(p.logo)) || '';
-    if (img) return `<img src="${esc(img)}" alt="" loading="lazy" decoding="async">`;
+    if (img) return `<img src="${esc(spImg(img))}" alt="" loading="lazy" decoding="async">`;
     if (typeof ART !== 'undefined' && ART[p.name]) return art(p.name);
     return `<span class="pim-ph">${esc(String(p.name || '?').charAt(0).toUpperCase())}</span>`;
   }
