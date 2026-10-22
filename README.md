@@ -54,7 +54,8 @@ Site statique : HTML, CSS et JavaScript, sans outil de build, publié avec **Git
 │   └── boot.js              lance le routage une fois tous les scripts chargés
 ├── functions/               Cloud Functions (Admin SDK, côté serveur uniquement) — à DÉPLOYER chez Google
 ├── firebase/
-│   ├── firestore.rules      règles de sécurité Firestore
+│   ├── firestore.rules      règles de sécurité Firestore (ASSEMBLÉ : ne pas modifier à la main)
+│   ├── rules/               SOURCE UNIQUE des règles de TOUTES les apps, un fichier par app (voir firebase/rules/README.md)
 │   └── firestore.indexes.json
 ├── storage.rules            règles de sécurité Firebase Storage (médiathèque)
 ├── firebase.json            configuration de la CLI Firebase (règles Firestore et Storage, index, functions)
@@ -175,6 +176,7 @@ Déploiement :
 ```bash
 npm install -g firebase-tools
 firebase login
+python3 tools/build_rules.py      # assemble firebase/rules/*.rules et vérifie que toutes les apps sont présentes
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
