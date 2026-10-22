@@ -172,6 +172,18 @@ async function doDelete(u) {
     const atProj = await q("atProjects", where("ownerUid", "==", uid)); const atRefs = []; atProj.forEach((p) => { atRefs.push(doc(db, "atProjects", p.id, "content", "main"), p); });
     await commitChunks(atRefs, 20);
     others.push(...(await q("atShares", where("ownerUid", "==", uid))), ...(await q("atShares", where("email", "==", email))), ...(await q("atFolders", where("ownerUid", "==", uid))), ...(await q("atGrants", where("uid", "==", uid))), doc(db, "atLibrary", uid));
+    // Spectra Motion : fichiers des médias dans Storage (chemins lus dans chaque projet), projets (contenu + fiche), partages, dossiers, accès par lien, modèles
+    const smProj = await q("smDocs", where("ownerUid", "==", uid)); const smRefs = []; const smFiles = [];
+    for (const p of smProj) {
+      const c = doc(db, "smDocs", p.id, "content", "main");
+      try { const d = await getDoc(c); if (d.exists()) Object.values(JSON.parse(d.data().data || "{}").media || {}).forEach((m) => { if (m && m.cloud && typeof m.path === "string" && m.path.startsWith("spectramotion/" + uid + "/")) smFiles.push(m.path); }); } catch (e) { /* contenu illisible : fiche supprimée quand même */ }
+      smRefs.push(c, p);
+    }
+    if (smFiles.length) {
+      try { const st = await import("./storage.js"); await Promise.all(smFiles.map((f) => st.remove(f).catch(() => null))); } catch (e) { console.warn("[Studio Prism] Fichiers Spectra Motion non supprimés (Storage indisponible) :", e); }
+    }
+    await commitChunks(smRefs, 20);
+    others.push(...(await q("smShares", where("ownerUid", "==", uid))), ...(await q("smShares", where("email", "==", email))), ...(await q("smFolders", where("ownerUid", "==", uid))), ...(await q("smGrants", where("uid", "==", uid))), doc(db, "smLibrary", uid));
     const uniq = [...new Map(others.map((r) => [r.path, r])).values()];
     await commitChunks(uniq, 400);
     // Profil + licences dans un seul lot (les règles n'autorisent la suppression d'une licence que si le profil disparaît avec)
@@ -179,7 +191,8 @@ async function doDelete(u) {
     // Compteur de stockage ARCHIPLAN : supprimé avec le profil (les règles l'exigent)
     const usage = await getDoc(doc(db, "apUsage", uid)).catch(() => null);
     const atUsage = await getDoc(doc(db, "atUsage", uid)).catch(() => null);
-    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); if (usage && usage.exists()) b.delete(doc(db, "apUsage", uid)); if (atUsage && atUsage.exists()) b.delete(doc(db, "atUsage", uid));
+    const smUsage = await getDoc(doc(db, "smUsage", uid)).catch(() => null);
+    const b = writeBatch(db); lics.docs.forEach((d) => b.delete(d.ref)); if (usage && usage.exists()) b.delete(doc(db, "apUsage", uid)); if (atUsage && atUsage.exists()) b.delete(doc(db, "atUsage", uid)); if (smUsage && smUsage.exists()) b.delete(doc(db, "smUsage", uid));
     b.delete(doc(db, "users", uid)); await b.commit();
     // Compte de connexion (connexion récente grâce au lien email)
     await deleteUser(u);
@@ -189,7 +202,7 @@ async function doDelete(u) {
   }
   // Nettoyage de cet appareil (ARCHIPLAN est sur le même domaine)
   try { ["sp.lock.", "sp.prof.", "sp.access.", "ap.localDismissed."].forEach((k) => localStorage.removeItem(k + uid)); localStorage.removeItem("archiplan.v1"); sessionStorage.removeItem("sp.del.from"); } catch (e) { /* stockage indisponible */ }
-  render(`<h1>Votre compte a été supprimé</h1><div class="note ok">Votre compte Studio Prism et toutes les données associées (profil, licences, fiche client, code PIN, projets ARCHIPLAN et chantiers ARCHITRAFIC) ont été supprimés.</div>
+  render(`<h1>Votre compte a été supprimé</h1><div class="note ok">Votre compte Studio Prism et toutes les données associées (profil, licences, fiche client, code PIN, projets ARCHIPLAN, chantiers ARCHITRAFIC, projets Spectra Motion et leurs médias) ont été supprimés.</div>
     <p class="mut">Merci d'avoir utilisé les apps Studio Prism. Vous pouvez créer un nouveau compte à tout moment.</p><div class="row"><a class="btn b1" href="${SITE}">Retour au site</a></div>`);
 }
 

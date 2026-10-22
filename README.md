@@ -57,7 +57,7 @@ Site statique : HTML, CSS et JavaScript, sans outil de build, publié avec **Git
 │   ├── firestore.rules      règles de sécurité Firestore (ASSEMBLÉ : ne pas modifier à la main)
 │   ├── rules/               SOURCE UNIQUE des règles de TOUTES les apps, un fichier par app (voir firebase/rules/README.md)
 │   └── firestore.indexes.json
-├── storage.rules            règles de sécurité Firebase Storage (médiathèque)
+├── storage.rules            règles de sécurité Firebase Storage (médiathèque + médias Spectra Motion)
 ├── firebase.json            configuration de la CLI Firebase (règles Firestore et Storage, index, functions)
 ├── .firebaserc              projet Firebase par défaut
 ├── assets/img/              logos et visuels
@@ -182,7 +182,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 
 ou copier-coller **tout** le fichier dans *Console Firebase → Firestore Database → Règles*, puis **Publier**. Vérifier ensuite que la date de publication affichée est récente et que le texte publié contient `match /products/{pid}`.
 
-**Storage** — fichier `storage.rules`, dossier unique `media/{identifiant}/{fichier}` : **écriture et suppression réservées à l'administrateur actif** (reconnu par une lecture de `users/{uid}` dans Firestore), images JPEG / PNG / WebP / GIF ≤ 8 Mo, vidéos MP4 / WebM ≤ 50 Mo, nom de fichier restreint, **aucun écrasement** ; lecture par le SDK réservée aux administrateurs (les visiteurs voient les images grâce à l'adresse de téléchargement, secrète et non devinable, enregistrée dans les métadonnées d'un média public) ; tout le reste du bucket est refusé. Déploiement : `firebase deploy --only storage`, ou console → *Storage → Règles*. Au premier déploiement, accepter l'autorisation inter-services proposée (`README_INSTALLATION.md`, étape B).
+**Storage** — fichier `storage.rules`, dossier unique `media/{identifiant}/{fichier}` : **écriture et suppression réservées à l'administrateur actif** (reconnu par une lecture de `users/{uid}` dans Firestore), images JPEG / PNG / WebP / GIF ≤ 8 Mo, vidéos MP4 / WebM ≤ 50 Mo, nom de fichier restreint, **aucun écrasement** ; lecture par le SDK réservée aux administrateurs (les visiteurs voient les images grâce à l'adresse de téléchargement, secrète et non devinable, enregistrée dans les métadonnées d'un média public) ; dossier `spectramotion/{propriétaire}/{projet}/{fichier}` : médias des projets **Spectra Motion** (lecture par le propriétaire et les personnes avec qui le projet est partagé, envoi par le propriétaire ou un invité « modification », images ≤ 40 Mo, vidéos ≤ 500 Mo, sons ≤ 200 Mo, jamais d'écrasement ni de listage ; à utiliser, appliquer aussi la configuration CORS du dépôt SpectraMotion `firebase/storage-cors.json`) ; tout le reste du bucket est refusé. Déploiement : `firebase deploy --only storage`, ou console → *Storage → Règles*. Au premier déploiement, accepter l'autorisation inter-services proposée (`README_INSTALLATION.md`, étape B).
 
 > **Symptôme « Accès refusé par les règles de sécurité… »** sur la page Abonnements, dans Mon compte ou dans Administration (alors que la connexion fonctionne) : les règles publiées dans Firebase ne contiennent pas toutes les collections (`products`, `subscriptions`, `licenses`, `pages`, `pageDrafts`, `projects`, `media`) : ancienne version, ou publication échouée. Publier le fichier ci-dessus.
 

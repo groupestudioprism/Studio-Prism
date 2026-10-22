@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Règles Firestore de Studio Prism — SOURCE UNIQUE pour tout le projet Firebase « archivision-studioprism »
-(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS).
+(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, Spectra Motion, NEXUS).
 
 Un projet Firebase n'a qu'UN fichier de règles en ligne : chaque publication remplace tout. Les règles sont donc
 rangées ici en morceaux (firebase/rules/NN-nom.rules, assemblés dans l'ordre des noms) et ce script :
@@ -25,6 +25,7 @@ REQUIRED = {
     'SPECTRA Writer':  ['swDocs', 'swUsage', 'swFolders', 'swShares', 'swGrants', 'swLibrary', 'swPublic'],
     'SPECTRA Calc':    ['scDocs', 'scUsage', 'scFolders', 'scShares', 'scGrants', 'scLibrary', 'scPublic'],
     'SPECTRA Slide':   ['ssDocs', 'ssUsage', 'ssFolders', 'ssShares', 'ssGrants', 'ssLibrary', 'ssPublic'],
+    'Spectra Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
 }
 def build():

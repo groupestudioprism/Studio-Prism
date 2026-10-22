@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ============================================================================================================
-// Règles Firebase Storage de Studio Prism — médiathèque du CMS
+// Règles Firebase Storage de Studio Prism — médiathèque du CMS + médias des projets Spectra Motion
 // ============================================================================================================
 //
 // Un seul dossier est utilisé : media/{identifiant du média}/{fichier}   (les métadonnées sont dans Firestore : collection « media »)
@@ -53,6 +53,54 @@ service firebase.storage {
                     && (okImage() || okVideo());
       allow update: if false;
       allow delete: if isAdmin();
+    }
+
+    // ========================================================================================================
+    // SPECTRA MOTION - media files of projects (images, videos, sounds)
+    //   spectramotion/{ownerUid}/{projectId}/{file}
+    //   - READ (get only, never list): the owner; a guest the project is shared with by email (smShares/{projectId}__{email},
+    //     verified email); a guest who opened the project's share link (smGrants/{projectId}__{uid}).
+    //   - CREATE: the owner, or an 'edit' guest of the project (email share). A file is never overwritten (update denied).
+    //   - DELETE: the owner, an 'edit' guest, or an active administrator.
+    //   - Allowed types and sizes: images (PNG, JPEG, WebP, GIF, AVIF) <= 40 MB, videos (MP4, WebM, MOV) <= 500 MB,
+    //     sounds (MP3, WAV, OGG, WebM, AAC, M4A, FLAC) <= 200 MB. File name: {mediaId}.{extension}.
+    //   Storage rules may read at most 2 Firestore documents per request: guests are checked with ONE document
+    //   (their share or their link grant), never with the project's folder. Guests of a shared FOLDER can open the
+    //   project but not download its media: share the project itself with them (documented limitation).
+    //   The account quota (10 MB / 50 MB / 1 GB) is counted in Firestore (smUsage) by the app; Storage rules cannot
+    //   sum file sizes, so they cap each file.
+    // ========================================================================================================
+    function smShare(owner, pid) {
+      let p = /databases/(default)/documents/smShares/$(pid + '__' + request.auth.token.email.lower());
+      return request.auth.token.email_verified == true && firestore.exists(p)
+             && firestore.get(p).data.ownerUid == owner && firestore.get(p).data.get('pid', '') == pid
+             ? firestore.get(p).data.role : '';
+    }
+
+    function smGrant(pid) {
+      let p = /databases/(default)/documents/smGrants/$(pid + '__' + request.auth.uid);
+      return request.auth.token.email_verified == true && firestore.exists(p) && firestore.get(p).data.get('pid', '') == pid;
+    }
+
+    function smOkFile() {
+      let t = request.resource.contentType;
+      let n = request.resource.size;
+      return n > 0
+        && ((t.matches('image/(png|jpeg|webp|gif|avif)') && n <= 40 * 1024 * 1024)
+            || (t.matches('video/(mp4|webm|quicktime)') && n <= 500 * 1024 * 1024)
+            || (t.matches('audio/(mpeg|mp3|wav|x-wav|wave|ogg|webm|aac|mp4|x-m4a|flac)') && n <= 200 * 1024 * 1024));
+    }
+
+    match /spectramotion/{owner}/{pid}/{file} {
+      allow get: if request.auth != null && pid.matches('[A-Za-z0-9]{10,40}')
+                 && (request.auth.uid == owner || smShare(owner, pid) in ['view', 'edit'] || smGrant(pid));
+      allow list: if false;
+      allow create: if request.auth != null && resource == null && pid.matches('[A-Za-z0-9]{10,40}')
+                    && file.matches('[A-Za-z0-9_-]{3,40}[.][a-z0-9]{2,5}')
+                    && (request.auth.uid == owner || smShare(owner, pid) == 'edit')
+                    && smOkFile();
+      allow update: if false;
+      allow delete: if request.auth != null && (request.auth.uid == owner || smShare(owner, pid) == 'edit' || isAdmin());
     }
 
     // Tout le reste : refusé.
