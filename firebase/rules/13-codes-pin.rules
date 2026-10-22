@@ -1,0 +1,13 @@
+    // ---------------------------------------------------------------- userSecrets
+    match /userSecrets/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['pinHash', 'pinSalt', 'pinIter', 'updatedAt'])
+                            && isString(request.resource.data.pinHash, 20, 100)
+                            && isString(request.resource.data.pinSalt, 10, 60)
+                            && request.resource.data.pinIter is int
+                            && request.resource.data.pinIter >= 100000 && request.resource.data.pinIter <= 1000000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+

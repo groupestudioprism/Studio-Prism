@@ -1,0 +1,276 @@
+    // ------------------------------------------------------------ ARCHIPLAN : fiche client clientProfiles/{uid}
+    //
+    function validClientProfile() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['phone', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['phone', 'profile', 'company', 'address', 'postalCode', 'city', 'country', 'siret', 'createdAt', 'updatedAt'])
+        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))
+        && isString(d.phone, 6, 40)
+        && isString(d.get('profile', ''), 0, 120)
+        && isString(d.get('company', ''), 0, 120)
+        && isString(d.get('address', ''), 0, 200)
+        && isString(d.get('postalCode', ''), 0, 20)
+        && isString(d.get('city', ''), 0, 120)
+        && isString(d.get('country', ''), 0, 120)
+        && d.updatedAt == request.time;
+    }
+
+    // ---------------------------------------------------------------- clientProfiles
+    match /clientProfiles/{uid} {
+      allow get: if isSignedIn() && ((request.auth.uid == uid && isActiveUser()) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == uid && isActiveUser() && validClientProfile()
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && request.auth.uid == uid && isActiveUser() && validClientProfile()
+                    && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    //
+    function apEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function apVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function apP(pid) {
+      return /databases/$(database)/documents/apProjects/$(pid);
+    }
+
+    function apF(fid) {
+      return /databases/$(database)/documents/apFolders/$(fid);
+    }
+
+    function apU(uid) {
+      return /databases/$(database)/documents/apUsage/$(uid);
+    }
+
+    function apQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      let lp = /databases/$(database)/documents/licenses/$(uid + '_archiplan');
+      return isActiveAdminProfile(u) ? 1000000000
+        : (exists(lp) && get(lp).data.status == 'active'
+           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
+        : 10000000;
+    }
+
+    function apUsageOk(owner, pid, delta) {
+      let before = exists(apU(owner)) ? get(apU(owner)).data.bytes : 0;
+      return delta == 0
+        || (existsAfter(apU(owner)) && getAfter(apU(owner)).data.lastPid == pid
+            && getAfter(apU(owner)).data.bytes == before + delta);
+    }
+
+    function apShareRole(key) {
+      let sp = /databases/$(database)/documents/apShares/$(key + '__' + apEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function apGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/apGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    function apFolderRole(fid) {
+      let f = get(apF(fid)).data;
+      let r = apShareRole('F_' + fid);
+      return !apVerified() ? '' : r != '' ? r : apGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    function apGuestRole(pid, p) {
+      let r = apShareRole(pid);
+      let viaLink = apGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(apF(p.folderId)) && get(apF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? apFolderRole(p.folderId) : '';
+      return !apVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+
+    function apCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || apGuestRole(pid, p) in ['view', 'edit']);
+    }
+
+    function apCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || apGuestRole(pid, p) == 'edit');
+    }
+
+    function apValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'thumb', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && isString(d.name, 1, 120)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
+        && isString(d.get('thumb', ''), 0, 90000)
+        && (d.get('thumb', '') == '' || d.thumb.matches('data:image/(jpeg|png|webp);base64,.*'))
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        && (d.folderId == '' || !existsAfter(apF(d.folderId)) || getAfter(apF(d.folderId)).data.ownerUid == d.ownerUid);
+    }
+
+    // ---------------------------------------------------------------- apProjects
+    match /apProjects/{pid} {
+      allow get: if apCanRead(pid, resource.data);
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser()
+                    && apValidProject(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && apFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(apF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && apUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && apValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (apCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && apUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && apCanRead(pid, get(apP(pid)).data);
+        allow create, update: if cid == 'main'
+                              && apCanEdit(pid, getAfter(apP(pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              && request.resource.data.data.size() <= getAfter(apP(pid)).data.get('size', 0) + 2048
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(apP(pid)) || get(apP(pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ---------------------------------------------------------------- apUsage
+    match /apUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= apQuota(uid))
+                            && (
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(apP(request.resource.data.lastPid))
+                                      ? (getAfter(apP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(apP(request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(apP(request.resource.data.lastPid)) ? get(apP(request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(apP(request.resource.data.lastPid))
+                                         && get(apP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(apP(request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
+    }
+
+    function apValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    // ---------------------------------------------------------------- apFolders
+    match /apFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && apFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (apFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function apValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(apF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(apP(d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    // ---------------------------------------------------------------- apShares
+    match /apShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && apValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && apValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail() || isAdmin());
+    }
+
+    function apValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      let t = folder ? get(apF(d.get('fid', '-'))).data : get(apP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    // ---------------------------------------------------------------- apGrants
+    match /apGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && apVerified() && apValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------------------------------------------------------------- apLibrary
+    match /apLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+

@@ -1,0 +1,215 @@
+// =====================================================================================================================
+// NEXUS — BLOC de règles Firestore. Ne PAS coller ce fichier seul dans la console (erreur « Unexpected 'match' »).
+// Pour la console, copier le fichier COMPLET firebase/firestore.rules (règles communes Studio Prism + ce bloc).
+// Sinon : insérer ce bloc dans « match /databases/{database}/documents { … } » des règles communes, JUSTE AVANT le bloc final
+// « match /{document=**} », puis publier.
+//
+// Collections de Nexus (rien d'autre n'est ajouté ; aucune règle existante n'est modifiée) :
+//   nxUsers/{uid}                    préférences Nexus du compte
+//   nxUsers/{uid}/connections/{app}  autorisations accordées à Nexus pour une application
+//   nxUsers/{uid}/workflows/{id}     automatisations
+//   nxUsers/{uid}/runs/{id}          exécutions (statut, étapes, résultat court) — champ expireAt pour une politique TTL facultative
+//   nxUsers/{uid}/activity/{id}      historique des opérations — expireAt idem
+//   nxUsers/{uid}/aiUsage/{jour}     compteur quotidien de demandes à AXION (AAAA-MM-JJ)
+//   nxConfig/axion                   réglage global d'AXION : lecture par les comptes actifs, écriture par un administrateur actif
+//
+// Principes : tout ce qui est sous nxUsers/{uid} n'est lisible et modifiable QUE par son titulaire (compte actif) — un administrateur
+// n'y a pas accès ; formes des documents validées (listes fermées, longueurs) ; une exécution réussie ou annulée n'est plus modifiable ;
+// une opération terminée de l'historique (vérifiée, échouée, annulée) non plus ; le compteur AXION ne peut qu'avancer d'un pas à la fois,
+// jamais au-delà de la limite réglée.
+// Utilise isSignedIn(), isActiveUser(), isAdmin(), isActiveAdminProfile(), isString() des règles communes.
+// =====================================================================================================================
+
+    function nxOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function nxApps() {
+      return ['archiplan', 'architrafic', 'archiindus', 'archivision', 'spectrawriter', 'spectracalc', 'spectraslide'];
+    }
+
+    function nxValidConnection(appId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['appId', 'scopes', 'status', 'grantedAt', 'updatedAt'])
+        && d.keys().hasOnly(['appId', 'scopes', 'status', 'grantedAt', 'updatedAt', 'revokedAt'])
+        && d.appId == appId && appId in nxApps()
+        && d.scopes is list && d.scopes.size() <= 4
+        && d.scopes.hasOnly(['catalog.read', 'projects.read', 'shared.read', 'documents.create'])
+        && (!d.scopes.hasAny(['documents.create']) || appId == 'spectrawriter')
+        && d.status in ['active', 'revoked']
+        && (d.status == 'active' ? d.scopes.size() >= 1 : d.scopes.size() == 0)
+        && d.grantedAt is timestamp
+        && (d.get('revokedAt', null) == null || d.revokedAt is timestamp)
+        && d.updatedAt == request.time;
+    }
+
+    function nxValidWorkflow() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'trigger', 'steps', 'status', 'runCount', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'description', 'trigger', 'steps', 'status', 'template', 'runCount', 'lastRunAt', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.get('description', ''), 0, 300)
+        && d.trigger == {'type': 'manual'}
+        && d.steps is list && d.steps.size() >= 1 && d.steps.size() <= 10
+        && d.status in ['active', 'paused']
+        && isString(d.get('template', ''), 0, 40)
+        && d.runCount is int && d.runCount >= 0
+        && (d.get('lastRunAt', null) == null || d.lastRunAt is timestamp)
+        && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    function nxRunTerminal(s) {
+      return s in ['succeeded', 'failed', 'cancelled'];
+    }
+
+    function nxValidRun() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['workflowName', 'status', 'steps', 'startedAt', 'updatedAt', 'expireAt'])
+        && d.keys().hasOnly(['workflowId', 'workflowName', 'trigger', 'status', 'steps', 'error', 'result', 'scopes',
+                             'startedAt', 'updatedAt', 'endedAt', 'expireAt'])
+        && isString(d.get('workflowId', ''), 0, 40)
+        && isString(d.workflowName, 1, 80)
+        && d.get('trigger', 'manual') == 'manual'
+        && d.status in ['running', 'awaiting_confirmation', 'succeeded', 'failed', 'cancelled']
+        && d.steps is list && d.steps.size() <= 10
+        && isString(d.get('error', ''), 0, 500)
+        && (d.get('result', null) == null || d.result is map)
+        && (d.get('scopes', []) is list && d.get('scopes', []).size() <= 20)
+        && d.startedAt is timestamp
+        && d.expireAt is timestamp
+        && d.updatedAt == request.time
+        && (nxRunTerminal(d.status) ? d.get('endedAt', null) is timestamp : d.get('endedAt', null) == null);
+    }
+
+    function nxValidActivity() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['action', 'status', 'at', 'updatedAt', 'expireAt'])
+        && d.keys().hasOnly(['action', 'label', 'appId', 'status', 'summary', 'error', 'runId', 'confirmedAt', 'at', 'updatedAt', 'expireAt'])
+        && isString(d.action, 1, 60)
+        && isString(d.get('label', ''), 0, 120)
+        && (d.get('appId', '') == '' || d.appId in nxApps())
+        && d.status in ['proposed', 'pending_confirmation', 'executed', 'verified', 'failed', 'cancelled']
+        && isString(d.get('summary', ''), 0, 300)
+        && isString(d.get('error', ''), 0, 300)
+        && isString(d.get('runId', ''), 0, 40)
+        && (d.get('confirmedAt', null) == null || d.confirmedAt is timestamp)
+        && d.at is timestamp
+        && d.expireAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    // Plafond du compteur AXION : AXION activé, limite « administrateur » pour un administrateur actif, sinon la plus haute des limites
+    // « gratuit » et « licence » (l'application applique la limite exacte selon les licences du compte).
+    function nxAiCeiling() {
+      let c = get(/databases/$(database)/documents/nxConfig/axion).data;
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return c.get('enabled', false) != true ? 0
+        : isActiveAdminProfile(me) ? c.dailyLimit.admin
+        : (c.dailyLimit.licensed > c.dailyLimit.free ? c.dailyLimit.licensed : c.dailyLimit.free);
+    }
+
+    // Le jour du compteur doit être celui de la requête (à un jour près, pour les fuseaux horaires).
+    function nxDayOk(day) {
+      let p = day.split('-');
+      return day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.time > timestamp.date(int(p[0]), int(p[1]), int(p[2])) - duration.value(1, 'd')
+        && request.time < timestamp.date(int(p[0]), int(p[1]), int(p[2])) + duration.value(2, 'd');
+    }
+
+    // ---------------------------------------------------------------- nxUsers
+    match /nxUsers/{uid} {
+      allow get: if nxOwner(uid) && isActiveUser();
+      allow create, update: if nxOwner(uid) && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['reduceMotion', 'home', 'axionConsent', 'updatedAt'])
+                            && request.resource.data.get('reduceMotion', false) is bool
+                            && request.resource.data.get('axionConsent', false) is bool
+                            && request.resource.data.get('home', 'accueil') in ['accueil', 'applications', 'automatisations']
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if nxOwner(uid);
+
+      match /connections/{appId} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidConnection(appId)
+                      && request.resource.data.grantedAt == request.time;
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidConnection(appId)
+                      && request.resource.data.grantedAt == resource.data.grantedAt;
+        allow delete: if nxOwner(uid);
+      }
+
+      match /workflows/{wid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidWorkflow()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.runCount == 0;
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidWorkflow()
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && (request.resource.data.runCount == resource.data.runCount
+                          || request.resource.data.runCount == resource.data.runCount + 1);
+        allow delete: if nxOwner(uid);
+      }
+
+      match /runs/{rid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidRun()
+                      && request.resource.data.status == 'running'
+                      && request.resource.data.startedAt == request.time;
+        // une exécution réussie ou annulée est figée ; une exécution en échec peut repartir (« Réessayer »)
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidRun()
+                      && !(resource.data.status in ['succeeded', 'cancelled'])
+                      && request.resource.data.startedAt == resource.data.startedAt
+                      && request.resource.data.workflowName == resource.data.workflowName
+                      && request.resource.data.get('workflowId', '') == resource.data.get('workflowId', '');
+        allow delete: if nxOwner(uid);
+      }
+
+      match /activity/{aid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidActivity()
+                      && request.resource.data.at == request.time;
+        // seule une opération non terminée évolue (proposée → en attente → exécutée → vérifiée / échec / annulée)
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidActivity()
+                      && resource.data.status in ['proposed', 'pending_confirmation', 'executed']
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'summary', 'error', 'confirmedAt', 'updatedAt']);
+        allow delete: if nxOwner(uid);
+      }
+
+      match /aiUsage/{day} {
+        allow get: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxDayOk(day)
+                      && request.resource.data.keys().hasOnly(['count', 'updatedAt'])
+                      && request.resource.data.count == 1
+                      && request.resource.data.count <= nxAiCeiling()
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if nxOwner(uid) && isActiveUser() && nxDayOk(day)
+                      && request.resource.data.keys().hasOnly(['count', 'updatedAt'])
+                      && request.resource.data.count == resource.data.count + 1
+                      && request.resource.data.count <= nxAiCeiling()
+                      && request.resource.data.updatedAt == request.time;
+        allow delete: if nxOwner(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- nxConfig
+    function nxValidAxionConfig() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['enabled', 'backend', 'model', 'location', 'dailyLimit', 'updatedAt', 'updatedBy'])
+        && d.keys().hasAll(['enabled', 'backend', 'model', 'location', 'dailyLimit', 'updatedAt', 'updatedBy'])
+        && d.enabled is bool
+        && d.backend in ['googleai', 'vertexai']
+        && d.model is string && d.model.matches('[A-Za-z0-9][A-Za-z0-9._/-]{2,79}')
+        && d.location is string && d.location.matches('[a-z0-9-]{2,30}')
+        && d.dailyLimit is map && d.dailyLimit.keys().hasOnly(['free', 'licensed', 'admin']) && d.dailyLimit.keys().hasAll(['free', 'licensed', 'admin'])
+        && d.dailyLimit.free is int && d.dailyLimit.free >= 0 && d.dailyLimit.free <= 5000
+        && d.dailyLimit.licensed is int && d.dailyLimit.licensed >= 0 && d.dailyLimit.licensed <= 5000
+        && d.dailyLimit.admin is int && d.dailyLimit.admin >= 0 && d.dailyLimit.admin <= 5000
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid;
+    }
+
+    match /nxConfig/{cid} {
+      allow get: if cid == 'axion' && isActiveUser();
+      allow create, update: if cid == 'axion' && isAdmin() && nxValidAxionConfig();
+      allow delete: if cid == 'axion' && isAdmin();
+    }
+

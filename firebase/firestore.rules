@@ -1,63 +1,19 @@
+// ============================================================================================================
+// Studio Prism - Firestore security rules (website, ARCHIPLAN, ARCHITRAFIC, ARCHIINDUS, SPECTRA Writer, SPECTRA Calc, SPECTRA Slide, NEXUS)
+// Everything is denied by default (last rule). Admin = users/{uid}.role == 'admin' AND status == 'active'.
+// Paste the WHOLE file in Firebase Console > Firestore Database > Rules, then click Publish.
+// ============================================================================================================
 rules_version = '2';
 
 // ============================================================================================================
-// Règles Firestore de Studio Prism
 // ============================================================================================================
 //
-// COLLECTIONS RÉELLEMENT UTILISÉES PAR LE SITE (js/ et functions/) — et rien d'autre :
-//   users          profil du compte (auth.js, admin.js, platform.js)
-//   companies      entreprise d'un compte Entreprise (créée à l'inscription, synchronisée par l'administration)
 //   products       catalogue central : produits Prism App / Prism Game / Prism 3D (data.js, catalog.js, platform.js)
-//   subscriptions  FORMULES (plans) d'un produit : gratuit, achat unique, abonnement, sur devis ; droits et fonctionnalités.
-//                  Chaque produit peut en avoir 0, 1 ou plusieurs. Les anciens documents « une offre = un prix » restent valides.
-//   prices         PRIX et périodes de facturation d'une formule : document « {planId}_{période} » (unique, mensuel, annuel…)
-//   licenses       licence d'UN utilisateur pour UN produit : document « {userId}_{productId} » (data.js, platform.js)
-//   settings       réglage public « catalogue » (le catalogue intégré au site a-t-il été importé dans Firestore ?)
-//   pages          CMS : version PUBLIÉE d'une page (textes modifiés, sections masquées / ordonnées / ajoutées). Lecture publique des
-//                  seules pages publiées ; une page archivée ou jamais publiée n'est lisible que d'un administrateur.
-//   pageDrafts     CMS : copie de travail (brouillon) d'une page. ADMINISTRATEUR SEUL (lecture comprise) : le public n'y accède jamais.
-//   projects       CMS : projets / réalisations (brouillon, publié, archivé). Lecture publique des seuls projets publiés.
-//   clientProfiles ARCHIPLAN : fiche client d'un compte (téléphone, profil, société, adresse) — voir en fin de fichier
-//   apProjects, apFolders, apShares, apGrants, apUsage, apLibrary, userSecrets : cloud ARCHIPLAN (projets, dossiers partagés, quotas,
-//   bibliothèque personnelle) et code PIN du compte — en fin de fichier
-//   media          CMS : médiathèque (métadonnées ; les fichiers sont dans Firebase Storage, voir storage.rules). Un média se lit
-//                  par son identifiant s'il est public ; aucune liste pour le public.
 //
 // PRINCIPES
-//   1. Tout est refusé par défaut (dernière règle du fichier). Aucune règle « if true », aucune règle « connecté = tout ».
-//   2. Administrateur = users/{uid}.role == 'admin' ET users/{uid}.status == 'active', lu dans Firestore à chaque requête
-//      (jamais dans un jeton ni dans un champ envoyé par le navigateur). Un seul get() par requête.
-//   3. Un utilisateur ne peut JAMAIS changer son rôle, son abonnement ni son statut, ni créer / modifier une licence,
-//      ni toucher au catalogue ou aux offres. Un administrateur ne change ni son propre rôle ni son propre statut : le dernier
-//      administrateur actif ne peut donc pas se désactiver lui-même, et personne d'autre ne peut le faire (seul un administrateur
-//      ACTIF peut modifier un compte). Seul cas non couvert : deux administrateurs qui se désactivent l'un l'autre au même instant.
-//   4. Produits, formules et prix : lisibles par tout le monde SI publiés / actifs (les requêtes du site filtrent sur status).
-//      Un brouillon, une formule ou un prix inactif n'est visible que d'un administrateur, qui est aussi seul à pouvoir écrire.
-//      Aucun produit n'a besoin d'une formule ni d'un prix pour exister ou être publié.
-//   5. Licences : un utilisateur ACTIF lit uniquement les siennes (requête where userId == uid). Écriture : administrateur seul ;
-//      seule exception, la suppression par un particulier de SES licences dans le même lot que celle de son profil (point 8).
-//   6. Entreprise : lisible par son responsable et par les comptes rattachés (users/{uid}.companyId) s'ils sont ACTIFS, et par
-//      un administrateur.
-//   7. CMS : tout contenu éditorial suit le même cycle brouillon → publié → archivé. Un brouillon ou un contenu archivé n'est
-//      JAMAIS lisible du public : c'est ici, côté serveurs Google, que c'est imposé (pas seulement par un masquage à l'écran).
-//      Seul un administrateur actif crée, modifie, publie, archive ou supprime pages, projets et médias.
-//   8. Aucune suppression de compte ni d'entreprise depuis le navigateur : c'est le rôle des Cloud Functions (functions/),
-//      qui utilisent l'Admin SDK côté serveur et ignorent ces règles (déploiement : forfait Blaze requis). SEULE EXCEPTION : un
-//      particulier (accountKind individual, role user, status active) supprime SON profil et SES licences, dans un même lot, juste
-//      avant de fermer son compte de connexion avec le SDK Firebase (js/data.js, deleteMyAccount). Jamais le compte d'un autre.
-//   9. DÉSACTIVATION (users/{uid}.status == 'suspended') : le compte ne peut plus lire ses licences ni son entreprise, ne peut plus
-//      rien modifier et n'a plus aucun droit d'administration. Son profil reste lisible par lui seul (le site doit pouvoir lui dire
-//      que le compte est désactivé). Les données sont conservées ; un administrateur peut réactiver le compte. C'est une
-//      désactivation LOGIQUE, imposée ici : le compte de connexion Firebase Authentication, lui, existe toujours (README_ADMIN.md).
 //
 // LIMITES DE FIRESTORE PRISES EN COMPTE
-//   - 10 accès get()/exists() par opération, 20 par lot (batch). Chaque écriture administrateur coûte 1 accès (isAdmin),
-//     2 pour une création de formule, de prix ou de licence. Le site écrit donc par lots de 10 documents au plus (js/data.js).
-//   - exists() / get() voient l'état AVANT le lot, getAfter() l'état APRÈS : un prix est donc créé dans le même lot que sa
-//     formule (vérifiée par getAfter), alors qu'une formule exige que son produit existe déjà (lot précédent).
 //
-// PREMIER ADMINISTRATEUR : à définir à la main dans la console Firebase (role = "admin", status = "active" dans users/{uid}).
-// DÉPLOIEMENT : firebase deploy --only firestore:rules   (ou copier-coller dans Console Firebase > Firestore > Règles > Publier).
 // ============================================================================================================
 
 service cloud.firestore {
@@ -69,7 +25,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Administrateur actif : un seul get() du document users/{uid} de l'appelant.
     function isActiveAdminProfile(profile) {
       return profile.get('role', '') == 'admin' && profile.get('status', '') == 'active';
     }
@@ -79,15 +34,11 @@ service cloud.firestore {
         && isActiveAdminProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
-    // Compte actif (ni désactivé, ni sans profil) : un seul get() du document users/{uid} de l'appelant.
     function isActiveUser() {
       return isSignedIn()
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') == 'active';
     }
 
-    // Responsable (représentant ou responsable de branche) d'une entreprise cliente : compte actif rattaché à cette fiche avec
-    // orgRole « responsable » (posé par l'administration à la validation). Il voit les clés et les comptes de son entreprise et
-    // demande l'ajout de personnes ; il ne crée jamais de clé ni de licence lui-même.
     function isResponsableOf(oid) {
       let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return oid is string && oid != '' && me.get('status', '') == 'active' && me.get('orgRole', '') == 'responsable' && me.get('orgId', '') == oid;
@@ -101,24 +52,19 @@ service cloud.firestore {
       return isString(v, 3, 160) && v.matches('.+@.+[.].+');
     }
 
-    // Identifiant de produit / d'offre : lettres minuscules, chiffres, tirets ; réutilisé comme « slug ».
     function isId(v) {
       return v is string && v.matches('[a-z0-9][a-z0-9_-]{1,59}');
     }
 
-    // Lien : https://..., #/... (page du site) ou assets/... (fichier du site) ; jamais javascript: ni data:. Vide autorisé.
     function isSafeUrl(v) {
       return v is string && v.size() <= 300
         && (v == '' || v.matches('https://[!#-:=?-~]+') || v.matches('#/[!#-:=?-~]*') || v.matches('assets/[!#-:=?-~]+'));
     }
 
-    // Référence à un média de la médiathèque : « media:{identifiant} » (résolue en adresse de fichier à l'affichage ; remplacer le
-    // fichier du média ne casse donc aucune référence).
     function isMediaRef(v) {
       return v is string && v.matches('media:[A-Za-z0-9]{10,40}');
     }
 
-    // Tranches « nombre de comptes nécessaires » (identiques à SUBSCRIPTION_CONFIG dans js/app.js).
     function tierOk(range, lim) {
       return (range == '1'      && lim == 1)
           || (range == '2-10'   && lim == 10)
@@ -130,8 +76,6 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ users/{uid}
 
-    // Création du profil : uniquement SON document, avec des valeurs non privilégiées imposées
-    // (inscription, ou première connexion d'un compte Authentication qui n'a pas encore de profil).
     function validIndividualProfile(d) {
       return d.accountKind == 'individual'
         && d.keys().hasOnly(['firstName', 'lastName', 'email', 'accountKind', 'subscription', 'role', 'status',
@@ -161,18 +105,14 @@ service cloud.firestore {
         && d.email.lower() == request.auth.token.email.lower()
         && d.subscription == 'free'
         && d.role == 'user'
-        // Particulier : actif tout de suite. Entreprise : « pending » (en attente) jusqu'à la validation manuelle par un administrateur ;
-        // un compte en attente n'est pas actif (isActiveUser) : il ne lit ni licences ni entreprise et ne modifie rien.
         && ((d.accountKind == 'individual' && d.status == 'active') || (d.accountKind == 'company' && d.status == 'pending'))
         && d.createdAt == request.time
         && d.updatedAt == request.time
         && d.lastLogin == request.time
-        && d.get('termsAcceptedAt', request.time) == request.time   // facultatif : absent d'un profil créé à la première connexion
+        && d.get('termsAcceptedAt', request.time) == request.time
         && (validIndividualProfile(d) || validCompanyProfile(d));
     }
 
-    // Mise à jour par le propriétaire : SES informations personnelles uniquement (+ dates). Jamais role, subscription,
-    // status, email, accountKind, ni les champs entreprise (ils dépendent du document companies/).
     function ownerUpdateOk() {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
@@ -180,13 +120,12 @@ service cloud.firestore {
         && changed.hasOnly(['firstName', 'lastName', 'jobTitle', 'lastLogin', 'updatedAt'])
         && (!changed.hasAny(['lastLogin']) || d.lastLogin == request.time)
         && (!changed.hasAny(['updatedAt']) || d.updatedAt == request.time)
-        && (!changed.hasAny(['firstName', 'lastName', 'jobTitle']) || changed.hasAny(['updatedAt']))   // toute modification du profil date updatedAt
+        && (!changed.hasAny(['firstName', 'lastName', 'jobTitle']) || changed.hasAny(['updatedAt']))
         && (!changed.hasAny(['firstName']) || isString(d.firstName, 1, 80))
         && (!changed.hasAny(['lastName']) || isString(d.lastName, 0, 80))
         && (!changed.hasAny(['jobTitle']) || (resource.data.accountKind == 'company' && isString(d.jobTitle, 0, 80)));
     }
 
-    // Mise à jour par un administrateur actif : subscription / role / status (+ updatedAt), valeurs dans des listes fermées.
     // Sur SON propre compte : seul l'abonnement peut changer (pas d'auto-promotion, pas d'auto-verrouillage).
     function adminUpdateOk(uid) {
       let d = request.resource.data;
@@ -198,12 +137,10 @@ service cloud.firestore {
         && (d.get('orgId', '') == '' || exists(/databases/$(database)/documents/organizations/$(d.orgId)))
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
-        && d.status in ['active', 'suspended']                 // validation d'un compte en attente : pending → active (ou suspended)
+        && d.status in ['active', 'suspended']
         && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
     }
 
-    // Particulier → Entreprise, à l'initiative du titulaire : son compte repasse « en attente » (validation par l'administration) et la
-    // fiche entreprise est créée dans le même lot. Jamais l'inverse, jamais pour un administrateur, rien d'autre ne change.
     function ownerToCompanyOk(uid) {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
@@ -216,8 +153,6 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/companies/$(d.companyId)).data.ownerUid == uid;
     }
 
-    // Rattachement à un établissement par l'utilisateur lui-même : uniquement en activant une clé de cet établissement dans le
-    // même lot (la clé passe « activée » à son nom ; l'établissement et son nom viennent de la clé).
     function ownerOrgJoinOk(uid) {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
@@ -230,12 +165,11 @@ service cloud.firestore {
         && k.orgId == d.orgId && k.orgName == d.orgName && d.orgId != '';
     }
 
+    // ---------------------------------------------------------------- users
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin()                                // inclut les requêtes de comptage (count)
+      allow list: if isAdmin()
                   || (isSignedIn() && isResponsableOf(resource.data.get('orgId', '')));   // responsable : comptes de son entreprise
-      // Compte supprimé par l'administration (trace deletedAccounts) : jamais recréé automatiquement à la connexion, mais la personne peut
-      // se réinscrire explicitement (acceptation des conditions dans la même écriture) ; la trace est alors retirée dans le même lot.
       allow create: if isSignedIn() && request.auth.uid == uid && validNewUser()
                     && (!exists(/databases/$(database)/documents/deletedAccounts/$(uid))
                         || request.resource.data.get('termsAcceptedAt', null) == request.time);
@@ -243,24 +177,19 @@ service cloud.firestore {
                          (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid) || ownerToCompanyOk(uid)))
                          || (isAdmin() && adminUpdateOk(uid))
                        );
-      // Suppression : uniquement un PARTICULIER ACTIF, de son PROPRE profil (suppression de son compte, js/data.js). Jamais un
-      // administrateur, un compte entreprise ni un compte désactivé (sinon la désactivation serait contournée : un profil absent
-      // est recréé « actif » à la connexion suivante). Tout autre compte : Cloud Functions (Admin SDK) uniquement.
       allow delete: if (isSignedIn() && request.auth.uid == uid
                     && resource.data.get('role', '') == 'user'
                     && resource.data.get('status', '') == 'active'
                     && resource.data.get('accountKind', 'individual') == 'individual')
-                    // administrateur : jamais son propre compte ni un autre administrateur ; une trace deletedAccounts/{uid} est écrite dans le même lot
                     || (isAdmin() && request.auth.uid != uid && resource.data.get('role', 'user') != 'admin'
                         && existsAfter(/databases/$(database)/documents/deletedAccounts/$(uid)));
     }
 
-    // Trace d'un compte supprimé par l'administration (empêche la recréation automatique du profil à la connexion suivante).
+    // ---------------------------------------------------------------- deletedAccounts
     match /deletedAccounts/{uid} {
       allow read, delete: if isAdmin();
-      // la personne elle-même, quand elle se réinscrit : seulement dans le lot qui recrée son profil
       allow delete: if isSignedIn() && request.auth.uid == uid && existsAfter(/databases/$(database)/documents/users/$(uid));
-      allow get: if isSignedIn() && request.auth.uid == uid;   // la personne supprimée l'apprend à sa reconnexion
+      allow get: if isSignedIn() && request.auth.uid == uid;
       allow create, update: if isAdmin() && request.auth.uid != uid
                             && request.resource.data.keys().hasOnly(['email', 'name', 'deletedAt', 'by'])
                             && isString(request.resource.data.get('email', ''), 0, 160)
@@ -271,7 +200,6 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ companies/{companyId}
 
-    // Création : uniquement pendant l'inscription (le profil écrit dans le même lot doit référencer cette entreprise).
     function validNewCompany(companyId) {
       let d = request.resource.data;
       return d.keys().hasAll(['name', 'email', 'ownerUid', 'userRange', 'userLimit', 'subscription', 'createdAt', 'updatedAt'])
@@ -291,7 +219,6 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('companyId', '') == companyId;
     }
 
-    // Administrateur : abonnement + coordonnées de l'entreprise (valeurs validées), jamais le responsable ni la date de création.
     function adminCompanyUpdateOk() {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
@@ -305,9 +232,8 @@ service cloud.firestore {
         && isString(d.get('website', ''), 0, 200);
     }
 
+    // ---------------------------------------------------------------- companies
     match /companies/{companyId} {
-      // Responsable de l'entreprise ou compte rattaché à cette entreprise (tous deux ACTIFS : un compte désactivé n'y accède plus),
-      // ou administrateur. Aucune liste pour un utilisateur.
       allow get: if isSignedIn() && (
                       isAdmin()
                       || (isActiveUser() && (
@@ -317,16 +243,11 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && validNewCompany(companyId);
       allow update: if isAdmin() && adminCompanyUpdateOk();
-      allow delete: if isAdmin();                             // administration : avec la suppression du compte du responsable
+      allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------------ catalogue : products/{productId}
 
-    // Un produit n'a besoin d'aucune formule : il peut être créé, publié ou indisponible sans abonnement ni prix.
-    // Champs d'origine (obligatoires) + champs du catalogue central (facultatifs, pour rester compatible avec les anciens documents).
-    //   status : published / draft / unavailable / archived (nouveau) ; active / hidden (anciens documents, toujours lus et acceptés)
-//            archived = dépublié sans être effacé : jamais lisible du public, comme un brouillon.
-    //   pole   : app / game / p3d (pôle responsable) ; category : type du produit, choisi indépendamment du pôle
     function validProduct(pid) {
       let d = request.resource.data;
       return d.keys().hasAll(['name', 'slug', 'category', 'description', 'logo', 'image', 'url', 'status', 'featured',
@@ -346,9 +267,7 @@ service cloud.firestore {
         && d.get('platforms', []) is list && d.get('platforms', []).size() <= 8
         && isString(d.description, 0, 1000)
         && (isSafeUrl(d.logo) || isMediaRef(d.logo)) && (isSafeUrl(d.image) || isMediaRef(d.image)) && isSafeUrl(d.url)
-        // site web de l'application (adresse https:// uniquement), affiché sur la fiche produit et les cartes du pôle
         && (d.get('website', '') == '' || (d.website is string && d.website.size() <= 300 && d.website.matches('https://[!#-:=?-~]+')))
-        // page « Voir plus » créée avec le produit : présentation détaillée (texte) et points forts (liste de lignes courtes)
         && isString(d.get('details', ''), 0, 5000)
         && d.get('highlights', []) is list && d.get('highlights', []).size() <= 12
         && d.status in ['published', 'draft', 'unavailable', 'archived', 'active', 'hidden']
@@ -357,9 +276,8 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- products
     match /products/{pid} {
-      // Public : produits publiés ou indisponibles (visibles mais non commandables) ; « active » = ancien nom de « published ».
-      // Les requêtes du site filtrent where('status', '==', …) pour chacune de ces valeurs. Brouillons : administrateur seul.
       allow get, list: if isAdmin()
                        || resource.data.status == 'published'
                        || resource.data.status == 'unavailable'
@@ -371,8 +289,6 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ formules : subscriptions/{planId}
 
-    // FORMULE (nouveau format) : ce qu'on obtient (droits, fonctionnalités, type de licence), PAS le prix (voir « prices »).
-    //   mode : free (gratuit) / one_time (achat unique) / subscription (abonnement) / quote (sur devis)
     function validPlan(sid) {
       let d = request.resource.data;
       return d.keys().hasAll(['productId', 'productName', 'name', 'slug', 'description', 'mode', 'features', 'licenseType',
@@ -394,8 +310,6 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
-    // ANCIEN format « une offre = un prix » (documents déjà en base) : toujours lisible et modifiable (activer / désactiver…),
-    // mais plus créé par le site. Le prix doit rester cohérent avec la périodicité : Gratuit = 0, Sur devis = null, mensuel / annuel > 0.
     function validLegacyOffer(sid) {
       let d = request.resource.data;
       return d.keys().hasAll(['productId', 'productName', 'name', 'slug', 'description', 'price', 'currency', 'billingPeriod',
@@ -420,9 +334,9 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- subscriptions
     match /subscriptions/{sid} {
       allow get, list: if isAdmin() || resource.data.status == 'active';
-      // À la création, le produit doit exister (lot précédent) et son nom doit correspondre (un get() qui échoue = refus).
       allow create: if isAdmin() && validPlan(sid) && request.resource.data.createdAt == request.time
                     && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
                        == request.resource.data.productName;
@@ -432,10 +346,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------ prix : prices/{planId_période}
-
-    // Un prix = une formule + une période de facturation. Plusieurs prix par formule (mensuel ET annuel, par exemple), aucun si la
-    // formule est gratuite ou sur devis. Identifiant imposé « {planId}_{period} » : un seul prix par formule et par période.
     //   period : once (achat unique) / monthly / quarterly / yearly ; legacyId = identifiant de l'ancienne offre reprise.
     function validPrice(prid) {
       let d = request.resource.data;
@@ -452,8 +362,6 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
-    // La formule (créée dans le même lot, d'où getAfter) appartient au même produit et accepte cette période :
-    // achat unique ⇒ « once » ; abonnement ⇒ « monthly » / « quarterly » / « yearly » ; gratuit et sur devis : aucun prix.
     function priceFitsPlan() {
       let d = request.resource.data;
       let plan = getAfter(/databases/$(database)/documents/subscriptions/$(d.planId)).data;
@@ -462,6 +370,7 @@ service cloud.firestore {
             || (plan.get('mode', '') == 'subscription' && d.period in ['monthly', 'quarterly', 'yearly']));
     }
 
+    // ---------------------------------------------------------------- prices
     match /prices/{prid} {
       allow get, list: if isAdmin() || resource.data.status == 'active';
       allow create: if isAdmin() && validPrice(prid) && request.resource.data.createdAt == request.time && priceFitsPlan();
@@ -472,12 +381,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------ réglage public : settings/catalogue
-
-    // builtinImported = true : le catalogue intégré au site (ArchiVision, concepts Prism Game et Prism 3D) a été copié dans
-    // Firestore ; le site cesse alors de l'afficher depuis le code et ne montre plus que les produits publiés (pas de doublon).
+    // ---------------------------------------------------------------- settings
     match /settings/{sid} {
-      allow get: if sid == 'catalogue';                       // lecture publique d'un seul document, aucune liste
+      allow get: if sid == 'catalogue';
       allow create, update: if isAdmin() && sid == 'catalogue'
                             && request.resource.data.keys().hasAll(['builtinImported', 'updatedAt'])
                             && request.resource.data.keys().hasOnly(['builtinImported', 'updatedAt'])
@@ -505,8 +411,6 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
-    // Licence obtenue par l'utilisateur en activant une clé (même lot : la clé passe « activée » à son nom). Produit, type,
-    // établissement et date de fin viennent de la clé (date de fin fixe, ou durée à partir de maintenant, à 10 minutes près).
     function keyLicenseOk(lid) {
       let d = request.resource.data;
       let k = getAfter(/databases/$(database)/documents/licenseKeys/$(d.keyId)).data;
@@ -516,40 +420,31 @@ service cloud.firestore {
         && k.redeemedBy == request.auth.uid && k.status == 'redeemed' && k.redeemedAt == request.time
         && d.productId == k.productId && d.productName == k.productName && d.licenseType == k.licenseType
         && d.status == 'active' && d.activatedAt == request.time && d.get('orgId', '') == k.get('orgId', '')
-        && (k.licenseType != 'pro_entreprise' || k.get('orgId', '') != '')   // Pro Entreprise : seulement par une clé d'entreprise
+        && (k.licenseType != 'pro_entreprise' || k.get('orgId', '') != '')
         && (k.get('expiresAt', null) != null ? d.expiresAt == k.expiresAt
             : end == null ? d.expiresAt == null
             : (d.expiresAt is timestamp && d.expiresAt > end - duration.value(10, 'm') && d.expiresAt < end + duration.value(10, 'm')));
     }
 
+    // ---------------------------------------------------------------- licenses
     match /licenses/{lid} {
-      // Un utilisateur ACTIF ne lit QUE ses licences (requête : where('userId', '==', uid)) ; un compte désactivé n'y accède plus ;
-      // un administrateur lit tout.
       allow get, list: if isSignedIn() && (isAdmin() || (resource.data.userId == request.auth.uid && isActiveUser()));
-      // Création / attribution : administrateur seul. L'identifiant du document est « userId_productId » (une licence par
-      // utilisateur et par produit), l'utilisateur et le produit doivent exister, le nom du produit doit correspondre.
       allow create: if (isSignedIn() && isActiveUser() && keyLicenseOk(lid) && request.resource.data.createdAt == request.time)
                     || isAdmin() && validLicenseFields() && request.resource.data.createdAt == request.time
                     && lid == request.resource.data.userId + '_' + request.resource.data.productId
                     && exists(/databases/$(database)/documents/users/$(request.resource.data.userId))
                     && get(/databases/$(database)/documents/products/$(request.resource.data.productId)).data.name
                        == request.resource.data.productName;
-      // Modification / suspension / réactivation : administrateur seul ; l'utilisateur, le produit et la date de création sont figés.
       allow update: if (isSignedIn() && isActiveUser() && resource.data.userId == request.auth.uid && keyLicenseOk(lid)
                         && request.resource.data.createdAt == resource.data.createdAt)
                     || isAdmin() && validLicenseFields() && request.resource.data.createdAt == resource.data.createdAt
                     && request.resource.data.userId == resource.data.userId
                     && request.resource.data.productId == resource.data.productId;
-      // Administrateur ; ou le propriétaire, UNIQUEMENT si son profil est supprimé dans le même lot (suppression de son compte).
-      // Sinon refusé : un utilisateur ne supprime jamais une licence isolée. Le profil n'étant supprimable que par un particulier
-      // actif, un compte désactivé ne peut pas non plus effacer ses licences. Coût : 2 accès (exists, existsAfter) par licence.
       allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid
                         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
                         && !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)))
                     || isAdmin();
     }
-
-    // ------------------------------------------------------------ établissements / entreprises clientes : organizations/{id}
 
     function validOrg() {
       let d = request.resource.data;
@@ -564,8 +459,8 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- organizations
     match /organizations/{oid} {
-      // Administrateur ; ou compte ACTIF rattaché à cet établissement (lecture de sa fiche seulement).
       allow get: if isSignedIn() && (isAdmin()
                     || (isActiveUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('orgId', '') == oid));
       allow list: if isAdmin();
@@ -574,9 +469,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------ clés de licence : licenseKeys/{sha256 de la clé}
-
-    // L'identifiant est l'empreinte SHA-256 de la clé normalisée : seul celui qui connaît la clé peut lire sa fiche (aucune liste).
     function validKey(kid) {
       let d = request.resource.data;
       return d.keys().hasAll(['key', 'productId', 'productName', 'licenseType', 'status', 'createdAt', 'updatedAt'])
@@ -594,15 +486,14 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- licenseKeys
     match /licenseKeys/{kid} {
       allow get: if isSignedIn() && (isAdmin() || isActiveUser());
-      allow list: if isAdmin() || (isSignedIn() && isResponsableOf(resource.data.get('orgId', '')));   // responsable : clés de son entreprise
+      allow list: if isAdmin() || (isSignedIn() && isResponsableOf(resource.data.get('orgId', '')));
       allow create: if isAdmin() && validKey(kid) && request.resource.data.status == 'available' && request.resource.data.createdAt == request.time;
-      // Administrateur : libellé, profil, classe, révocation, rétablissement (jamais le produit ni le titulaire ; le statut d'une clé activée ne change pas).
       allow update: if (isAdmin() && validKey(kid) && request.resource.data.createdAt == resource.data.createdAt
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'role', 'classe', 'status', 'updatedAt'])
                         && (resource.data.status != 'redeemed' || request.resource.data.status == 'redeemed'))
-                    // Utilisateur : activation d'une clé disponible pour SON compte, avec la licence créée dans le même lot.
                     || (isSignedIn() && isActiveUser() && resource.data.status == 'available'
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'redeemedBy', 'redeemedEmail', 'redeemedAt', 'updatedAt'])
                         && request.resource.data.status == 'redeemed'
@@ -611,13 +502,10 @@ service cloud.firestore {
                         && request.resource.data.redeemedAt == request.time && request.resource.data.updatedAt == request.time
                         && (resource.data.get('expiresAt', null) == null || resource.data.expiresAt > request.time)
                         && getAfter(/databases/$(database)/documents/licenses/$(request.auth.uid + '_' + resource.data.productId)).data.get('keyId', '') == kid);
-      allow delete: if isAdmin();   // suppression d'un établissement : toutes ses clés
+      allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------------ demandes de licences d'entreprise : licenseRequests/{id}
-    //   kind « signup » : le responsable qui inscrit son entreprise (ou passe son compte en Entreprise) demande des licences ;
-    //   kind « member » : le responsable d'une entreprise validée demande l'ajout de personnes (une clé par adresse e-mail).
-    //   L'administration accepte (fiche entreprise, clés de licence) ou refuse ; le demandeur suit l'état de ses demandes.
     function validRequestItems(items) {
       return items is list && items.size() >= 1 && items.size() <= 6;
     }
@@ -639,6 +527,8 @@ service cloud.firestore {
             || (d.kind == 'member' && isResponsableOf(d.get('orgId', ''))
                 && d.get('emails', []) is list && d.emails.size() >= 1 && d.emails.size() <= 50));
     }
+
+    // ---------------------------------------------------------------- licenseRequests
     match /licenseRequests/{rid} {
       allow get, list: if isAdmin() || (isSignedIn() && resource.data.requesterUid == request.auth.uid);
       allow create: if isSignedIn() && validLicenseRequest();
@@ -646,11 +536,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && resource.data.requesterUid == request.auth.uid && resource.data.status == 'pending');
     }
 
-    // ============================================================ CMS : pages, projets, médias
-
-    // Contenu d'une page (structure seulement : textes modifiés, liens / images modifiés, ordre et visibilité des sections,
-    // sections ajoutées). Seul un administrateur écrit ; l'affichage public n'interprète JAMAIS ces données comme du HTML ou du
-    // JavaScript (textes insérés comme texte, adresses vérifiées avant usage) : la structure suffit donc à borner les documents.
     function validContent(c) {
       return c is map
         && c.keys().hasOnly(['v', 'seo', 'texts', 'attrs', 'layout', 'hidden', 'extra'])
@@ -664,7 +549,6 @@ service cloud.firestore {
         && (!('extra' in c) || (c.extra is list && c.extra.size() <= 40));
     }
 
-    // Identifiant d'une page : lettres minuscules, chiffres, tirets. Page personnalisée = « c-{adresse} » ; page du site = son nom.
     function isPageId(v) {
       return v is string && v.matches('[a-z0-9][a-z0-9-]{0,58}');
     }
@@ -683,7 +567,6 @@ service cloud.firestore {
         && d.updatedBy == request.auth.uid;
     }
 
-    // Version PUBLIÉE : lecture publique tant que status == 'published' ; archivée (dépubliée) = administrateur seul.
     function validPage(pid) {
       let d = request.resource.data;
       return d.keys().hasAll(['kind', 'title', 'slug', 'status', 'footer', 'content', 'mediaIds', 'revision', 'publishedAt', 'updatedAt', 'updatedBy'])
@@ -693,6 +576,7 @@ service cloud.firestore {
         && d.revision is int && d.revision >= 1 && d.revision <= 100000;
     }
 
+    // ---------------------------------------------------------------- pages
     match /pages/{pid} {
       allow get, list: if isAdmin() || resource.data.status == 'published';
       allow create: if isAdmin() && validPage(pid) && request.resource.data.status == 'published'
@@ -704,7 +588,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Brouillon (copie de travail) : jamais lisible ni modifiable par le public, même publié par ailleurs.
     function validPageDraft(pid) {
       let d = request.resource.data;
       return d.keys().hasAll(['kind', 'title', 'slug', 'footer', 'content', 'mediaIds', 'baseRevision', 'updatedAt', 'updatedBy'])
@@ -713,13 +596,12 @@ service cloud.firestore {
         && d.baseRevision is int && d.baseRevision >= 0 && d.baseRevision <= 100000;
     }
 
+    // ---------------------------------------------------------------- pageDrafts
     match /pageDrafts/{pid} {
       allow get, list: if isAdmin();
       allow create, update: if isAdmin() && validPageDraft(pid);
       allow delete: if isAdmin();
     }
-
-    // ------------------------------------------------------------ projets / réalisations : projects/{projectId}
 
     function validProject(pid) {
       let d = request.resource.data;
@@ -743,19 +625,14 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- projects
     match /projects/{pid} {
-      // Public : projets publiés SEULEMENT (les requêtes du site filtrent where('status', '==', 'published')).
       allow get, list: if isAdmin() || resource.data.status == 'published';
       allow create: if isAdmin() && validProject(pid) && request.resource.data.createdAt == request.time;
       allow update: if isAdmin() && validProject(pid) && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------ médiathèque : media/{mediaId}
-
-    // Métadonnées d'un média. Le fichier est dans Firebase Storage (media/{mediaId}/…, voir storage.rules) ou, pour un média
-    // « lien », sur un site externe (source == 'link'). Lecture publique d'UN média par son identifiant s'il est marqué public ;
-    // aucune liste pour le public (la médiathèque ne peut pas être énumérée).
     function validMedia(mid) {
       let d = request.resource.data;
       return d.keys().hasAll(['name', 'folder', 'alt', 'title', 'kind', 'mime', 'size', 'source', 'url', 'path', 'public',
@@ -782,6 +659,7 @@ service cloud.firestore {
         && d.createdBy is string && d.createdBy.size() <= 128;
     }
 
+    // ---------------------------------------------------------------- media
     match /media/{mid} {
       allow get: if isAdmin() || resource.data.public == true;
       allow list: if isAdmin();
@@ -795,15 +673,11 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ ARCHIPLAN : fiche client clientProfiles/{uid}
     //
-    // Ajout pour ARCHIPLAN (Prism App), qui partage les comptes du site. Coordonnées complémentaires d'un compte :
-    // téléphone, type de profil, société, adresse. Un document par compte, identifiant = uid. Le propriétaire ACTIF lit et écrit
-    // le sien (un compte désactivé n'y accède plus) ; un administrateur actif lit tout. Champs bornés, aucun champ privilégié.
-    // Suppression autorisée au propriétaire (suppression de son compte, RGPD).
     function validClientProfile() {
       let d = request.resource.data;
       return d.keys().hasAll(['phone', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['phone', 'profile', 'company', 'address', 'postalCode', 'city', 'country', 'siret', 'createdAt', 'updatedAt'])
-        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))   // SIRET : usage commercial d'une licence Pro
+        && (d.get('siret', '') == '' || (d.siret is string && d.siret.matches('[0-9]{14}')))
         && isString(d.phone, 6, 40)
         && isString(d.get('profile', ''), 0, 120)
         && isString(d.get('company', ''), 0, 120)
@@ -814,6 +688,7 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- clientProfiles
     match /clientProfiles/{uid} {
       allow get: if isSignedIn() && ((request.auth.uid == uid && isActiveUser()) || isAdmin());
       allow list: if isAdmin();
@@ -824,20 +699,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
-    // ------------------------------------------------------------ ARCHIPLAN : cloud des projets, dossiers, partage, quotas, bibliothèque, code PIN
     //
-    // apProjects/{id}            fiche d'un projet (propriétaire, nom, dossier, taille, miniature, accès par lien). Contenu : apProjects/{id}/content/main.
-    // apFolders/{id}             dossiers du propriétaire ; un dossier partagé liste ses projets (pids) et donne accès à chacun d'eux.
-    // apShares/{cible}__{email}  partage par email : cible = id du projet, ou « F_ » + id du dossier (kind 'folder', fid).
-    // apGrants/{cible}__{uid}    accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey de la cible.
-    // apUsage/{uid}              stockage utilisé par un compte (octets). Quota : 10 Mo (gratuit), 50 Mo (licence ARCHIPLAN), 1 Go (administrateur).
-    //                            Chaque écriture qui change la taille d'un projet met à jour ce compteur DANS LE MÊME LOT (increment + lastPid),
-    //                            et les règles vérifient la cohérence : le compteur ne peut ni être contourné ni dépasser le quota.
-    //                            Un invité qui modifie ou crée un projet dans un dossier partagé consomme le stockage du propriétaire.
-    // apLibrary/{uid}            bibliothèque personnelle (matériaux, compositions de parois, familles) : son seul titulaire.
-    // userSecrets/{uid}          code PIN du compte, HACHÉ (PBKDF2) : lisible par son seul titulaire, jamais par un administrateur.
-    // Le cloud est ouvert à tous les comptes actifs (offre gratuite comprise) ; les invités doivent avoir un email vérifié.
-    // Les plafonds de dossiers (5 privés, 3 partagés) sont appliqués par l'application.
     function apEmail() {
       return request.auth.token.email.lower();
     }
@@ -858,7 +720,6 @@ service cloud.firestore {
       return /databases/$(database)/documents/apUsage/$(uid);
     }
 
-    // Quota du compte uid (le propriétaire du stockage, pas forcément l'auteur de l'écriture)
     function apQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
       let lp = /databases/$(database)/documents/licenses/$(uid + '_archiplan');
@@ -868,7 +729,6 @@ service cloud.firestore {
         : 10000000;
     }
 
-    // Le compteur du propriétaire a bien été mis à jour dans ce lot, de la variation de taille du projet pid
     function apUsageOk(owner, pid, delta) {
       let before = exists(apU(owner)) ? get(apU(owner)).data.bytes : 0;
       return delta == 0
@@ -886,14 +746,12 @@ service cloud.firestore {
       return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
     }
 
-    // Droit d'un invité sur un dossier : 'edit', 'view' ou ''
     function apFolderRole(fid) {
       let f = get(apF(fid)).data;
       let r = apShareRole('F_' + fid);
       return !apVerified() ? '' : r != '' ? r : apGrantOk('F_' + fid, f) ? f.linkMode : '';
     }
 
-    // Droit d'un invité sur un projet : directement, ou par le dossier (du même propriétaire) qui le contient
     function apGuestRole(pid, p) {
       let r = apShareRole(pid);
       let viaLink = apGrantOk(pid, p) ? p.linkMode : '';
@@ -930,14 +788,13 @@ service cloud.firestore {
         && isString(d.get('linkToken', ''), 0, 64)
         && d.get('linkPw', false) is bool
         && d.updatedAt == request.time
-        // un projet rangé dans un dossier : dossier du même propriétaire (un ancien dossier disparu ne donne aucun accès)
         && (d.folderId == '' || !existsAfter(apF(d.folderId)) || getAfter(apF(d.folderId)).data.ownerUid == d.ownerUid);
     }
 
+    // ---------------------------------------------------------------- apProjects
     match /apProjects/{pid} {
       allow get: if apCanRead(pid, resource.data);
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-      // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
       allow create: if isSignedIn() && isActiveUser()
                     && apValidProject(request.resource.data)
                     && request.resource.data.createdAt == request.time
@@ -952,7 +809,6 @@ service cloud.firestore {
                         || (apCanEdit(pid, resource.data)
                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
                     && apUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
-      // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
       match /content/{cid} {
@@ -962,16 +818,15 @@ service cloud.firestore {
                               && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
                               && request.resource.data.data is string
                               && request.resource.data.data.size() <= 1000000
-                              // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
                               && request.resource.data.data.size() <= getAfter(apP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
         allow delete: if isSignedIn() && (!exists(apP(pid)) || get(apP(pid)).data.ownerUid == request.auth.uid || isAdmin());
       }
     }
 
+    // ---------------------------------------------------------------- apUsage
     match /apUsage/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
-      // écrit avec la fiche d'un projet (lastPid) : cohérence vérifiée des deux côtés ; jamais au-delà du quota (une baisse reste permise)
       allow create, update: if isSignedIn() && isActiveUser()
                             && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
                             && request.resource.data.bytes is int && request.resource.data.bytes >= 0
@@ -981,9 +836,7 @@ service cloud.firestore {
                                 || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
                                 || request.resource.data.bytes <= apQuota(uid))
                             && (
-                              // première création par le titulaire (somme de ses projets existants)
                               (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
-                              // sinon : la variation correspond exactement à la taille du projet lastPid écrit dans le même lot
                               || (request.resource.data.lastPid != ''
                                   && (existsAfter(apP(request.resource.data.lastPid))
                                       ? (getAfter(apP(request.resource.data.lastPid)).data.ownerUid == uid
@@ -996,7 +849,6 @@ service cloud.firestore {
                                          && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
                                             == -get(apP(request.resource.data.lastPid)).data.get('size', 0))))
                             );
-      // supprimé seulement vide, ou avec le profil du compte (suppression du compte, même lot)
       allow delete: if (isSignedIn() && request.auth.uid == uid
                     && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
                     || isAdmin();
@@ -1019,13 +871,13 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- apFolders
     match /apFolders/{fid} {
       allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && apFolderRole(fid) in ['view', 'edit']));
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.createdAt == request.time;
-      // propriétaire : tout ; invité « Modification » : seulement la liste des projets (création d'un projet dans le dossier)
       allow update: if isSignedIn() && isActiveUser() && apValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.createdAt == resource.data.createdAt
@@ -1054,6 +906,7 @@ service cloud.firestore {
                && get(apP(d.pid)).data.ownerUid == request.auth.uid));
     }
 
+    // ---------------------------------------------------------------- apShares
     match /apShares/{sid} {
       allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == apEmail() || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && apValidShare(sid) && request.resource.data.createdAt == request.time;
@@ -1076,12 +929,14 @@ service cloud.firestore {
         && t.get('linkKey', '') == d.key;
     }
 
+    // ---------------------------------------------------------------- apGrants
     match /apGrants/{gid} {
       allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create, update: if isSignedIn() && isActiveUser() && apVerified() && apValidGrant(gid);
       allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
+    // ---------------------------------------------------------------- apLibrary
     match /apLibrary/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
@@ -1092,19 +947,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
-    // ------------------------------------------------------------ ARCHITRAFIC : cloud des chantiers, dossiers, partage, quotas, bibliothèque
     //
-    // atProjects/{id}            fiche d'un projet (propriétaire, nom, dossier, taille, miniature, accès par lien). Contenu : atProjects/{id}/content/main.
-    // atFolders/{id}             dossiers du propriétaire ; un dossier partagé liste ses projets (pids) et donne accès à chacun d'eux.
-    // atShares/{cible}__{email}  partage par email : cible = id du projet, ou « F_ » + id du dossier (kind 'folder', fid).
-    // atGrants/{cible}__{uid}    accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey de la cible.
-    // atUsage/{uid}              stockage utilisé par un compte (octets). Quota : 50 Mo (licence ARCHITRAFIC gratuite pour tout compte actif), 1 Go (administrateur).
-    //                            Chaque écriture qui change la taille d'un projet met à jour ce compteur DANS LE MÊME LOT (increment + lastPid),
-    //                            et les règles vérifient la cohérence : le compteur ne peut ni être contourné ni dépasser le quota.
-    //                            Un invité qui modifie ou crée un projet dans un dossier partagé consomme le stockage du propriétaire.
-    // atLibrary/{uid}            bibliothèque personnelle (éléments de signalisation et de balisage personnalisés) : son seul titulaire.
-    // Le cloud est ouvert à tous les comptes actifs (offre gratuite comprise) ; les invités doivent avoir un email vérifié.
-    // Les plafonds de dossiers (5 privés, 3 partagés) sont appliqués par l'application.
     function atEmail() {
       return request.auth.token.email.lower();
     }
@@ -1125,13 +968,11 @@ service cloud.firestore {
       return /databases/$(database)/documents/atUsage/$(uid);
     }
 
-    // Quota du compte uid (le propriétaire du stockage, pas forcément l'auteur de l'écriture)
     function atQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
       return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
-    // Le compteur du propriétaire a bien été mis à jour dans ce lot, de la variation de taille du projet pid
     function atUsageOk(owner, pid, delta) {
       let before = exists(atU(owner)) ? get(atU(owner)).data.bytes : 0;
       return delta == 0
@@ -1149,14 +990,12 @@ service cloud.firestore {
       return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
     }
 
-    // Droit d'un invité sur un dossier : 'edit', 'view' ou ''
     function atFolderRole(fid) {
       let f = get(atF(fid)).data;
       let r = atShareRole('F_' + fid);
       return !atVerified() ? '' : r != '' ? r : atGrantOk('F_' + fid, f) ? f.linkMode : '';
     }
 
-    // Droit d'un invité sur un projet : directement, ou par le dossier (du même propriétaire) qui le contient
     function atGuestRole(pid, p) {
       let r = atShareRole(pid);
       let viaLink = atGrantOk(pid, p) ? p.linkMode : '';
@@ -1193,14 +1032,13 @@ service cloud.firestore {
         && isString(d.get('linkToken', ''), 0, 64)
         && d.get('linkPw', false) is bool
         && d.updatedAt == request.time
-        // un projet rangé dans un dossier : dossier du même propriétaire (un ancien dossier disparu ne donne aucun accès)
         && (d.folderId == '' || !existsAfter(atF(d.folderId)) || getAfter(atF(d.folderId)).data.ownerUid == d.ownerUid);
     }
 
+    // ---------------------------------------------------------------- atProjects
     match /atProjects/{pid} {
       allow get: if atCanRead(pid, resource.data);
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-      // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
       allow create: if isSignedIn() && isActiveUser()
                     && atValidProject(request.resource.data)
                     && request.resource.data.createdAt == request.time
@@ -1215,7 +1053,6 @@ service cloud.firestore {
                         || (atCanEdit(pid, resource.data)
                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
                     && atUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
-      // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
       match /content/{cid} {
@@ -1225,16 +1062,15 @@ service cloud.firestore {
                               && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
                               && request.resource.data.data is string
                               && request.resource.data.data.size() <= 1000000
-                              // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
                               && request.resource.data.data.size() <= getAfter(atP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
         allow delete: if isSignedIn() && (!exists(atP(pid)) || get(atP(pid)).data.ownerUid == request.auth.uid || isAdmin());
       }
     }
 
+    // ---------------------------------------------------------------- atUsage
     match /atUsage/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
-      // écrit avec la fiche d'un projet (lastPid) : cohérence vérifiée des deux côtés ; jamais au-delà du quota (une baisse reste permise)
       allow create, update: if isSignedIn() && isActiveUser()
                             && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
                             && request.resource.data.bytes is int && request.resource.data.bytes >= 0
@@ -1244,9 +1080,7 @@ service cloud.firestore {
                                 || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
                                 || request.resource.data.bytes <= atQuota(uid))
                             && (
-                              // première création par le titulaire (somme de ses projets existants)
                               (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
-                              // sinon : la variation correspond exactement à la taille du projet lastPid écrit dans le même lot
                               || (request.resource.data.lastPid != ''
                                   && (existsAfter(atP(request.resource.data.lastPid))
                                       ? (getAfter(atP(request.resource.data.lastPid)).data.ownerUid == uid
@@ -1259,7 +1093,6 @@ service cloud.firestore {
                                          && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
                                             == -get(atP(request.resource.data.lastPid)).data.get('size', 0))))
                             );
-      // supprimé seulement vide, ou avec le profil du compte (suppression du compte, même lot)
       allow delete: if (isSignedIn() && request.auth.uid == uid
                     && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
                     || isAdmin();
@@ -1282,13 +1115,13 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- atFolders
     match /atFolders/{fid} {
       allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && atFolderRole(fid) in ['view', 'edit']));
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && atValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.createdAt == request.time;
-      // propriétaire : tout ; invité « Modification » : seulement la liste des projets (création d'un projet dans le dossier)
       allow update: if isSignedIn() && isActiveUser() && atValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.createdAt == resource.data.createdAt
@@ -1317,6 +1150,7 @@ service cloud.firestore {
                && get(atP(d.pid)).data.ownerUid == request.auth.uid));
     }
 
+    // ---------------------------------------------------------------- atShares
     match /atShares/{sid} {
       allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == atEmail() || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && atValidShare(sid) && request.resource.data.createdAt == request.time;
@@ -1339,12 +1173,14 @@ service cloud.firestore {
         && t.get('linkKey', '') == d.key;
     }
 
+    // ---------------------------------------------------------------- atGrants
     match /atGrants/{gid} {
       allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create, update: if isSignedIn() && isActiveUser() && atVerified() && atValidGrant(gid);
       allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
+    // ---------------------------------------------------------------- atLibrary
     match /atLibrary/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
@@ -1355,19 +1191,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
-    // ------------------------------------------------------------ ARCHIINDUS : cloud des projets, dossiers, partage, quotas, bibliothèque
     //
-    // aiProjects/{id}            fiche d'un projet (propriétaire, nom, dossier, taille, miniature, accès par lien). Contenu : aiProjects/{id}/content/main.
-    // aiFolders/{id}             dossiers du propriétaire ; un dossier partagé liste ses projets (pids) et donne accès à chacun d'eux.
-    // aiShares/{cible}__{email}  partage par email : cible = id du projet, ou « F_ » + id du dossier (kind 'folder', fid).
-    // aiGrants/{cible}__{uid}    accès par lien : l'invité prouve qu'il connaît le lien (et son mot de passe) : clé = linkKey de la cible.
-    // aiUsage/{uid}              stockage utilisé par un compte (octets). Quota : 10 Mo (gratuit), 50 Mo (licence ARCHIINDUS), 1 Go (administrateur).
-    //                            Chaque écriture qui change la taille d'un projet met à jour ce compteur DANS LE MÊME LOT (increment + lastPid),
-    //                            et les règles vérifient la cohérence : le compteur ne peut ni être contourné ni dépasser le quota.
-    //                            Un invité qui modifie ou crée un projet dans un dossier partagé consomme le stockage du propriétaire.
-    // aiLibrary/{uid}            bibliothèque personnelle (matériaux, composants, symboles) : son seul titulaire.
-    // Le cloud est ouvert à tous les comptes actifs (offre gratuite comprise) ; les invités doivent avoir un email vérifié.
-    // Les plafonds de dossiers (5 privés, 3 partagés) sont appliqués par l'application.
     function aiEmail() {
       return request.auth.token.email.lower();
     }
@@ -1388,7 +1212,6 @@ service cloud.firestore {
       return /databases/$(database)/documents/aiUsage/$(uid);
     }
 
-    // Quota du compte uid (le propriétaire du stockage, pas forcément l'auteur de l'écriture)
     function aiQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
       let lp = /databases/$(database)/documents/licenses/$(uid + '_archiindus');
@@ -1398,7 +1221,6 @@ service cloud.firestore {
         : 10000000;
     }
 
-    // Le compteur du propriétaire a bien été mis à jour dans ce lot, de la variation de taille du projet pid
     function aiUsageOk(owner, pid, delta) {
       let before = exists(aiU(owner)) ? get(aiU(owner)).data.bytes : 0;
       return delta == 0
@@ -1416,14 +1238,12 @@ service cloud.firestore {
       return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
     }
 
-    // Droit d'un invité sur un dossier : 'edit', 'view' ou ''
     function aiFolderRole(fid) {
       let f = get(aiF(fid)).data;
       let r = aiShareRole('F_' + fid);
       return !aiVerified() ? '' : r != '' ? r : aiGrantOk('F_' + fid, f) ? f.linkMode : '';
     }
 
-    // Droit d'un invité sur un projet : directement, ou par le dossier (du même propriétaire) qui le contient
     function aiGuestRole(pid, p) {
       let r = aiShareRole(pid);
       let viaLink = aiGrantOk(pid, p) ? p.linkMode : '';
@@ -1460,14 +1280,13 @@ service cloud.firestore {
         && isString(d.get('linkToken', ''), 0, 64)
         && d.get('linkPw', false) is bool
         && d.updatedAt == request.time
-        // un projet rangé dans un dossier : dossier du même propriétaire (un ancien dossier disparu ne donne aucun accès)
         && (d.folderId == '' || !existsAfter(aiF(d.folderId)) || getAfter(aiF(d.folderId)).data.ownerUid == d.ownerUid);
     }
 
+    // ---------------------------------------------------------------- aiProjects
     match /aiProjects/{pid} {
       allow get: if aiCanRead(pid, resource.data);
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-      // création : par le propriétaire, ou par un invité « Modification » d'un dossier partagé (le projet appartient alors au propriétaire du dossier)
       allow create: if isSignedIn() && isActiveUser()
                     && aiValidProject(request.resource.data)
                     && request.resource.data.createdAt == request.time
@@ -1482,7 +1301,6 @@ service cloud.firestore {
                         || (aiCanEdit(pid, resource.data)
                             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
                     && aiUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
-      // suppression : le propriétaire (l'application décrémente le compteur dans le même lot ; ne pas le faire ne pénalise que lui)
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
       match /content/{cid} {
@@ -1492,16 +1310,15 @@ service cloud.firestore {
                               && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
                               && request.resource.data.data is string
                               && request.resource.data.data.size() <= 1000000
-                              // la taille déclarée sur la fiche (celle qui est comptée) correspond au contenu
                               && request.resource.data.data.size() <= getAfter(aiP(pid)).data.get('size', 0) + 2048
                               && request.resource.data.updatedAt == request.time;
         allow delete: if isSignedIn() && (!exists(aiP(pid)) || get(aiP(pid)).data.ownerUid == request.auth.uid || isAdmin());
       }
     }
 
+    // ---------------------------------------------------------------- aiUsage
     match /aiUsage/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
-      // écrit avec la fiche d'un projet (lastPid) : cohérence vérifiée des deux côtés ; jamais au-delà du quota (une baisse reste permise)
       allow create, update: if isSignedIn() && isActiveUser()
                             && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
                             && request.resource.data.bytes is int && request.resource.data.bytes >= 0
@@ -1511,9 +1328,7 @@ service cloud.firestore {
                                 || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
                                 || request.resource.data.bytes <= aiQuota(uid))
                             && (
-                              // première création par le titulaire (somme de ses projets existants)
                               (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
-                              // sinon : la variation correspond exactement à la taille du projet lastPid écrit dans le même lot
                               || (request.resource.data.lastPid != ''
                                   && (existsAfter(aiP(request.resource.data.lastPid))
                                       ? (getAfter(aiP(request.resource.data.lastPid)).data.ownerUid == uid
@@ -1526,7 +1341,6 @@ service cloud.firestore {
                                          && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
                                             == -get(aiP(request.resource.data.lastPid)).data.get('size', 0))))
                             );
-      // supprimé seulement vide, ou avec le profil du compte (suppression du compte, même lot)
       allow delete: if (isSignedIn() && request.auth.uid == uid
                     && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
                     || isAdmin();
@@ -1549,13 +1363,13 @@ service cloud.firestore {
         && d.updatedAt == request.time;
     }
 
+    // ---------------------------------------------------------------- aiFolders
     match /aiFolders/{fid} {
       allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && aiFolderRole(fid) in ['view', 'edit']));
       allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && aiValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.createdAt == request.time;
-      // propriétaire : tout ; invité « Modification » : seulement la liste des projets (création d'un projet dans le dossier)
       allow update: if isSignedIn() && isActiveUser() && aiValidFolder(request.resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.createdAt == resource.data.createdAt
@@ -1584,6 +1398,7 @@ service cloud.firestore {
                && get(aiP(d.pid)).data.ownerUid == request.auth.uid));
     }
 
+    // ---------------------------------------------------------------- aiShares
     match /aiShares/{sid} {
       allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == aiEmail() || isAdmin());
       allow create: if isSignedIn() && isActiveUser() && aiValidShare(sid) && request.resource.data.createdAt == request.time;
@@ -1606,12 +1421,14 @@ service cloud.firestore {
         && t.get('linkKey', '') == d.key;
     }
 
+    // ---------------------------------------------------------------- aiGrants
     match /aiGrants/{gid} {
       allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create, update: if isSignedIn() && isActiveUser() && aiVerified() && aiValidGrant(gid);
       allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
+    // ---------------------------------------------------------------- aiLibrary
     match /aiLibrary/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
@@ -1622,6 +1439,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
+    // ---------------------------------------------------------------- userSecrets
     match /userSecrets/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
@@ -1634,7 +1452,1285 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
     }
 
-    // ------------------------------------------------------------ tout le reste : refusé
+    // ------------------------------------------------------------ SPECTRA WRITER: documents, folders, sharing, quotas, personal templates
+    function swEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function swVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function swP(pid) {
+      return /databases/$(database)/documents/swDocs/$(pid);
+    }
+
+    function swF(fid) {
+      return /databases/$(database)/documents/swFolders/$(fid);
+    }
+
+    function swU(uid) {
+      return /databases/$(database)/documents/swUsage/$(uid);
+    }
+
+    // Storage quota of account uid (the storage owner, not necessarily the writer)
+    function swQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectrawriter');
+      return isActiveAdminProfile(u) ? 1000000000
+        : (exists(lp) && get(lp).data.status == 'active'
+           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
+        : 10000000;
+    }
+
+    // The owner's usage counter was updated in this same batch by the size change of document pid
+    function swUsageOk(owner, pid, delta) {
+      let before = exists(swU(owner)) ? get(swU(owner)).data.bytes : 0;
+      return delta == 0
+        || (existsAfter(swU(owner)) && getAfter(swU(owner)).data.lastPid == pid
+            && getAfter(swU(owner)).data.bytes == before + delta);
+    }
+
+    function swShareRole(key) {
+      let sp = /databases/$(database)/documents/swShares/$(key + '__' + swEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function swGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/swGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    // Guest role on a folder: 'edit', 'view' or ''
+    function swFolderRole(fid) {
+      let f = get(swF(fid)).data;
+      let r = swShareRole('F_' + fid);
+      return !swVerified() ? '' : r != '' ? r : swGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    // Guest role on a document: directly, or through the folder (same owner) that contains it
+    function swGuestRole(pid, p) {
+      let r = swShareRole(pid);
+      let viaLink = swGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(swF(p.folderId)) && get(swF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? swFolderRole(p.folderId) : '';
+      return !swVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+
+    function swCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || swGuestRole(pid, p) in ['view', 'edit']);
+    }
+
+    function swCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || swGuestRole(pid, p) == 'edit');
+    }
+
+    function swValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'preview', 'theme', 'words', 'tpl', 'pageSize',
+                             'starred', 'linkMode', 'linkKey', 'linkToken', 'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && isString(d.name, 1, 120)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('tpl', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('words', 0) is int && d.get('words', 0) >= 0
+        && d.get('starred', false) is bool
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        // a document stored in a folder: the folder belongs to the same owner (a deleted folder grants no access)
+        && (d.folderId == '' || !existsAfter(swF(d.folderId)) || getAfter(swF(d.folderId)).data.ownerUid == d.ownerUid);
+    }
+
+    // ---------------------------------------------------------------- swDocs
+    match /swDocs/{pid} {
+      allow get: if swCanRead(pid, resource.data);
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      // create: by the owner, or by an 'edit' guest of a shared folder (the document then belongs to the folder owner)
+      allow create: if isSignedIn() && isActiveUser()
+                    && swValidProject(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && swFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(swF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && swUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && swValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (swCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'preview', 'theme', 'words', 'pageSize', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && swUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      // delete: the owner (the app decrements the usage counter in the same batch)
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && swCanRead(pid, get(swP(pid)).data);
+        allow create, update: if cid == 'main'
+                              && swCanEdit(pid, getAfter(swP(pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              // the size declared on the document record (the counted one) matches the content
+                              && request.resource.data.data.size() <= getAfter(swP(pid)).data.get('size', 0) + 2048
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(swP(pid)) || get(swP(pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ---------------------------------------------------------------- swUsage
+    match /swUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // written together with a document record (lastPid): consistency checked both ways; never above quota (a decrease is always allowed)
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= swQuota(uid))
+                            && (
+                              // first creation by the account owner (sum of existing documents)
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              // otherwise: the change equals exactly the size change of document lastPid written in the same batch
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(swP(request.resource.data.lastPid))
+                                      ? (getAfter(swP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(swP(request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(swP(request.resource.data.lastPid)) ? get(swP(request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(swP(request.resource.data.lastPid))
+                                         && get(swP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(swP(request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      // deleted only when empty, or together with the account profile (account deletion, same batch)
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
+    }
+
+    function swValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    // ---------------------------------------------------------------- swFolders
+    match /swFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && swFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && swValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      // owner: everything; 'edit' guest: only the document list (creating a document in the folder)
+      allow update: if isSignedIn() && isActiveUser() && swValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (swFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function swValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(swF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(swP(d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    // ---------------------------------------------------------------- swShares
+    match /swShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == swEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && swValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && swValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == swEmail() || isAdmin());
+    }
+
+    function swValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      let t = folder ? get(swF(d.get('fid', '-'))).data : get(swP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    // ---------------------------------------------------------------- swGrants
+    match /swGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && swVerified() && swValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------------------------------------------------------------- swLibrary
+    match /swLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- Community template library: swPublic/{id} (+ content/main) ----
+    // Any active user can submit one of their documents as a public template: it is created 'pending'.
+    // Only Studio Prism administrators can publish ('published') or reject ('rejected', with a reason shown to the author).
+    // Signed-in users can read published templates, count a use (+1) and report a template once (reports +1).
+    function swPub(id) {
+      return /databases/$(database)/documents/swPublic/$(id);
+    }
+
+    function swValidPublic(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'cat', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerName', 'name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size',
+                             'uses', 'reports', 'reporters', 'createdAt', 'updatedAt', 'reviewedAt', 'reviewedBy'])
+        && isString(d.name, 2, 80)
+        && isString(d.get('desc', ''), 0, 200)
+        && isString(d.cat, 1, 40)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.status in ['pending', 'published', 'rejected']
+        && isString(d.get('reason', ''), 0, 300)
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 400000
+        && d.get('uses', 0) is int && d.get('uses', 0) >= 0
+        && d.get('reports', 0) is int && d.get('reports', 0) >= 0
+        && d.get('reporters', []) is list && d.get('reporters', []).size() <= 200;
+    }
+
+    function swPubReadable(d) {
+      return isSignedIn() && (d.status == 'published' || d.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /swPublic/{id} {
+      allow get, list: if swPubReadable(resource.data);
+      // submission: always 'pending', counters at zero, never pre-reviewed
+      allow create: if isSignedIn() && isActiveUser()
+                    && swValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.get('reason', '') == ''
+                    && request.resource.data.get('uses', 0) == 0
+                    && request.resource.data.get('reports', 0) == 0
+                    && request.resource.data.get('reporters', []).size() == 0
+                    && !('reviewedAt' in request.resource.data) && !('reviewedBy' in request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && swValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (
+                      // administrators: review (publish, reject, keep a reported template)
+                      isAdmin()
+                      // the author: edit and resubmit (back to 'pending')
+                      || (resource.data.ownerUid == request.auth.uid && isActiveUser()
+                          && request.resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size', 'updatedAt'])
+                          && request.resource.data.updatedAt == request.time)
+                      // any member: one more use of a published template
+                      || (resource.data.status == 'published'
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses'])
+                          && request.resource.data.uses == resource.data.get('uses', 0) + 1)
+                      // any member: report a published template, once per account
+                      || (resource.data.status == 'published' && isActiveUser()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reports', 'reporters'])
+                          && !(request.auth.uid in resource.data.get('reporters', []))
+                          && request.resource.data.reports == resource.data.get('reports', 0) + 1
+                          && request.resource.data.reporters == resource.data.get('reporters', []).concat([request.auth.uid]))
+                    );
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && swPubReadable(get(swPub(id)).data);
+        allow create, update: if cid == 'main' && isSignedIn()
+                              && ((getAfter(swPub(id)).data.ownerUid == request.auth.uid && getAfter(swPub(id)).data.status == 'pending')
+                                  || isAdmin())
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 400000
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(swPub(id)) || get(swPub(id)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+// =====================================================================================================================
+// SPECTRA Calc - Firestore rules BLOCK (same model as SPECTRA Writer, "sc" prefix instead of "sw").
+// Do NOT paste this file alone in the Firebase console: copy the COMPLETE file firebase/firestore.rules.
+//   scDocs/{id} (+ content/main)   spreadsheet record + JSON content      scFolders/{id}   folders
+//   scShares / scGrants             email and link sharing                  scUsage/{uid}    bytes used (quota)
+//   scLibrary/{uid}                 personal templates                      scPublic/{id}    community templates (moderated)
+// Licence: licenses/{uid}_spectracalc. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
+// =====================================================================================================================
+
+    function scEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function scVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function scP(pid) {
+      return /databases/$(database)/documents/scDocs/$(pid);
+    }
+
+    function scF(fid) {
+      return /databases/$(database)/documents/scFolders/$(fid);
+    }
+
+    function scU(uid) {
+      return /databases/$(database)/documents/scUsage/$(uid);
+    }
+
+    // Storage quota of account uid (the storage owner, not necessarily the writer)
+    function scQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectracalc');
+      return isActiveAdminProfile(u) ? 1000000000
+        : (exists(lp) && get(lp).data.status == 'active'
+           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
+        : 10000000;
+    }
+
+    // The owner's usage counter was updated in this same batch by the size change of document pid
+    function scUsageOk(owner, pid, delta) {
+      let before = exists(scU(owner)) ? get(scU(owner)).data.bytes : 0;
+      return delta == 0
+        || (existsAfter(scU(owner)) && getAfter(scU(owner)).data.lastPid == pid
+            && getAfter(scU(owner)).data.bytes == before + delta);
+    }
+
+    function scShareRole(key) {
+      let sp = /databases/$(database)/documents/scShares/$(key + '__' + scEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function scGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/scGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    // Guest role on a folder: 'edit', 'view' or ''
+    function scFolderRole(fid) {
+      let f = get(scF(fid)).data;
+      let r = scShareRole('F_' + fid);
+      return !scVerified() ? '' : r != '' ? r : scGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    // Guest role on a document: directly, or through the folder (same owner) that contains it
+    function scGuestRole(pid, p) {
+      let r = scShareRole(pid);
+      let viaLink = scGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(scF(p.folderId)) && get(scF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? scFolderRole(p.folderId) : '';
+      return !scVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+
+    function scCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || scGuestRole(pid, p) in ['view', 'edit']);
+    }
+
+    function scCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || scGuestRole(pid, p) == 'edit');
+    }
+
+    function scValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'preview', 'theme', 'words', 'tpl', 'pageSize',
+                             'starred', 'linkMode', 'linkKey', 'linkToken', 'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && isString(d.name, 1, 120)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('tpl', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('words', 0) is int && d.get('words', 0) >= 0
+        && d.get('starred', false) is bool
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        // a document stored in a folder: the folder belongs to the same owner (a deleted folder grants no access)
+        && (d.folderId == '' || !existsAfter(scF(d.folderId)) || getAfter(scF(d.folderId)).data.ownerUid == d.ownerUid);
+    }
+
+    match /scDocs/{pid} {
+      allow get: if scCanRead(pid, resource.data);
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      // create: by the owner, or by an 'edit' guest of a shared folder (the document then belongs to the folder owner)
+      allow create: if isSignedIn() && isActiveUser()
+                    && scValidProject(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && scFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(scF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && scUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && scValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (scCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'preview', 'theme', 'words', 'pageSize', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && scUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      // delete: the owner (the app decrements the usage counter in the same batch)
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && scCanRead(pid, get(scP(pid)).data);
+        allow create, update: if cid == 'main'
+                              && scCanEdit(pid, getAfter(scP(pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              // the size declared on the document record (the counted one) matches the content
+                              && request.resource.data.data.size() <= getAfter(scP(pid)).data.get('size', 0) + 2048
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(scP(pid)) || get(scP(pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /scUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // written together with a document record (lastPid): consistency checked both ways; never above quota (a decrease is always allowed)
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= scQuota(uid))
+                            && (
+                              // first creation by the account owner (sum of existing documents)
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              // otherwise: the change equals exactly the size change of document lastPid written in the same batch
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(scP(request.resource.data.lastPid))
+                                      ? (getAfter(scP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(scP(request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(scP(request.resource.data.lastPid)) ? get(scP(request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(scP(request.resource.data.lastPid))
+                                         && get(scP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(scP(request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      // deleted only when empty, or together with the account profile (account deletion, same batch)
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
+    }
+
+    function scValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /scFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && scFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && scValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      // owner: everything; 'edit' guest: only the document list (creating a document in the folder)
+      allow update: if isSignedIn() && isActiveUser() && scValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (scFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function scValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(scF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(scP(d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    match /scShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == scEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && scValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && scValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == scEmail() || isAdmin());
+    }
+
+    function scValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      let t = folder ? get(scF(d.get('fid', '-'))).data : get(scP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    match /scGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && scVerified() && scValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /scLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- Community template library: scPublic/{id} (+ content/main) ----
+    // Any active user can submit one of their documents as a public template: it is created 'pending'.
+    // Only Studio Prism administrators can publish ('published') or reject ('rejected', with a reason shown to the author).
+    // Signed-in users can read published templates, count a use (+1) and report a template once (reports +1).
+    function scPub(id) {
+      return /databases/$(database)/documents/scPublic/$(id);
+    }
+
+    function scValidPublic(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'cat', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerName', 'name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size',
+                             'uses', 'reports', 'reporters', 'createdAt', 'updatedAt', 'reviewedAt', 'reviewedBy'])
+        && isString(d.name, 2, 80)
+        && isString(d.get('desc', ''), 0, 200)
+        && isString(d.cat, 1, 40)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.status in ['pending', 'published', 'rejected']
+        && isString(d.get('reason', ''), 0, 300)
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 400000
+        && d.get('uses', 0) is int && d.get('uses', 0) >= 0
+        && d.get('reports', 0) is int && d.get('reports', 0) >= 0
+        && d.get('reporters', []) is list && d.get('reporters', []).size() <= 200;
+    }
+
+    function scPubReadable(d) {
+      return isSignedIn() && (d.status == 'published' || d.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /scPublic/{id} {
+      allow get, list: if scPubReadable(resource.data);
+      // submission: always 'pending', counters at zero, never pre-reviewed
+      allow create: if isSignedIn() && isActiveUser()
+                    && scValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.get('reason', '') == ''
+                    && request.resource.data.get('uses', 0) == 0
+                    && request.resource.data.get('reports', 0) == 0
+                    && request.resource.data.get('reporters', []).size() == 0
+                    && !('reviewedAt' in request.resource.data) && !('reviewedBy' in request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && scValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (
+                      // administrators: review (publish, reject, keep a reported template)
+                      isAdmin()
+                      // the author: edit and resubmit (back to 'pending')
+                      || (resource.data.ownerUid == request.auth.uid && isActiveUser()
+                          && request.resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size', 'updatedAt'])
+                          && request.resource.data.updatedAt == request.time)
+                      // any member: one more use of a published template
+                      || (resource.data.status == 'published'
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses'])
+                          && request.resource.data.uses == resource.data.get('uses', 0) + 1)
+                      // any member: report a published template, once per account
+                      || (resource.data.status == 'published' && isActiveUser()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reports', 'reporters'])
+                          && !(request.auth.uid in resource.data.get('reporters', []))
+                          && request.resource.data.reports == resource.data.get('reports', 0) + 1
+                          && request.resource.data.reporters == resource.data.get('reporters', []).concat([request.auth.uid]))
+                    );
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && scPubReadable(get(scPub(id)).data);
+        allow create, update: if cid == 'main' && isSignedIn()
+                              && ((getAfter(scPub(id)).data.ownerUid == request.auth.uid && getAfter(scPub(id)).data.status == 'pending')
+                                  || isAdmin())
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 400000
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(scPub(id)) || get(scPub(id)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+
+// =====================================================================================================================
+// SPECTRA Slide - Firestore rules BLOCK (same model as SPECTRA Writer, "ss" prefix instead of "sw").
+// Do NOT paste this file alone in the Firebase console: copy the COMPLETE file firebase/firestore.rules.
+//   ssDocs/{id} (+ content/main)   presentation record + JSON content      ssFolders/{id}   folders
+//   ssShares / ssGrants             email and link sharing                  ssUsage/{uid}    bytes used (quota)
+//   ssLibrary/{uid}                 personal templates                      ssPublic/{id}    community templates (moderated)
+// Licence: licenses/{uid}_spectraslide. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
+// =====================================================================================================================
+
+    function ssEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function ssVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function ssP(pid) {
+      return /databases/$(database)/documents/ssDocs/$(pid);
+    }
+
+    function ssF(fid) {
+      return /databases/$(database)/documents/ssFolders/$(fid);
+    }
+
+    function ssU(uid) {
+      return /databases/$(database)/documents/ssUsage/$(uid);
+    }
+
+    // Storage quota of account uid (the storage owner, not necessarily the writer)
+    function ssQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectraslide');
+      return isActiveAdminProfile(u) ? 1000000000
+        : (exists(lp) && get(lp).data.status == 'active'
+           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
+        : 10000000;
+    }
+
+    // The owner's usage counter was updated in this same batch by the size change of document pid
+    function ssUsageOk(owner, pid, delta) {
+      let before = exists(ssU(owner)) ? get(ssU(owner)).data.bytes : 0;
+      return delta == 0
+        || (existsAfter(ssU(owner)) && getAfter(ssU(owner)).data.lastPid == pid
+            && getAfter(ssU(owner)).data.bytes == before + delta);
+    }
+
+    function ssShareRole(key) {
+      let sp = /databases/$(database)/documents/ssShares/$(key + '__' + ssEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+
+    function ssGrantOk(key, t) {
+      let gp = /databases/$(database)/documents/ssGrants/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+
+    // Guest role on a folder: 'edit', 'view' or ''
+    function ssFolderRole(fid) {
+      let f = get(ssF(fid)).data;
+      let r = ssShareRole('F_' + fid);
+      return !ssVerified() ? '' : r != '' ? r : ssGrantOk('F_' + fid, f) ? f.linkMode : '';
+    }
+
+    // Guest role on a document: directly, or through the folder (same owner) that contains it
+    function ssGuestRole(pid, p) {
+      let r = ssShareRole(pid);
+      let viaLink = ssGrantOk(pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(ssF(p.folderId)) && get(ssF(p.folderId)).data.ownerUid == p.ownerUid
+                      ? ssFolderRole(p.folderId) : '';
+      return !ssVerified() ? ''
+        : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+        : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+
+    function ssCanRead(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || ssGuestRole(pid, p) in ['view', 'edit']);
+    }
+
+    function ssCanEdit(pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || ssGuestRole(pid, p) == 'edit');
+    }
+
+    function ssValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'preview', 'theme', 'words', 'tpl', 'pageSize',
+                             'starred', 'linkMode', 'linkKey', 'linkToken', 'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && isString(d.name, 1, 120)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000000
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('tpl', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('words', 0) is int && d.get('words', 0) >= 0
+        && d.get('starred', false) is bool
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        // a document stored in a folder: the folder belongs to the same owner (a deleted folder grants no access)
+        && (d.folderId == '' || !existsAfter(ssF(d.folderId)) || getAfter(ssF(d.folderId)).data.ownerUid == d.ownerUid);
+    }
+
+    match /ssDocs/{pid} {
+      allow get: if ssCanRead(pid, resource.data);
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      // create: by the owner, or by an 'edit' guest of a shared folder (the document then belongs to the folder owner)
+      allow create: if isSignedIn() && isActiveUser()
+                    && ssValidProject(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && ssFolderRole(request.resource.data.folderId) == 'edit'
+                            && getAfter(ssF(request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && ssUsageOk(request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && ssValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (ssCanEdit(pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'preview', 'theme', 'words', 'pageSize', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && ssUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      // delete: the owner (the app decrements the usage counter in the same batch)
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && ssCanRead(pid, get(ssP(pid)).data);
+        allow create, update: if cid == 'main'
+                              && ssCanEdit(pid, getAfter(ssP(pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              // the size declared on the document record (the counted one) matches the content
+                              && request.resource.data.data.size() <= getAfter(ssP(pid)).data.get('size', 0) + 2048
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(ssP(pid)) || get(ssP(pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+
+      // images of the presentation: one document per image (keeps the content document small).
+      // Their bytes are counted in the 'size' of the presentation record (quota), written by the app in the next save.
+      match /media/{mid} {
+        allow get, list: if ssCanRead(pid, get(ssP(pid)).data);
+        allow create: if mid.matches('^[A-Za-z0-9_-]{4,40}$')
+                      && ssCanEdit(pid, getAfter(ssP(pid)).data)
+                      && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                      && request.resource.data.data is string
+                      && request.resource.data.data.size() <= 1000000
+                      && request.resource.data.data.matches('^data:image/(png|jpeg|webp|gif|svg[+]xml);base64,[A-Za-z0-9+/=]+$')
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if false;
+        allow delete: if isSignedIn() && (!exists(ssP(pid)) || ssCanEdit(pid, get(ssP(pid)).data) || get(ssP(pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /ssUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // written together with a document record (lastPid): consistency checked both ways; never above quota (a decrease is always allowed)
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= ssQuota(uid))
+                            && (
+                              // first creation by the account owner (sum of existing documents)
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              // otherwise: the change equals exactly the size change of document lastPid written in the same batch
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(ssP(request.resource.data.lastPid))
+                                      ? (getAfter(ssP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(ssP(request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(ssP(request.resource.data.lastPid)) ? get(ssP(request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(ssP(request.resource.data.lastPid))
+                                         && get(ssP(request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(ssP(request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      // deleted only when empty, or together with the account profile (account deletion, same batch)
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
+    }
+
+    function ssValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.parentId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.get('shared', false) is bool
+        && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+        && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /ssFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && ssFolderRole(fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && ssValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      // owner: everything; 'edit' guest: only the document list (creating a document in the folder)
+      allow update: if isSignedIn() && isActiveUser() && ssValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (ssFolderRole(fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function ssValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(ssF(d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(ssP(d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    match /ssShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == ssEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && ssValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && ssValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == ssEmail() || isAdmin());
+    }
+
+    function ssValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'doc') == 'folder';
+      let t = folder ? get(ssF(d.get('fid', '-'))).data : get(ssP(d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'doc') in ['doc', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    match /ssGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && ssVerified() && ssValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /ssLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- Community template library: ssPublic/{id} (+ content/main) ----
+    // Any active user can submit one of their documents as a public template: it is created 'pending'.
+    // Only Studio Prism administrators can publish ('published') or reject ('rejected', with a reason shown to the author).
+    // Signed-in users can read published templates, count a use (+1) and report a template once (reports +1).
+    function ssPub(id) {
+      return /databases/$(database)/documents/ssPublic/$(id);
+    }
+
+    function ssValidPublic(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'cat', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerName', 'name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size',
+                             'uses', 'reports', 'reporters', 'createdAt', 'updatedAt', 'reviewedAt', 'reviewedBy'])
+        && isString(d.name, 2, 80)
+        && isString(d.get('desc', ''), 0, 200)
+        && isString(d.cat, 1, 40)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.status in ['pending', 'published', 'rejected']
+        && isString(d.get('reason', ''), 0, 300)
+        && isString(d.get('preview', ''), 0, 6000)
+        && isString(d.get('theme', ''), 0, 40)
+        && isString(d.get('pageSize', ''), 0, 12)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 400000
+        && d.get('uses', 0) is int && d.get('uses', 0) >= 0
+        && d.get('reports', 0) is int && d.get('reports', 0) >= 0
+        && d.get('reporters', []) is list && d.get('reporters', []).size() <= 200;
+    }
+
+    function ssPubReadable(d) {
+      return isSignedIn() && (d.status == 'published' || d.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /ssPublic/{id} {
+      allow get, list: if ssPubReadable(resource.data);
+      // submission: always 'pending', counters at zero, never pre-reviewed
+      allow create: if isSignedIn() && isActiveUser()
+                    && ssValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.get('reason', '') == ''
+                    && request.resource.data.get('uses', 0) == 0
+                    && request.resource.data.get('reports', 0) == 0
+                    && request.resource.data.get('reporters', []).size() == 0
+                    && !('reviewedAt' in request.resource.data) && !('reviewedBy' in request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && ssValidPublic(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (
+                      // administrators: review (publish, reject, keep a reported template)
+                      isAdmin()
+                      // the author: edit and resubmit (back to 'pending')
+                      || (resource.data.ownerUid == request.auth.uid && isActiveUser()
+                          && request.resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size', 'updatedAt'])
+                          && request.resource.data.updatedAt == request.time)
+                      // any member: one more use of a published template
+                      || (resource.data.status == 'published'
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses'])
+                          && request.resource.data.uses == resource.data.get('uses', 0) + 1)
+                      // any member: report a published template, once per account
+                      || (resource.data.status == 'published' && isActiveUser()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reports', 'reporters'])
+                          && !(request.auth.uid in resource.data.get('reporters', []))
+                          && request.resource.data.reports == resource.data.get('reports', 0) + 1
+                          && request.resource.data.reporters == resource.data.get('reporters', []).concat([request.auth.uid]))
+                    );
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && ssPubReadable(get(ssPub(id)).data);
+        allow create, update: if cid == 'main' && isSignedIn()
+                              && ((getAfter(ssPub(id)).data.ownerUid == request.auth.uid && getAfter(ssPub(id)).data.status == 'pending')
+                                  || isAdmin())
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 400000
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(ssPub(id)) || get(ssPub(id)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+
+// =====================================================================================================================
+// NEXUS — BLOC de règles Firestore. Ne PAS coller ce fichier seul dans la console (erreur « Unexpected 'match' »).
+// Pour la console, copier le fichier COMPLET firebase/firestore.rules (règles communes Studio Prism + ce bloc).
+// Sinon : insérer ce bloc dans « match /databases/{database}/documents { … } » des règles communes, JUSTE AVANT le bloc final
+// « match /{document=**} », puis publier.
+//
+// Collections de Nexus (rien d'autre n'est ajouté ; aucune règle existante n'est modifiée) :
+//   nxUsers/{uid}                    préférences Nexus du compte
+//   nxUsers/{uid}/connections/{app}  autorisations accordées à Nexus pour une application
+//   nxUsers/{uid}/workflows/{id}     automatisations
+//   nxUsers/{uid}/runs/{id}          exécutions (statut, étapes, résultat court) — champ expireAt pour une politique TTL facultative
+//   nxUsers/{uid}/activity/{id}      historique des opérations — expireAt idem
+//   nxUsers/{uid}/aiUsage/{jour}     compteur quotidien de demandes à AXION (AAAA-MM-JJ)
+//   nxConfig/axion                   réglage global d'AXION : lecture par les comptes actifs, écriture par un administrateur actif
+//
+// Principes : tout ce qui est sous nxUsers/{uid} n'est lisible et modifiable QUE par son titulaire (compte actif) — un administrateur
+// n'y a pas accès ; formes des documents validées (listes fermées, longueurs) ; une exécution réussie ou annulée n'est plus modifiable ;
+// une opération terminée de l'historique (vérifiée, échouée, annulée) non plus ; le compteur AXION ne peut qu'avancer d'un pas à la fois,
+// jamais au-delà de la limite réglée.
+// Utilise isSignedIn(), isActiveUser(), isAdmin(), isActiveAdminProfile(), isString() des règles communes.
+// =====================================================================================================================
+
+    function nxOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function nxApps() {
+      return ['archiplan', 'architrafic', 'archiindus', 'archivision', 'spectrawriter', 'spectracalc', 'spectraslide'];
+    }
+
+    function nxValidConnection(appId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['appId', 'scopes', 'status', 'grantedAt', 'updatedAt'])
+        && d.keys().hasOnly(['appId', 'scopes', 'status', 'grantedAt', 'updatedAt', 'revokedAt'])
+        && d.appId == appId && appId in nxApps()
+        && d.scopes is list && d.scopes.size() <= 4
+        && d.scopes.hasOnly(['catalog.read', 'projects.read', 'shared.read', 'documents.create'])
+        && (!d.scopes.hasAny(['documents.create']) || appId == 'spectrawriter')
+        && d.status in ['active', 'revoked']
+        && (d.status == 'active' ? d.scopes.size() >= 1 : d.scopes.size() == 0)
+        && d.grantedAt is timestamp
+        && (d.get('revokedAt', null) == null || d.revokedAt is timestamp)
+        && d.updatedAt == request.time;
+    }
+
+    function nxValidWorkflow() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'trigger', 'steps', 'status', 'runCount', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'description', 'trigger', 'steps', 'status', 'template', 'runCount', 'lastRunAt', 'createdAt', 'updatedAt'])
+        && isString(d.name, 1, 80)
+        && isString(d.get('description', ''), 0, 300)
+        && d.trigger == {'type': 'manual'}
+        && d.steps is list && d.steps.size() >= 1 && d.steps.size() <= 10
+        && d.status in ['active', 'paused']
+        && isString(d.get('template', ''), 0, 40)
+        && d.runCount is int && d.runCount >= 0
+        && (d.get('lastRunAt', null) == null || d.lastRunAt is timestamp)
+        && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    function nxRunTerminal(s) {
+      return s in ['succeeded', 'failed', 'cancelled'];
+    }
+
+    function nxValidRun() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['workflowName', 'status', 'steps', 'startedAt', 'updatedAt', 'expireAt'])
+        && d.keys().hasOnly(['workflowId', 'workflowName', 'trigger', 'status', 'steps', 'error', 'result', 'scopes',
+                             'startedAt', 'updatedAt', 'endedAt', 'expireAt'])
+        && isString(d.get('workflowId', ''), 0, 40)
+        && isString(d.workflowName, 1, 80)
+        && d.get('trigger', 'manual') == 'manual'
+        && d.status in ['running', 'awaiting_confirmation', 'succeeded', 'failed', 'cancelled']
+        && d.steps is list && d.steps.size() <= 10
+        && isString(d.get('error', ''), 0, 500)
+        && (d.get('result', null) == null || d.result is map)
+        && (d.get('scopes', []) is list && d.get('scopes', []).size() <= 20)
+        && d.startedAt is timestamp
+        && d.expireAt is timestamp
+        && d.updatedAt == request.time
+        && (nxRunTerminal(d.status) ? d.get('endedAt', null) is timestamp : d.get('endedAt', null) == null);
+    }
+
+    function nxValidActivity() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['action', 'status', 'at', 'updatedAt', 'expireAt'])
+        && d.keys().hasOnly(['action', 'label', 'appId', 'status', 'summary', 'error', 'runId', 'confirmedAt', 'at', 'updatedAt', 'expireAt'])
+        && isString(d.action, 1, 60)
+        && isString(d.get('label', ''), 0, 120)
+        && (d.get('appId', '') == '' || d.appId in nxApps())
+        && d.status in ['proposed', 'pending_confirmation', 'executed', 'verified', 'failed', 'cancelled']
+        && isString(d.get('summary', ''), 0, 300)
+        && isString(d.get('error', ''), 0, 300)
+        && isString(d.get('runId', ''), 0, 40)
+        && (d.get('confirmedAt', null) == null || d.confirmedAt is timestamp)
+        && d.at is timestamp
+        && d.expireAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    // Plafond du compteur AXION : AXION activé, limite « administrateur » pour un administrateur actif, sinon la plus haute des limites
+    // « gratuit » et « licence » (l'application applique la limite exacte selon les licences du compte).
+    function nxAiCeiling() {
+      let c = get(/databases/$(database)/documents/nxConfig/axion).data;
+      let me = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return c.get('enabled', false) != true ? 0
+        : isActiveAdminProfile(me) ? c.dailyLimit.admin
+        : (c.dailyLimit.licensed > c.dailyLimit.free ? c.dailyLimit.licensed : c.dailyLimit.free);
+    }
+
+    // Le jour du compteur doit être celui de la requête (à un jour près, pour les fuseaux horaires).
+    function nxDayOk(day) {
+      let p = day.split('-');
+      return day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.time > timestamp.date(int(p[0]), int(p[1]), int(p[2])) - duration.value(1, 'd')
+        && request.time < timestamp.date(int(p[0]), int(p[1]), int(p[2])) + duration.value(2, 'd');
+    }
+
+    // ---------------------------------------------------------------- nxUsers
+    match /nxUsers/{uid} {
+      allow get: if nxOwner(uid) && isActiveUser();
+      allow create, update: if nxOwner(uid) && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['reduceMotion', 'home', 'axionConsent', 'updatedAt'])
+                            && request.resource.data.get('reduceMotion', false) is bool
+                            && request.resource.data.get('axionConsent', false) is bool
+                            && request.resource.data.get('home', 'accueil') in ['accueil', 'applications', 'automatisations']
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if nxOwner(uid);
+
+      match /connections/{appId} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidConnection(appId)
+                      && request.resource.data.grantedAt == request.time;
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidConnection(appId)
+                      && request.resource.data.grantedAt == resource.data.grantedAt;
+        allow delete: if nxOwner(uid);
+      }
+
+      match /workflows/{wid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidWorkflow()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.runCount == 0;
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidWorkflow()
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && (request.resource.data.runCount == resource.data.runCount
+                          || request.resource.data.runCount == resource.data.runCount + 1);
+        allow delete: if nxOwner(uid);
+      }
+
+      match /runs/{rid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidRun()
+                      && request.resource.data.status == 'running'
+                      && request.resource.data.startedAt == request.time;
+        // une exécution réussie ou annulée est figée ; une exécution en échec peut repartir (« Réessayer »)
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidRun()
+                      && !(resource.data.status in ['succeeded', 'cancelled'])
+                      && request.resource.data.startedAt == resource.data.startedAt
+                      && request.resource.data.workflowName == resource.data.workflowName
+                      && request.resource.data.get('workflowId', '') == resource.data.get('workflowId', '');
+        allow delete: if nxOwner(uid);
+      }
+
+      match /activity/{aid} {
+        allow get, list: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxValidActivity()
+                      && request.resource.data.at == request.time;
+        // seule une opération non terminée évolue (proposée → en attente → exécutée → vérifiée / échec / annulée)
+        allow update: if nxOwner(uid) && isActiveUser() && nxValidActivity()
+                      && resource.data.status in ['proposed', 'pending_confirmation', 'executed']
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'summary', 'error', 'confirmedAt', 'updatedAt']);
+        allow delete: if nxOwner(uid);
+      }
+
+      match /aiUsage/{day} {
+        allow get: if nxOwner(uid) && isActiveUser();
+        allow create: if nxOwner(uid) && isActiveUser() && nxDayOk(day)
+                      && request.resource.data.keys().hasOnly(['count', 'updatedAt'])
+                      && request.resource.data.count == 1
+                      && request.resource.data.count <= nxAiCeiling()
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if nxOwner(uid) && isActiveUser() && nxDayOk(day)
+                      && request.resource.data.keys().hasOnly(['count', 'updatedAt'])
+                      && request.resource.data.count == resource.data.count + 1
+                      && request.resource.data.count <= nxAiCeiling()
+                      && request.resource.data.updatedAt == request.time;
+        allow delete: if nxOwner(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- nxConfig
+    function nxValidAxionConfig() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['enabled', 'backend', 'model', 'location', 'dailyLimit', 'updatedAt', 'updatedBy'])
+        && d.keys().hasAll(['enabled', 'backend', 'model', 'location', 'dailyLimit', 'updatedAt', 'updatedBy'])
+        && d.enabled is bool
+        && d.backend in ['googleai', 'vertexai']
+        && d.model is string && d.model.matches('[A-Za-z0-9][A-Za-z0-9._/-]{2,79}')
+        && d.location is string && d.location.matches('[a-z0-9-]{2,30}')
+        && d.dailyLimit is map && d.dailyLimit.keys().hasOnly(['free', 'licensed', 'admin']) && d.dailyLimit.keys().hasAll(['free', 'licensed', 'admin'])
+        && d.dailyLimit.free is int && d.dailyLimit.free >= 0 && d.dailyLimit.free <= 5000
+        && d.dailyLimit.licensed is int && d.dailyLimit.licensed >= 0 && d.dailyLimit.licensed <= 5000
+        && d.dailyLimit.admin is int && d.dailyLimit.admin >= 0 && d.dailyLimit.admin <= 5000
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid;
+    }
+
+    match /nxConfig/{cid} {
+      allow get: if cid == 'axion' && isActiveUser();
+      allow create, update: if cid == 'axion' && isAdmin() && nxValidAxionConfig();
+      allow delete: if cid == 'axion' && isAdmin();
+    }
 
     match /{document=**} {
       allow read, write: if false;
