@@ -1,5 +1,5 @@
 // ============================================================================================================
-// Studio Prism - Firestore security rules (website, ARCHIPLAN, ARCHITRAFIC, ARCHIINDUS, SPECTRA Writer, SPECTRA Calc, SPECTRA Slide, NEXUS)
+// Studio Prism - Firestore security rules (website, ARCHIPLAN, ARCHITRAFIC, SPECTRA Writer, SPECTRA Calc, SPECTRA Slide, NEXUS)
 // Everything is denied by default (last rule). Admin = users/{uid}.role == 'admin' AND status == 'active'.
 // Paste the WHOLE file in Firebase Console > Firestore Database > Rules, then click Publish.
 // ============================================================================================================

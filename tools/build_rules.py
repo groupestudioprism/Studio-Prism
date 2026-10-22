@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Règles Firestore de Studio Prism — SOURCE UNIQUE pour tout le projet Firebase « archivision-studioprism »
-(site, ARCHIPLAN, ARCHITRAFIC, ARCHIINDUS, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS).
+(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS).
 
 Un projet Firebase n'a qu'UN fichier de règles en ligne : chaque publication remplace tout. Les règles sont donc
 rangées ici en morceaux (firebase/rules/NN-nom.rules, assemblés dans l'ordre des noms) et ce script :
@@ -21,7 +21,6 @@ REQUIRED = {
     'site':            ['users', 'companies', 'products', 'subscriptions', 'prices', 'licenses', 'licenseKeys', 'licenseRequests', 'organizations', 'settings', 'pages', 'pageDrafts', 'projects', 'media', 'deletedAccounts'],
     'ARCHIPLAN':       ['clientProfiles', 'apProjects', 'apUsage', 'apFolders', 'apShares', 'apGrants', 'apLibrary'],
     'ARCHITRAFIC':     ['atProjects', 'atUsage', 'atFolders', 'atShares', 'atGrants', 'atLibrary'],
-    'ARCHIINDUS':      ['aiProjects', 'aiUsage', 'aiFolders', 'aiShares', 'aiGrants', 'aiLibrary'],
     'code PIN':        ['userSecrets'],
     'SPECTRA Writer':  ['swDocs', 'swUsage', 'swFolders', 'swShares', 'swGrants', 'swLibrary', 'swPublic'],
     'SPECTRA Calc':    ['scDocs', 'scUsage', 'scFolders', 'scShares', 'scGrants', 'scLibrary', 'scPublic'],
