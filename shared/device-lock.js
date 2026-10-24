@@ -37,9 +37,15 @@ const Bio = {
       timeout:60000, attestation:'none'}});
     const id = b64(cred.rawId); BioShare.set(u.uid, id); return id;
   },
-  async verify(credId, shared){
-    const a = await navigator.credentials.get({publicKey:{...(shared && SP_DOMAIN ? {rpId:SP_DOMAIN} : {}), challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{type:'public-key', id:unb64(credId), transports:['internal', 'hybrid']}], userVerification:'required', timeout:60000}});
-    return !!a;
+  // une seule demande à la fois : un second appel (demande automatique + bouton, écran réaffiché…) réutilise la demande en cours,
+  // et une vérification réussie vaut 20 secondes (pas de seconde empreinte pour la même ouverture)
+  _p:null, _ok:0,
+  verify(credId, shared){
+    if (Date.now() - this._ok < 20000) return Promise.resolve(true);
+    if (this._p) return this._p;
+    this._p = navigator.credentials.get({publicKey:{...(shared && SP_DOMAIN ? {rpId:SP_DOMAIN} : {}), challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{type:'public-key', id:unb64(credId), transports:['internal', 'hybrid']}], userVerification:'required', timeout:60000}})
+      .then(a => { if (a) this._ok = Date.now(); return !!a; }).finally(() => { this._p = null; });
+    return this._p;
   },
 };
 
