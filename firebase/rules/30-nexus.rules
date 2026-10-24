@@ -25,7 +25,7 @@
     }
 
     function nxApps() {
-      return ['archiplan', 'architrafic', 'archivision', 'spectrawriter', 'spectracalc', 'spectraslide'];
+      return ['archiplan', 'architrafic', 'archivision', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion'];
     }
 
     function nxValidConnection(appId) {

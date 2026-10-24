@@ -25,6 +25,7 @@ REQUIRED = {
     'SPECTRA Writer':  ['swDocs', 'swUsage', 'swFolders', 'swShares', 'swGrants', 'swLibrary', 'swPublic'],
     'SPECTRA Calc':    ['scDocs', 'scUsage', 'scFolders', 'scShares', 'scGrants', 'scLibrary', 'scPublic'],
     'SPECTRA Slide':   ['ssDocs', 'ssUsage', 'ssFolders', 'ssShares', 'ssGrants', 'ssLibrary', 'ssPublic'],
+    'SPECTRA Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
 }
 def build():
