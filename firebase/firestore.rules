@@ -1017,8 +1017,9 @@ service cloud.firestore {
     function atValidProject(d) {
       return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'thumb', 'linkMode', 'linkKey', 'linkToken',
-                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'info'])
         && isString(d.name, 1, 120)
+        && isString(d.get('info', ''), 0, 800)
         && isString(d.folderId, 0, 40)
         && isString(d.get('ownerEmail', ''), 0, 160)
         && isString(d.get('ownerName', ''), 0, 160)
@@ -1051,7 +1052,7 @@ service cloud.firestore {
                     && request.resource.data.createdAt == resource.data.createdAt
                     && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
                         || (atCanEdit(pid, resource.data)
-                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'info', 'updatedAt', 'updatedBy', 'updatedByName'])))
                     && atUsageOk(resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
       allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
 
