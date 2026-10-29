@@ -386,3 +386,6 @@ html.pl-open{overflow:hidden}
 .dl-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}.dl-h h3{margin:0}
 .dl-act{margin:14px 0 6px;display:flex;gap:10px;flex-wrap:wrap}.dl-how{font-size:14px}
 .dl-adm{margin:18px 0}
+/* génération de clés : choix de plusieurs applications (clé pack) */
+.ok-apps{border:1px solid var(--line,#dde3ec);border-radius:10px;padding:8px 12px 10px;margin:10px 0}.ok-apps legend{font-weight:600;padding:0 4px}
+.ok-apps-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:0 14px}.ok-apps-l .mut{margin-left:4px;font-size:12px}

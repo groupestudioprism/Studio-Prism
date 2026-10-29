@@ -198,7 +198,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       <td data-label="Licence"><div class="adm-v"><b>${esc(k.productName)}</b><small>${esc(tLabel(k.licenseType))}</small></div></td>
       <td data-label="Profil"><div class="adm-v">${esc(ROLE_L[k.role] || '—')}${k.classe ? `<small>${esc(k.classe)}</small>` : ''}</div></td>
       <td data-label="Validité"><div class="adm-v">${esc(dur(k))}</div></td>
-      <td data-label="Libellé"><div class="adm-v">${esc(k.label || '—')}${k.status === 'redeemed' ? `<small>Activée par ${esc(k.redeemedEmail)} le ${esc(fdate(k.redeemedAt))}</small>` : ''}</div></td>
+      <td data-label="Libellé"><div class="adm-v">${packLabel(k.label)}${k.status === 'redeemed' ? `<small>Activée par ${esc(k.redeemedEmail)} le ${esc(fdate(k.redeemedAt))}</small>` : ''}</div></td>
       <td data-label="Statut"><div class="adm-v">${keyBadge(k)}</div></td>
       <td class="adm-act"><button class="btn b4" data-a="org-key-copy" data-k="${esc(k.key)}" aria-label="Copier la clé">Copier</button>${k.status !== 'revoked' ? ` <button class="btn b4" data-a="org-key-label" data-id="${esc(k.id)}">Modifier</button>` : ''}${k.status === 'available' ? ` <button class="btn b4" data-a="org-key-revoke" data-id="${esc(k.id)}">Révoquer</button>` : ''}${k.status === 'revoked' ? ` <button class="btn b4" data-a="org-key-restore" data-id="${esc(k.id)}">Rétablir</button> <button class="btn btn-danger" data-a="org-key-del" data-id="${esc(k.id)}">Supprimer</button>` : ''}${k.status !== 'revoked' && !oid ? ` <button class="btn btn-danger" data-a="org-key-del-ask" data-id="${esc(k.id)}">Supprimer</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -279,17 +279,26 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 
   /* ---- clés : génération et saisie manuelle ---- */
   const BASE_TYPES = ['pro', 'pro_entreprise', 'etudiant', 'enseignant', 'free'];
+  /* Produits proposés pour les clés : les applications (et services) du catalogue, archivés exclus ; brouillons signalés */
+  const LIC_ST = { draft: ' (brouillon)', unavailable: ' (indisponible)', hidden: ' (masqué)' };
+  const licProds = () => O.prods.filter((p) => p.status !== 'archived' && (!p.category || p.category === 'application' || p.category === 'service'))
+    .sort((a, b) => (a.status === 'draft') - (b.status === 'draft') || (a.displayOrder ?? 999) - (b.displayOrder ?? 999) || String(a.name).localeCompare(String(b.name), 'fr'));
+  const typesForMany = (ids) => { const s = new Set(BASE_TYPES); O.offers.filter((o) => ids.includes(o.productId) && o.licenseType).forEach((o) => s.add(o.licenseType)); return [...s].map((t) => [t, tLabel(t)]); };
   const typesFor = (pid) => { const s = new Set(BASE_TYPES); O.offers.filter((o) => o.productId === pid && o.licenseType).forEach((o) => s.add(o.licenseType)); return [...s].map((t) => [t, tLabel(t)]); };
   function keysForm(oid, manual) {
-    const o = oid ? orgById(oid) : null, prods = O.prods.filter((p) => p.status !== 'draft');
+    const o = oid ? orgById(oid) : null, prods = licProds();
     if (!prods.length) return pmodal('<h3>Clés de licence</h3><p>Le catalogue est vide : ajoutez d’abord un produit (onglet Catalogue).</p>');
     const first = prods.find((p) => p.id === 'archiplan') || prods[0];
     const free = o ? Math.max(0, (o.seats || 0) - O.keys.filter((k) => k.orgId === oid && k.status !== 'revoked').length) : 10;
     pmodal(`<h3>${manual ? 'Saisir une clé existante' : 'Générer des clés de licence'}</h3><p class="mut">${o ? esc(o.name) + ` · ${free} poste${free > 1 ? 's' : ''} sans clé` : 'Clés sans établissement ni entreprise'}</p>
       <form data-f="org-keys" data-org="${esc(oid || '')}" data-manual="${manual ? 1 : ''}" novalidate>
       ${manual ? fld('ok-key', 'Clé', inp('ok-key', 'text', '', 'maxlength="60" autocomplete="off" autocapitalize="characters" placeholder="ABCD-EFGH-IJKL-MNOP" style="font-family:monospace"'), 'Lettres et chiffres, tirets facultatifs (au moins 12 caractères).')
-        : fld('ok-n', 'Nombre de clés', inp('ok-n', 'number', Math.max(1, Math.min(free || 1, 50)), 'min="1" max="500"'))}
-      <div class="row">${fld('ok-prod', 'Produit', sel('ok-prod', prods.map((p) => [p.id, p.name]), first.id))}${fld('ok-type', 'Type de licence', sel('ok-type', typesFor(first.id), 'pro'))}</div>
+        : fld('ok-n', '<span id="ok-n-l">Nombre de clés</span>', inp('ok-n', 'number', Math.max(1, Math.min(free || 1, 50)), 'min="1" max="500"'), 'Une clé par compte.')}
+      ${manual ? `<div class="row">${fld('ok-prod', 'Produit', sel('ok-prod', prods.map((p) => [p.id, p.name + (LIC_ST[p.status] || '')]), first.id))}${fld('ok-type', 'Type de licence', sel('ok-type', typesFor(first.id), 'pro'))}</div>`
+        : `<fieldset class="acc-f ok-apps"><legend>Applications <span class="mut">(cochez-en plusieurs pour une clé pack : une seule clé active toutes les applications cochées)</span></legend>
+            <div class="ok-apps-l">${prods.map((p) => `<label class="opt"><input type="checkbox" name="ok-app" value="${esc(p.id)}"${p.id === first.id ? ' checked' : ''}> ${esc(p.name)}<span class="mut">${esc(LIC_ST[p.status] || '')}</span></label>`).join('')}</div>
+            <p class="mut" id="ok-pack-note" style="margin:6px 0 0"></p><p class="fe" id="e-ok-app" role="alert"></p></fieldset>
+          <div class="row">${fld('ok-type', 'Type de licence', sel('ok-type', typesForMany([first.id]), 'pro'))}</div>`}
       <div class="row">${fld('ok-dur', 'Validité', sel('ok-dur', [['365', '1 an après activation'], ['730', '2 ans après activation'], ['1095', '3 ans après activation'], ['30', '30 jours (essai)'], ['90', '90 jours'], ['date', 'Jusqu’à une date'], ['', 'Sans limite']], '365'))}${fld('ok-date', 'Date de fin <span class="mut">(si « jusqu’à une date »)</span>', inp('ok-date', 'date', ''))}</div>
       ${o ? (() => { const S = SEG[segOfKind(o.kind)]; return `<div class="row">${S.roles ? fld('ok-role', 'Profil', sel('ok-role', [['', '—'], ['eleve', 'Élève / étudiant'], ['enseignant', 'Enseignant']], FO.role)) : ''}${fld('ok-class', S.group + ' <span class="mut">(facultatif)</span>', inp('ok-class', 'text', FO.classe, `maxlength="60" list="ok-classes" placeholder="${S.groupPh}"`) + `<datalist id="ok-classes">${classesOf(oid).map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`)}</div>`; })() : ''}
       ${fld('ok-label', 'Libellé <span class="mut">(facultatif : nom de la personne, poste, n° de commande…)</span>', inp('ok-label', 'text', '', 'maxlength="120"'))}
@@ -297,14 +306,18 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   }
   async function submitKeys(fm) {
     K.clearErrors(); const g = (n) => fm.elements[n] ? fm.elements[n].value.trim() : '', er = {}, oid = fm.dataset.org, manual = !!fm.dataset.manual, od = await OD();
-    const prod = O.prods.find((p) => p.id === g('ok-prod')), n = manual ? 1 : parseInt(g('ok-n'), 10);
+    const picked = manual ? [g('ok-prod')] : [...fm.querySelectorAll('input[name="ok-app"]:checked')].map((c) => c.value);
+    const apps = picked.map((id) => O.prods.find((p) => p.id === id)).filter(Boolean), prod = apps[0], n = manual ? 1 : parseInt(g('ok-n'), 10);
+    if (!apps.length){ const e = fm.querySelector('#e-ok-app'); if (e) e.textContent = 'Cochez au moins une application.'; return; }
     if (manual && !od.keyOk(g('ok-key'))) er['ok-key'] = 'Clé invalide.';
-    if (!manual && !(n >= 1 && n <= 500)) er['ok-n'] = 'Entre 1 et 500.';
+    if (!manual && !(n >= 1 && n <= (apps.length > 1 ? 100 : 500))) er['ok-n'] = apps.length > 1 ? 'Entre 1 et 100 packs.' : 'Entre 1 et 500.';
+    if (g('ok-type') === 'pro_entreprise' && !oid) er['ok-type'] = 'Pro Entreprise : générez les clés depuis la fiche de l’entreprise.';
     let expiresAt = null, durationDays = null;
     if (g('ok-dur') === 'date'){ expiresAt = g('ok-date') ? new Date(g('ok-date') + 'T23:59:59') : null; if (!expiresAt || expiresAt < new Date()) er['ok-date'] = 'Choisissez une date future.'; }
     else if (g('ok-dur')) durationDays = parseInt(g('ok-dur'), 10);
     if (K.showErrors(fm, er)) return;
     const btn = fm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Enregistrement…';
+    if (!manual && apps.length > 1) return submitPacks(fm, od, apps, n, { licenseType: g('ok-type'), durationDays, expiresAt, org: oid ? orgById(oid) : null, label: g('ok-label'), role: g('ok-role'), classe: g('ok-class') }, oid, btn);
     const pref = prod.id === 'archiplan' ? 'ARCH' : prod.id === 'archivision' ? 'AVIS' : prod.id.replace(/[^a-z]/gi, '').slice(0, 4);
     const keys = manual ? [g('ok-key')] : Array.from({ length: n }, () => od.generateKey(pref));
     try {
@@ -314,6 +327,25 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
         <textarea id="ok-out" readonly rows="${Math.min(12, out.length + 1)}" style="width:100%;font-family:monospace">${esc(out.map((x) => x.key).join('\n'))}</textarea>
         <p style="margin-top:10px"><button class="btn b1" data-a="org-copy-out">Copier les clés</button> ${oid ? `<button class="btn b4" data-a="org-open" data-org="${esc(oid)}">Retour à la fiche</button>` : ''}</p>`, true);
     } catch (e) { fm.querySelector('#ok-err').textContent = errMsg(e) + (e.key ? ' (' + e.key + ')' : ''); btn.disabled = false; btn.textContent = manual ? 'Enregistrer la clé' : 'Générer'; }
+  }
+  /* libellé d'une clé de pack, lisible : « Pack : ARCHIPLAN, ARCHITRAFIC · libellé » / « Pack PACK-… (application du pack) » */
+  const pname = (id) => (O.prods.find((p) => p.id === id) || (window.SP?.catalog?.all?.() || []).find((p) => p.id === id) || {}).name || ({ archiplan: 'ARCHIPLAN', architrafic: 'ARCHITRAFIC', archivision: 'ArchiVision' })[id] || id;
+  function packLabel(l) {
+    const m = /^Pack ([a-z0-9_+-]+)(?: · (.*))?$/.exec(l || ''); if (m) return `${badge('bd-pro', 'Pack')} ${esc(m[1].split('+').map(pname).join(', '))}${m[2] ? ' · ' + esc(m[2]) : ''}`;
+    const d = /^Pack (PACK-[A-Z0-9-]+)(?: · (.*))?$/.exec(l || ''); if (d) return `<span class="mut">Incluse dans le pack ${esc(d[1])}</span>${d[2] ? ' · ' + esc(d[2]) : ''}`;
+    return esc(l || '—');
+  }
+  async function submitPacks(fm, od, apps, n, spec, oid, btn) {
+    try {
+      const out = await od.adminCreatePacks(n, apps.map((a) => ({ id: a.id, name: a.name })), spec);
+      await loadOrgs();
+      const names = apps.map((a) => a.name).join(', ');
+      pmodal(`<h3>${out.length} clé${out.length > 1 ? 's' : ''} pack générée${out.length > 1 ? 's' : ''}</h3><p class="mut">${esc(names)} · ${esc(tLabel(spec.licenseType))}${oid ? ' · ' + esc(orgById(oid).name) : ''}.
+        Une clé par compte : la personne la saisit une seule fois (Mon compte → Activer une clé, ou dans ARCHIPLAN, ARCHITRAFIC ou ArchiVision) et toutes ces applications s’activent.</p>
+        <textarea id="ok-out" readonly rows="${Math.min(12, out.length + 1)}" style="width:100%;font-family:monospace">${esc(out.map((x) => x.key).join('\n'))}</textarea>
+        <details style="margin-top:8px"><summary>Détail : clé de chaque application (activables aussi une par une)</summary><pre style="font-size:12px;white-space:pre-wrap">${esc(out.map((x) => x.key + '\n' + x.apps.map((a) => '   ' + a.productName + ' : ' + a.key).join('\n')).join('\n\n'))}</pre></details>
+        <p style="margin-top:10px"><button class="btn b1" data-a="org-copy-out">Copier les clés pack</button> ${oid ? `<button class="btn b4" data-a="org-open" data-org="${esc(oid)}">Retour à la fiche</button>` : ''}</p>`, true);
+    } catch (e) { fm.querySelector('#ok-err').textContent = errMsg(e) + (e.key ? ' (' + e.key + ')' : ''); btn.disabled = false; btn.textContent = 'Générer'; }
   }
   function keysCsv(oid) {
     const o = orgById(oid), ks = O.keys.filter((k) => (k.orgId || '') === (oid || '')), S = SEG[segOfOrg(oid)];
@@ -433,6 +465,12 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   document.addEventListener('change', (e) => {
     if (e.target.id === 'org-fclass') { FO.classe = e.target.value; renderFiche(); return; }
     if (e.target.id === 'ok-role') { const t = document.getElementById('ok-type'), v = { eleve: 'etudiant', enseignant: 'enseignant' }[e.target.value]; if (t && v && [...t.options].some((o) => o.value === v)) t.value = v; return; }
+    if (e.target.name === 'ok-app') { const fm = e.target.form, ids = [...fm.querySelectorAll('input[name="ok-app"]:checked')].map((c) => c.value), t = fm.querySelector('#ok-type'), cur = t && t.value;
+      if (t){ t.innerHTML = typesForMany(ids).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(''); if ([...t.options].some((o) => o.value === cur)) t.value = cur; }
+      const pk = ids.length > 1, l = fm.querySelector('#ok-n-l'), nt = fm.querySelector('#ok-pack-note'), er = fm.querySelector('#e-ok-app'); if (er) er.textContent = '';
+      if (l) l.textContent = pk ? 'Nombre de clés pack' : 'Nombre de clés';
+      if (nt) nt.textContent = pk ? `Clé pack : ${ids.length} applications activées par une seule clé.` : '';
+      return; }
     if (e.target.id === 'ok-prod') { const t = document.getElementById('ok-type'); if (t) t.innerHTML = typesFor(e.target.value).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(''); } });
 
   /* ================================================================== MON COMPTE : ESPACE ENTREPRISE
@@ -523,7 +561,9 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   let peekT = 0;
   async function peek(v) {
     const box = document.getElementById('kr-peek'); if (!box) return;
-    try { const od = await OD(); if (!od.keyOk(v)) { box.innerHTML = ''; return; } const k = await od.peekKey(v);
+    try { await window.SP?.catalog?.load?.(); } catch (e) { /* noms d'applications : catalogue indisponible */ }
+    try { const od = await OD(); if (!od.keyOk(v)) { box.innerHTML = ''; return; } const k = await od.peekKey(v), pk = od.packApps(k.label);
+      if (pk.length > 1) { box.innerHTML = `<div class="acc-sum">${badge('bd-pro', 'Pack')} <b>${esc(pk.map(pname).join(', '))}</b> — ${esc(tLabel(k.licenseType))} · ${esc(dur(k))}<br>Une seule clé : toutes ces applications s’activent sur votre compte.${k.orgName ? `<br>Établissement : <b>${esc(k.orgName)}</b> (votre compte y sera rattaché)` : ''}</div>`; return; }
       box.innerHTML = k.status === 'available' ? `<div class="acc-sum"><b>${esc(k.productName)}</b> — ${esc(tLabel(k.licenseType))} · ${esc(dur(k))}${k.orgName ? `<br>Établissement : <b>${esc(k.orgName)}</b> (votre compte y sera rattaché)` : ''}</div>` : `<p class="fe" style="display:block">${esc(errMsg({ code: k.status === 'redeemed' ? (k.redeemedBy === st.auth.user?.uid ? 'app/key-mine' : 'app/key-used') : 'app/key-revoked' }))}</p>`;
     } catch (e) { box.innerHTML = e.code === 'app/key-unknown' ? `<p class="fe" style="display:block">${esc(errMsg(e))}</p>` : ''; }
   }
@@ -532,8 +572,10 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     const err = fm.querySelector('#kr-err'), btn = fm.querySelector('button[type=submit]'), v = fm.elements['kr-key'].value; err.textContent = '';
     btn.disabled = true; btn.textContent = 'Activation…';
     try {
-      const k = await (await OD()).redeemKey(v, st.auth.user);
+      const res = await (await OD()).redeemAny(v, st.auth.user), k = res.find((r) => r.ok) || res[0];
       try { sessionStorage.removeItem(PENDING); } catch (e) { /* rien */ }
+      if (res.length > 1) return V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Pack activé</h1><div class="panel"><ul class="acc-sumul">${res.map((r) => `<li><b>${esc(r.productName || pname(r.productId))}</b> — ${r.ok ? `${esc(tLabel(r.licenseType))} activée (${esc(dur(r))})` : esc(errMsg({ code: r.code }))}</li>`).join('')}</ul>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
+        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a></p></div></div></section>`);
       V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Licence activée</h1><div class="panel"><p><b>${esc(k.productName)}</b> — ${esc(tLabel(k.licenseType))} est activée sur votre compte (${esc(dur(k))}).</p>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
         <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="https://archiplan.studio-prism.com/" target="_blank" rel="noopener">Ouvrir ARCHIPLAN</a>' : ''}</p></div></div></section>`);
     } catch (e) { console.error('[Studio Prism] Activation de clé :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Activer'; }

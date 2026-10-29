@@ -404,7 +404,8 @@
     const taken = new Set(AD.lic[uid].map((l) => l.productId));
     const sold = new Set((adminCache.offers || []).filter((o) => o.status === 'active').map((o) => o.productId));
     // produits qui ont une formule en premier (ordre du catalogue conservé sinon)
-    const avail = (edit ? prods.filter((p) => p.id === pid) : prods.filter((p) => !taken.has(p.id))).sort((a, b) => (sold.has(b.id) ? 1 : 0) - (sold.has(a.id) ? 1 : 0));
+    const isApp = (p) => p.status !== 'archived' && (!p.category || p.category === 'application' || p.category === 'service');   // applications seulement (ni jeux, ni objets 3D, ni archivés)
+    const avail = (edit ? prods.filter((p) => p.id === pid) : prods.filter((p) => !taken.has(p.id) && isApp(p))).sort((a, b) => (sold.has(b.id) ? 1 : 0) - (sold.has(a.id) ? 1 : 0));
     if (!avail.length) {
       pmodal(`<h3>Ajouter une licence</h3><p>${prods.length ? 'Ce compte a déjà une licence pour chaque produit du catalogue.' : 'Le catalogue est vide : ajoutez d’abord un produit (onglet Catalogue).'}</p>` +
         `<p style="margin-top:10px"><button class="btn b4" data-a="adm-fiche" data-uid="${esc(uid)}">Retour à la fiche</button></p>`);
@@ -413,7 +414,8 @@
     const first = avail[0];
     pmodal(`<h3>${edit ? 'Modifier la licence' : 'Ajouter une licence'}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>` +
       `<form data-f="adm-lic" data-uid="${esc(uid)}" data-mode="${edit ? 'edit' : 'new'}" novalidate>` +
-      fld('lic-prod', 'Produit', sel('lic-prod', avail.map((p) => [p.id, p.name + (p.status === 'hidden' || p.status === 'draft' ? ' (brouillon)' : '')]), first.id, edit ? 'disabled' : '')) +
+      (edit ? fld('lic-prod', 'Produit', sel('lic-prod', avail.map((p) => [p.id, p.name]), first.id, 'disabled'))
+        : `<fieldset class="ok-apps"><legend>Applications <span class="mut">(cochez-en plusieurs : une licence par application, mêmes réglages)</span></legend><div class="ok-apps-l">${avail.map((p) => `<label class="opt"><input type="checkbox" name="lic-app" value="${esc(p.id)}"${p.id === first.id ? ' checked' : ''}> ${esc(p.name)}${p.status === 'hidden' || p.status === 'draft' ? '<span class="mut"> (brouillon)</span>' : ''}</label>`).join('')}</div><p class="fe" id="e-lic-app" role="alert"></p></fieldset>`) +
       fld('lic-type', 'Type de licence', sel('lic-type', typesFor(first.id, lic && lic.licenseType), lic ? lic.licenseType : (typesFor(first.id)[1] || typesFor(first.id)[0])[0])) +
       fld('lic-status', 'Statut', sel('lic-status', Object.keys(LIC_STATUS).map((k) => [k, LIC_STATUS[k]]), lic ? lic.status : 'active')) +
       `<div class="row">${fld('lic-start', 'Date d’activation', inp('lic-start', 'date', dInput(lic ? toDate(lic.activatedAt) : new Date())))}` +
@@ -427,8 +429,10 @@
   async function submitLicense(fm) {
     clearErrors();
     const uid = fm.dataset.uid, edit = fm.dataset.mode === 'edit', err = fm.querySelector('#lic-err'), g = (n) => fm.elements[n].value;
-    const pid = g('lic-prod'), prod = (AD.products || []).find((p) => p.id === pid), start = fromInput(g('lic-start')), end = fromInput(g('lic-end'), true), er = {};
+    const pids = edit ? [g('lic-prod')] : [...fm.querySelectorAll('input[name="lic-app"]:checked')].map((c) => c.value);
+    const pid = pids[0], prod = (AD.products || []).find((p) => p.id === pid), start = fromInput(g('lic-start')), end = fromInput(g('lic-end'), true), er = {};
     err.textContent = '';
+    if (!pids.length){ const e = fm.querySelector('#e-lic-app'); if (e) e.textContent = 'Cochez au moins une application.'; return; }
     if (!prod) er['lic-prod'] = 'Produit inexistant.';
     if (!TYPE_RE.test(g('lic-type'))) er['lic-type'] = 'Choisissez un type de licence.';
     { const who = findUser(uid); if (g('lic-type') === 'pro_entreprise' && who && who.accountKind !== 'company' && !who.orgId) er['lic-type'] = 'Pro Entreprise est réservée aux entreprises : un particulier peut avoir la licence Pro (sans usage commercial).'; }
@@ -439,8 +443,9 @@
     const btn = fm.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      await (await D()).saveLicense({ userId: uid, productId: pid, productName: prod.name, licenseType: g('lic-type'), status: g('lic-status'), activatedAt: start, expiresAt: end || null }, !edit);
-      toast(edit ? 'Licence mise à jour.' : 'Licence activée.');
+      const d = await D();
+      for (const id of pids){ const pr = (AD.products || []).find((p) => p.id === id); if (pr) await d.saveLicense({ userId: uid, productId: id, productName: pr.name, licenseType: g('lic-type'), status: g('lic-status'), activatedAt: start, expiresAt: end || null }, !edit); }
+      toast(edit ? 'Licence mise à jour.' : pids.length > 1 ? `${pids.length} licences activées.` : 'Licence activée.');
       await openFiche(uid);
     } catch (e) {
       console.error('[Studio Prism] Licence :', e);
@@ -450,6 +455,12 @@
   }
 
   document.addEventListener('change', (e) => {
+    if (e.target.name === 'lic-app') {   // plusieurs applications cochées : types de licence de toutes
+      const t = document.getElementById('lic-type'), cur = t && t.value, m = new Map();
+      e.target.form.querySelectorAll('input[name="lic-app"]:checked').forEach((c) => typesFor(c.value).forEach(([v, l]) => m.set(v, l)));
+      if (t && m.size){ t.innerHTML = [...m].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(''); if (m.has(cur)) t.value = cur; }
+      const er = document.getElementById('e-lic-app'); if (er) er.textContent = ''; return;
+    }
     if (e.target.id !== 'lic-prod') return;
     const t = document.getElementById('lic-type');
     if (t) t.innerHTML = typesFor(e.target.value).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');

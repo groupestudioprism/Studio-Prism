@@ -32,6 +32,32 @@ export function generateKey(prefix) {
   return formatKey(p + Array.from(r, (x) => ALPHA[x % 32]).join(""));
 }
 
+/* ------------------------------------------------------------------ packs (une clé pour plusieurs applications)
+ * Clé pack : PACK-XXXX-XXXX-XXXX. Sa fiche est la clé de la PREMIÈRE application ; son libellé commence par
+ * « Pack app1+app2+… » (liste des applications). La clé de chaque autre application est DÉRIVÉE de la clé pack
+ * (SHA-256 de « CLÉPACK|identifiant ») : seul le porteur de la clé pack peut la recalculer. Chaque fiche reste une
+ * clé ordinaire (un produit), donc les règles Firestore ne changent pas. Même calcul dans les applications. */
+export const isPackKey = (raw) => normalizeKey(raw).startsWith("PACK");
+export const packApps = (label) => { const m = /^Pack ([a-z0-9_+-]+)/.exec(String(label || "")); return m ? m[1].split("+").filter(Boolean) : []; };
+export async function derivePackKey(packRaw, productId) {
+  const buf = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizeKey(packRaw) + "|" + productId)));
+  return formatKey("PACK" + Array.from(buf.slice(0, 12), (x) => ALPHA[x % 32]).join(""));
+}
+/* n packs ; apps : [{id, name}] (2 au moins) ; spec : comme adminCreateKeys (sans produit) → [{key, apps:[{productName, key}]}] */
+export async function adminCreatePacks(n, apps, spec) {
+  const out = [], ids = apps.map((a) => a.id).join("+"), label = (`Pack ${ids}` + (spec.label ? " · " + spec.label : "")).slice(0, 120);
+  for (let i = 0; i < n; i++) {
+    const K = generateKey("PACK"), row = { key: K, apps: [] };
+    for (const [j, a] of apps.entries()) {
+      const k = j === 0 ? K : await derivePackKey(K, a.id);
+      await adminCreateKeys([k], { ...spec, productId: a.id, productName: a.name, label: j === 0 ? label : (`Pack ${K}` + (spec.label ? " · " + spec.label : "")).slice(0, 120) });
+      row.apps.push({ productId: a.id, productName: a.name, key: k });
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ administration : établissements */
 export const ORG_KINDS = { entreprise: "Entreprise", etablissement: "Établissement scolaire", ecole: "École / formation", collectivite: "Collectivité", association: "Association", autre: "Autre" };
 
@@ -157,6 +183,20 @@ export async function peekKey(raw) {
   const s = await getDoc(doc(db, "licenseKeys", await keyHash(raw)));
   if (!s.exists()) throw fail("app/key-unknown");
   return { id: s.id, ...s.data() };
+}
+/* Activation d'une clé, pack compris : → [{productName, licenseType, …, ok, code}] (première ligne : la clé saisie) */
+export async function redeemAny(raw, user) {
+  const first = await redeemKey(raw, user).then((k) => ({ ...k, ok: true }), (e) => { if (!isPackKey(raw) || e.code === "app/key-unknown" || e.code === "app/key-format") throw e; return null; });
+  const head = first || await peekKey(raw);
+  const apps = packApps(head.label);
+  if (!apps.length) { if (first) return [first]; return redeemKey(raw, user).then((k) => [{ ...k, ok: true }]); }
+  const res = [first || { ...head, ok: false, code: head.redeemedBy === user.uid ? "app/key-mine" : "app/key-used" }];
+  for (const pid of apps.slice(1)) {
+    try { const d = await derivePackKey(raw, pid); res.push({ ...(await redeemKey(d, user)), ok: true }); }
+    catch (e) { res.push({ productId: pid, productName: pid, ok: false, code: e.code || "app/unknown" }); }
+  }
+  if (!res.some((r) => r.ok)) throw Object.assign(new Error("pack"), { code: res[0].code || "app/key-used" });
+  return res;
 }
 export async function redeemKey(raw, user) {
   const k = await peekKey(raw);
