@@ -1,4 +1,11 @@
 # Changelog
+## ARCHIINDUS retiré de la suite — 2026-10-29
+
+- ARCHIINDUS ne fait plus partie de Studio Prism : plus aucune mention dans le site, les apps ni les règles Firestore
+  (le bloc `ai*` avait déjà été retiré ; son dépôt GitHub est supprimé). L'entrée du 15/10 ci-dessous n'est plus d'actualité.
+- Administration → Catalogue → Supprimer : si le produit est encore utilisé, « Supprimer partout » retire aussi ses licences
+  (tous les comptes), ses formules et leurs prix, et ses clés de licence. À faire une fois pour le produit `archiindus`.
+
 
 ## ARCHIINDUS dans la suite Studio Prism — 2026-10-15
 

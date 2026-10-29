@@ -1021,21 +1021,26 @@
     } catch (e) { const el = document.getElementById('ct-err'); if (el) el.textContent = errMsg(e); btn.disabled = false; }
   };
 
-  A['cat-del'] = (btn) => {
+  A['cat-del'] = async (btn) => {
     const x = CT.prods.find((p) => p.id === btn.dataset.id);
     if (!x) return;
     if (needsImport(x.id)) return importFirst();
-    pmodal(`<h3>Supprimer le produit</h3><p><b>Supprimer définitivement « ${esc(x.name)} » ?</b></p><p class="mut" style="margin-top:6px">La suppression est refusée tant que des licences ou des formules utilisent ce produit : passez-le en brouillon plutôt.</p>` +
-      `<p class="fe" id="cd-err" role="alert"></p><p style="margin-top:12px"><button class="btn btn-danger" data-a="cat-del-ok" data-id="${esc(x.id)}">Supprimer le produit</button></p>`);
+    pmodal(`<h3>Supprimer le produit</h3><p class="mut">Recherche de ce qui utilise « ${esc(x.name)} »…</p>`);
+    let u = null; try { u = await (await D()).productUsage(x.id); } catch (e) { /* comptage impossible : suppression simple proposée */ }
+    const n = u ? u.licenses + u.plans + u.keys : 0, pl = (k, one, many) => `${k} ${k > 1 ? many : one}`;
+    pmodal(`<h3>Supprimer le produit</h3><p><b>Supprimer définitivement « ${esc(x.name)} » ?</b></p>` +
+      (n ? `<p style="margin-top:6px">Il est encore utilisé : <b>${[u.licenses && pl(u.licenses, 'licence de compte', 'licences de comptes'), u.plans && pl(u.plans, 'formule', 'formules'), u.keys && pl(u.keys, 'clé de licence', 'clés de licence')].filter(Boolean).join(', ')}</b>.</p>` +
+        `<p class="mut" style="margin-top:6px">« Supprimer partout » retire aussi tout cela (les comptes concernés perdent ce produit ; leurs autres licences ne changent pas). C’est définitif.</p>` : '<p class="mut" style="margin-top:6px">Aucune licence, formule ni clé ne l’utilise.</p>') +
+      `<p class="fe" id="cd-err" role="alert"></p><p style="margin-top:12px"><button class="btn btn-danger" data-a="cat-del-ok" data-id="${esc(x.id)}" data-all="${n ? 1 : ''}">${n ? 'Supprimer partout' : 'Supprimer le produit'}</button></p>`);
   };
 
   A['cat-del-ok'] = async (btn) => {
     btn.disabled = true;
     try {
-      await (await D()).deleteProduct(btn.dataset.id);
+      const d = await D(), r = btn.dataset.all ? await d.deleteProductEverywhere(btn.dataset.id) : (await d.deleteProduct(btn.dataset.id), null);
       resetCatalogue();
       A.x();
-      toast('Produit supprimé.');
+      toast(r ? `Produit supprimé partout : ${r.licenses} licence(s), ${r.plans} formule(s), ${r.keys} clé(s) retirées.` : 'Produit supprimé.');
       loadCatalogueAdmin();
     } catch (e) {
       const el = document.getElementById('cd-err');

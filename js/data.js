@@ -144,6 +144,23 @@ export async function deleteProduct(id) {
   await deleteDoc(doc(db, "products", id));
 }
 
+/* Produit retiré de la suite : tout ce qui s'y rattache (administrateur seulement, règles inchangées) */
+const byProduct = async (col, id) => rows(await getDocs(query(collection(db, col), where("productId", "==", id))));
+export async function productUsage(id) {
+  const [lic, plans, keys] = await Promise.all([byProduct("licenses", id), byProduct("subscriptions", id), byProduct("licenseKeys", id)]);
+  return { licenses: lic.length, plans: plans.length, keys: keys.length };
+}
+/* Supprime le produit ET ses licences (tous les comptes), ses formules et leurs prix, ses clés de licence */
+export async function deleteProductEverywhere(id) {
+  const [lic, plans, keys] = await Promise.all([byProduct("licenses", id), byProduct("subscriptions", id), byProduct("licenseKeys", id)]);
+  const prices = (await Promise.all(plans.map((pl) => getDocs(query(collection(db, "prices"), where("planId", "==", pl.id)))))).flatMap(rows);
+  const refs = [...lic.map((x) => doc(db, "licenses", x.id)), ...keys.map((x) => doc(db, "licenseKeys", x.id)),
+    ...prices.map((x) => doc(db, "prices", x.id)), ...plans.map((x) => doc(db, "subscriptions", x.id))];
+  for (let i = 0; i < refs.length; i += 400) { const b = writeBatch(db); refs.slice(i, i + 400).forEach((r) => b.delete(r)); await b.commit(); }
+  await deleteDoc(doc(db, "products", id));
+  return { licenses: lic.length, plans: plans.length, prices: prices.length, keys: keys.length };
+}
+
 /* ------------------------------------------------------------------ formules (collection subscriptions) et prix (collection prices) */
 
 const planData = (plan) => ({
