@@ -70,7 +70,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
   async function loadOrgs() {
     try {
       const [od, pd] = await Promise.all([OD(), PD()]);
-      await pd.ensureSuiteProducts().catch(() => []);   // NEXUS et les apps de la suite toujours proposés
+      await pd.ensureSuiteProducts?.().catch(() => []);   // NEXUS et les apps de la suite toujours proposés
       [O.orgs, O.keys, O.prods, O.offers, O.pending, O.requests] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => []), od.adminListRequests().catch(() => [])]);
       O.err = '';
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
