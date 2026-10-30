@@ -224,6 +224,15 @@ export async function deletePlan(planId, ids) {
 /* ------------------------------------------------------------------ licences */
 
 export const licenseId = (userId, productId) => `${userId}_${productId}`;
+/* Écran « À traiter » : toutes les licences (administrateur), comptes par identifiant, prolongation */
+export async function adminListAllLicenses() { return rows(await getDocs(collection(db, "licenses"))); }
+export async function adminUsersByIds(uids) {
+  const out = {}; await Promise.all([...new Set(uids)].map(async (u) => { try { const s = await getDoc(doc(db, "users", u)); if (s.exists()) out[u] = { uid: u, ...s.data() }; } catch (e) { /* compte illisible */ } }));
+  return out;
+}
+export async function adminExtendLicense(lid, until) {
+  await updateDoc(doc(db, "licenses", lid), { expiresAt: Timestamp.fromDate(until), status: "active", updatedAt: serverTimestamp() });
+}
 const ts = (d) => (d ? Timestamp.fromDate(d) : null);
 
 /* input : { userId, productId, productName, licenseType, status, activatedAt: Date, expiresAt: Date|null } */
@@ -262,10 +271,10 @@ export async function deleteLicense(id) {
 /* Applications de la suite Studio Prism : toujours proposées dans l'administration (licences, clés). Celles absentes du catalogue
    sont créées en BROUILLON (invisibles du public) la première fois que l'administration en a besoin : une licence exige une fiche produit. */
 export const SUITE_APPS = [
-  { id: "archiplan", name: "ARCHIPLAN", tagline: "Conception de plans et modélisation 3D" },
-  { id: "architrafic", name: "ARCHITRAFIC", tagline: "Routes barrées, déviations et simulation du trafic" },
+  { id: "archiplan", name: "ARCHIPLAN", tagline: "Conception de plans et modélisation 3D", website: "https://archiplan.studio-prism.com/" },
+  { id: "architrafic", name: "ARCHITRAFIC", tagline: "Routes barrées, déviations et simulation du trafic", website: "https://architraffic.studio-prism.com/" },
   { id: "archivision", name: "ArchiVision", tagline: "Maquettes BIM en visite 3D et réalité augmentée" },
-  { id: "nexus", name: "NEXUS", tagline: "Automatisations entre les applications Studio Prism, avec AXION" }
+  { id: "nexus", name: "NEXUS", tagline: "Automatisations entre les applications Studio Prism, avec AXION", website: "https://groupestudioprism.github.io/Nexus/" }
 ];
 export async function ensureSuiteProducts() {
   const have = new Set((await adminListProducts()).map((p) => p.id)), todo = SUITE_APPS.filter((a) => !have.has(a.id));

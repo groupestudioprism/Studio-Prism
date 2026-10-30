@@ -65,6 +65,7 @@ ${seg === 'ent' ? '<button class="btn b4 org-pend-btn" data-a="org-pending" id="
 ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 <div id="org-list"><p class="mut">Chargement…</p></div>
 <h2 class="lh" style="margin-top:28px">Clés sans établissement ni entreprise</h2><p class="mut">Clés individuelles (vente à un particulier, licence offerte…). Les mêmes clés apparaissent dans les onglets Scolaire et Entreprise.</p><div id="org-free-keys"></div>`));
+    if (O.at) renderOrgs();   // données déjà chargées : affichage immédiat, mise à jour en arrière-plan
     loadOrgs();
   }
   async function loadOrgs() {
@@ -72,10 +73,11 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       const [od, pd] = await Promise.all([OD(), PD()]);
       await pd.ensureSuiteProducts?.().catch(() => []);   // NEXUS et les apps de la suite toujours proposés
       [O.orgs, O.keys, O.prods, O.offers, O.pending, O.requests] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => []), od.adminListRequests().catch(() => [])]);
-      O.err = '';
+      O.err = ''; O.at = Date.now();
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
-    renderOrgs();
+    renderOrgs(); renderTodo(); todoCount();
   }
+  function todoCount() { const el = document.getElementById('adm-todo-n'); if (!el) return; const n = O.pending.length + O.requests.filter((r) => r.kind === 'member').length; el.hidden = !n; el.textContent = n; }
   function renderOrgs() {
     const list = document.getElementById('org-list'); if (!list) return;
     if (O.err) { list.innerHTML = `<div class="panel"><p>${esc(O.err)}</p><p class="mut">Les règles Firestore du site doivent inclure les blocs « organizations » et « licenseKeys ».</p><p><button class="btn b1" data-a="org-reload">Réessayer</button></p></div>`; return; }
@@ -136,7 +138,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       ${r ? `<fieldset class="acc-f"><legend>Clés de licence demandées</legend><label class="chk"><input type="checkbox" name="ap-keys" checked> Générer ${esc(itemsTxt(r.items))} (Pro Entreprise)</label>${fld('ap-dur', 'Validité des clés', sel('ap-dur', DUR, '365'))}</fieldset>` : ''}
       <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider l’entreprise</button></p></form>`, true);
   }
-  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
+  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : pid === 'nexus' ? 'NEXU' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
   async function genKeys(od, org, item, n, durationDays, label) {
     const keys = Array.from({ length: n }, () => od.generateKey(prefOf(item.productId)));
     return od.adminCreateKeys(keys, { productId: item.productId, productName: item.productName || item.productId, licenseType: item.licenseType || 'pro_entreprise', durationDays, expiresAt: null, org, label: label || '', role: '', classe: '' });
@@ -146,29 +148,45 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       <textarea id="ok-out" readonly rows="${Math.min(14, list.length + 1)}" style="width:100%;font-family:monospace">${esc(list.join('\n'))}</textarea>
       <p style="margin-top:10px"><button class="btn b1" data-a="org-copy-out">Copier</button> <button class="btn b4" data-a="org-open" data-org="${esc(org.id)}">Voir la fiche entreprise</button></p>`, true);
   }
+  /* Validation d'une inscription d'entreprise (formulaire détaillé ou bouton « Valider » de l'écran À traiter) */
+  async function doApprove(u, mode, orgId, withKeys, dur) {
+    const r = reqOf(u.uid);
+    const od = await OD(); let org = null;
+    const total = r ? (r.items || []).reduce((t, x) => t + (x.qty || 0), 0) : 0;
+    if (mode === 'existing') org = orgById(orgId);
+    else {
+      const name = (u.companyName || fullName(u)).slice(0, 120);
+      const id = await od.saveOrg({ name, kind: 'entreprise', siret: (r && r.siret) || '', email: String(u.companyEmail || u.email || '').toLowerCase(), contactName: fullName(u), seats: Math.min(10000, Math.max(1, total || u.companyUserLimit || 1)), notes: `Inscrite par ${fullName(u)} (${u.email})${r && r.repRole ? ', ' + (ROLE_REP[r.repRole] || '') : ''}.`, status: 'active' }, null);
+      org = { id, name };
+    }
+    await od.adminApprove(u.uid, org, 'responsable');
+    const out = [];
+    if (r && withKeys) {
+      for (const it of r.items || []) (await genKeys(od, org, it, it.qty, dur, '')).forEach((k) => out.push(`${k.key}  ·  ${it.productName || it.productId}`));
+    }
+    if (r) await od.adminCloseRequest(r.id, 'accepted', org.id);
+    return { org, out };
+  }
   async function submitApprove(fm) {
     const u = pendById(fm.dataset.uid), err = fm.querySelector('#ap-err'), btn = fm.querySelector('button[type=submit]'), mode = (fm.querySelector('[name=ap-mode]:checked') || {}).value || 'new';
-    if (!u) return; const r = reqOf(u.uid); btn.disabled = true; btn.textContent = 'Validation…'; err.textContent = '';
+    if (!u) return; btn.disabled = true; btn.textContent = 'Validation…'; err.textContent = '';
     try {
-      const od = await OD(); let org = null;
-      const total = r ? (r.items || []).reduce((t, x) => t + (x.qty || 0), 0) : 0;
-      if (mode === 'existing') org = orgById(fm.elements['ap-org'].value);
-      else {
-        const name = (u.companyName || fullName(u)).slice(0, 120);
-        const id = await od.saveOrg({ name, kind: 'entreprise', siret: (r && r.siret) || '', email: String(u.companyEmail || u.email || '').toLowerCase(), contactName: fullName(u), seats: Math.min(10000, Math.max(1, total || u.companyUserLimit || 1)), notes: `Inscrite par ${fullName(u)} (${u.email})${r && r.repRole ? ', ' + (ROLE_REP[r.repRole] || '') : ''}.`, status: 'active' }, null);
-        org = { id, name };
-      }
-      await od.adminApprove(u.uid, org, 'responsable');
-      const out = [];
-      if (r && fm.elements['ap-keys'] && fm.elements['ap-keys'].checked) {
-        const dur = fm.elements['ap-dur'].value ? parseInt(fm.elements['ap-dur'].value, 10) : null;
-        for (const it of r.items || []) (await genKeys(od, org, it, it.qty, dur, '')).forEach((k) => out.push(`${k.key}  ·  ${it.productName || it.productId}`));
-      }
-      if (r) await od.adminCloseRequest(r.id, 'accepted', org.id);
+      const withKeys = !!(fm.elements['ap-keys'] && fm.elements['ap-keys'].checked), dur = fm.elements['ap-dur'] && fm.elements['ap-dur'].value ? parseInt(fm.elements['ap-dur'].value, 10) : null;
+      const { org, out } = await doApprove(u, mode, fm.elements['ap-org'] && fm.elements['ap-org'].value, withKeys, dur);
       await loadOrgs();
       toast(`Entreprise validée : ${org.name}. ${fullName(u)} peut se connecter.`);
       if (out.length) keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} Pro Entreprise générée${out.length > 1 ? 's' : ''}`, org, out); else A.x();
     } catch (e) { console.error('[Studio Prism] Validation :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Valider l’entreprise'; }
+  }
+  /* « Valider » en un clic : fiche entreprise existante de même nom ou nouvelle, clés demandées générées pour 1 an */
+  async function quickApprove(b) {
+    const u = pendById(b.dataset.uid); if (!u) return; b.disabled = true; b.textContent = 'Validation…';
+    try {
+      const same = O.orgs.find((o) => segOfKind(o.kind) === 'ent' && String(o.name).trim().toLowerCase() === String(u.companyName || '').trim().toLowerCase());
+      const { org, out } = await doApprove(u, same ? 'existing' : 'new', same && same.id, true, 365);
+      await loadOrgs(); toast(`Entreprise validée : ${org.name}.`);
+      if (out.length) keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} Pro Entreprise générée${out.length > 1 ? 's' : ''}`, org, out);
+    } catch (e) { console.error('[Studio Prism] Validation :', e); toast(errMsg(e)); b.disabled = false; b.textContent = 'Valider'; }
   }
   function refuseForm(uid) {
     const u = pendById(uid); if (!u) return;
@@ -180,16 +198,24 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     pmodal(`<h3>Ajouter ${(r.emails || []).length} personne${(r.emails || []).length > 1 ? 's' : ''} à ${esc(r.companyName || '')}</h3><p class="mut">${esc(it.productName || it.productId || '')} · Pro Entreprise · une clé par adresse :</p><p>${(r.emails || []).map(esc).join('<br>')}</p>
       <form data-f="org-req-ok" data-id="${esc(id)}">${fld('rq-dur', 'Validité des clés', sel('rq-dur', DUR, '365'))}<p class="fe" id="rq-err" role="alert"></p><p><button class="btn b1" type="submit">Générer les clés</button></p></form>`);
   }
+  async function doMember(r, dur) {
+    const org = orgById(r.orgId); if (!org) throw Object.assign(new Error('org'), { code: 'app/org-missing' });
+    const od = await OD(), it = (r.items || [])[0] || {}, out = [];
+    for (const em of r.emails || []) { const k = (await genKeys(od, org, it, 1, dur, em))[0]; out.push(`${em}  →  ${k.key}`); }
+    await od.adminCloseRequest(r.id, 'accepted');
+    return { org, out };
+  }
   async function submitMember(fm) {
     const r = O.requests.find((x) => x.id === fm.dataset.id), err = fm.querySelector('#rq-err'), btn = fm.querySelector('button[type=submit]');
-    if (!r) return; const org = orgById(r.orgId); if (!org) { err.textContent = 'Fiche entreprise introuvable.'; return; }
-    btn.disabled = true; btn.textContent = 'Génération…';
-    try {
-      const od = await OD(), it = (r.items || [])[0] || {}, dur = fm.elements['rq-dur'].value ? parseInt(fm.elements['rq-dur'].value, 10) : null, out = [];
-      for (const em of r.emails || []) { const k = (await genKeys(od, org, it, 1, dur, em))[0]; out.push(`${em}  →  ${k.key}`); }
-      await od.adminCloseRequest(r.id, 'accepted');
+    if (!r) return; btn.disabled = true; btn.textContent = 'Génération…';
+    try { const { org, out } = await doMember(r, fm.elements['rq-dur'].value ? parseInt(fm.elements['rq-dur'].value, 10) : null);
       await loadOrgs(); keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} générée${out.length > 1 ? 's' : ''}`, org, out);
-    } catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Générer les clés'; }
+    } catch (e) { err.textContent = e.code === 'app/org-missing' ? 'Fiche entreprise introuvable.' : errMsg(e); btn.disabled = false; btn.textContent = 'Générer les clés'; }
+  }
+  async function quickMember(b) {
+    const r = O.requests.find((x) => x.id === b.dataset.id); if (!r) return; b.disabled = true; b.textContent = 'Génération…';
+    try { const { org, out } = await doMember(r, 365); await loadOrgs(); keysResult(`${out.length} clé${out.length > 1 ? 's' : ''} générée${out.length > 1 ? 's' : ''}`, org, out); }
+    catch (e) { toast(e.code === 'app/org-missing' ? 'Fiche entreprise introuvable.' : errMsg(e)); b.disabled = false; b.textContent = 'Accepter'; }
   }
   function keyTable(ks, oid) {
     const S = SEG[segOfOrg(oid)];
@@ -319,7 +345,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     if (K.showErrors(fm, er)) return;
     const btn = fm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Enregistrement…';
     if (!manual && apps.length > 1) return submitPacks(fm, od, apps, n, { licenseType: g('ok-type'), durationDays, expiresAt, org: oid ? orgById(oid) : null, label: g('ok-label'), role: g('ok-role'), classe: g('ok-class') }, oid, btn);
-    const pref = prod.id === 'archiplan' ? 'ARCH' : prod.id === 'archivision' ? 'AVIS' : prod.id.replace(/[^a-z]/gi, '').slice(0, 4);
+    const pref = prefOf(prod.id);
     const keys = manual ? [g('ok-key')] : Array.from({ length: n }, () => od.generateKey(pref));
     try {
       const out = await od.adminCreateKeys(keys, { productId: prod.id, productName: prod.name, licenseType: g('ok-type'), durationDays, expiresAt, org: oid ? orgById(oid) : null, label: g('ok-label'), role: g('ok-role'), classe: g('ok-class') });
@@ -397,9 +423,78 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     a.download = `cles-${o.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}-par-${S.roles ? 'classe' : 'service'}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
   }
 
+
+  /* ================================================================== ADMINISTRATION : À TRAITER
+     Page d'accueil de l'administration : tout ce qui attend une action, avec l'action en un clic, et une recherche globale. */
+  const T = { lic: null, users: {}, at: 0, q: '' };
+  const DAYS = 864e5, tms = (x) => (x && x.toMillis ? x.toMillis() : 0);
+  function todoTab(p, shell) {
+    T.q = '';
+    V(shell(`<p class="lead">Ce qui attend une action. Les boutons font tout d’un coup (fiche entreprise, clés, validation) ; « Détails » ouvre le formulaire complet.</p>
+<div class="panel adm-bar"><div class="acc-f adm-q" style="flex:1"><label for="todo-q">Rechercher partout</label><input id="todo-q" type="search" placeholder="Nom, e-mail, entreprise, SIRET, clé…" autocomplete="off"></div></div>
+<div id="todo-res"></div><div id="todo"><p class="mut" role="status">Chargement…</p></div>`));
+    if (O.at) renderTodo();
+    loadTodo();
+  }
+  async function loadTodo() {
+    const fresh = Date.now() - T.at < 60000;
+    await Promise.all([loadOrgs(), fresh ? null : (async () => {
+      try { const pd = await PD(), all = await pd.adminListAllLicenses(), now = Date.now();
+        T.lic = all.filter((l) => l.status !== 'suspended' && tms(l.expiresAt) && tms(l.expiresAt) < now + 30 * DAYS && tms(l.expiresAt) > now - 60 * DAYS).sort((a, b) => tms(a.expiresAt) - tms(b.expiresAt));
+        T.users = await pd.adminUsersByIds(T.lic.slice(0, 80).map((l) => l.userId)); window.SP_TODO_USERS = T.users; T.at = Date.now();
+      } catch (e) { console.warn('[Studio Prism] Licences :', e); T.lic = T.lic || []; }
+    })()]);
+    renderTodo();
+  }
+  const sec = (title, n, body, more) => `<section class="panel todo-s"><h2 class="lh">${esc(title)} ${n ? `<span class="org-pend-n">${n}</span>` : ''}</h2>${more ? `<p class="mut">${more}</p>` : ''}${body}</section>`;
+  function renderTodo() {
+    const box = document.getElementById('todo'); if (!box) return;
+    if (O.err) { box.innerHTML = `<div class="panel"><p>${esc(O.err)}</p><p><button class="btn b1" data-a="todo-reload">Réessayer</button></p></div>`; return; }
+    const members = O.requests.filter((r) => r.kind === 'member'), lic = T.lic || [], now = Date.now();
+    const oldKeys = O.keys.filter((k) => k.status === 'available' && tms(k.createdAt) && tms(k.createdAt) < now - 30 * DAYS);
+    const parts = [];
+    if (O.pending.length) parts.push(sec('Inscriptions d’entreprise', O.pending.length, `<ul class="adm-pend-l">${O.pending.map((u) => { const r = reqOf(u.uid); return `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${r && r.siret ? ' · SIRET ' + esc(r.siret) : ''} · le ${esc(fdate(u.createdAt))}</small><small>${r ? 'Licences demandées : ' + esc(itemsTxt(r.items)) : 'Aucune licence demandée'}</small></div>` +
+      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn b4" data-a="org-approve" data-uid="${esc(u.uid)}">Détails…</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`; }).join('')}</ul>`,
+      '« Valider » crée la fiche entreprise (ou rattache à celle du même nom), nomme le demandeur responsable et génère les clés demandées pour 1 an.'));
+    if (members.length) parts.push(sec('Ajouts de personnes', members.length, `<ul class="adm-pend-l">${members.map((r) => `<li><div><b>${esc(r.companyName || '—')}</b><small>Demandé par ${esc(r.requesterName || r.requesterEmail)} · ${esc(itemsTxt(r.items).replace(/^\d+ × /, ''))} · le ${esc(fdate(r.createdAt))}</small><small>${esc((r.emails || []).join(', '))}</small></div>` +
+      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-member" data-id="${esc(r.id)}">Accepter</button> <button class="btn b4" data-a="org-req-ok" data-id="${esc(r.id)}">Détails…</button> <button class="btn btn-danger" data-a="org-req-no" data-id="${esc(r.id)}">Refuser</button></span></li>`).join('')}</ul>`,
+      '« Accepter » génère une clé d’un an par adresse.'));
+    if (T.lic === null) parts.push(sec('Licences qui expirent', 0, '<p class="mut" role="status">Chargement des licences…</p>'));
+    else if (lic.length) parts.push(sec('Licences qui expirent', lic.length, `<ul class="adm-pend-l">${lic.slice(0, 80).map((l) => { const u = T.users[l.userId] || {}, gone = tms(l.expiresAt) < now; return `<li><div><b>${esc(fullName(u) !== '—' ? fullName(u) : (u.email || l.userId))}</b><small>${esc(u.email || '')}${u.orgName ? ' · ' + esc(u.orgName) : ''}</small><small>${esc(l.productName)} · ${esc(tLabel(l.licenseType))} · ${gone ? 'expirée le' : 'expire le'} ${esc(fdate(l.expiresAt))}</small></div>` +
+      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-extend" data-id="${esc(l.id)}">Prolonger d’un an</button> <button class="btn b4" data-a="adm-fiche" data-uid="${esc(l.userId)}">Fiche</button></span></li>`; }).join('')}</ul>`,
+      'Expirées depuis moins de 60 jours, ou qui expirent dans les 30 prochains jours. « Prolonger » ajoute un an à partir de la date de fin (ou d’aujourd’hui si elle est passée).'));
+    if (oldKeys.length) parts.push(sec('Clés jamais activées', oldKeys.length, `<p>${oldKeys.length} clé${oldKeys.length > 1 ? 's' : ''} générée${oldKeys.length > 1 ? 's' : ''} il y a plus de 30 jours ${oldKeys.length > 1 ? 'n’ont' : 'n’a'} pas été activée${oldKeys.length > 1 ? 's' : ''} : ${esc([...new Set(oldKeys.map((k) => k.orgName || 'sans établissement'))].slice(0, 6).join(', '))}.</p><p><a class="btn b4" href="#/admin/entreprises">Voir les clés</a></p>`, 'À relancer, ou à révoquer depuis la fiche de l’établissement.'));
+    box.innerHTML = parts.length ? parts.join('') : '<div class="panel"><p><b>Tout est à jour.</b> Aucune inscription, demande ni licence à traiter.</p></div>';
+    todoSearch();
+  }
+  function todoSearch() {
+    const box = document.getElementById('todo-res'); if (!box) return; const q = T.q.trim().toLowerCase();
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    const m = (v) => String(v || '').toLowerCase().includes(q), qn = q.replace(/[^a-z0-9]/g, '');
+    const orgs = O.orgs.filter((o) => m(o.name) || m(o.siret) || m(o.email) || m(o.contactName)).slice(0, 8);
+    const keys = O.keys.filter((k) => (qn.length >= 4 && String(k.key).toLowerCase().replace(/[^a-z0-9]/g, '').includes(qn)) || m(k.label) || m(k.redeemedEmail)).slice(0, 8);
+    const pend = O.pending.filter((u) => m(u.companyName) || m(u.email) || m(fullName(u))).slice(0, 5);
+    box.innerHTML = `<section class="panel todo-s"><h2 class="lh">Résultats pour « ${esc(T.q.trim())} »</h2>` +
+      (orgs.length ? `<h3 class="todo-h">Écoles et entreprises</h3><ul class="adm-pend-l">${orgs.map((o) => `<li><div><b>${esc(o.name)}</b><small>${esc(SEG[segOfKind(o.kind)].one)}${o.siret ? ' · SIRET ' + esc(o.siret) : ''}${o.contactName ? ' · ' + esc(o.contactName) : ''}</small></div><span class="adm-pend-b"><button class="btn b4" data-a="org-open" data-org="${esc(o.id)}">Ouvrir</button></span></li>`).join('')}</ul>` : '') +
+      (keys.length ? `<h3 class="todo-h">Clés</h3><ul class="adm-pend-l">${keys.map((k) => `<li><div><code class="kcode">${esc(k.key)}</code><small>${esc(k.productName)} · ${esc(KS[k.status]?.[1] || k.status)}${k.redeemedEmail ? ' · ' + esc(k.redeemedEmail) : ''}${k.orgName ? ' · ' + esc(k.orgName) : ''}</small></div>${k.orgId ? `<span class="adm-pend-b"><button class="btn b4" data-a="org-open" data-org="${esc(k.orgId)}">Ouvrir</button></span>` : ''}</li>`).join('')}</ul>` : '') +
+      (pend.length ? `<h3 class="todo-h">Inscriptions en attente</h3><ul class="adm-pend-l">${pend.map((u) => `<li><div><b>${esc(u.companyName || fullName(u))}</b><small>${esc(u.email)}</small></div><span class="adm-pend-b"><button class="btn b1" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider</button></span></li>`).join('')}</ul>` : '') +
+      `<p style="margin-top:10px"><button class="btn b4" data-a="todo-users">Chercher « ${esc(T.q.trim())} » dans les comptes utilisateurs →</button></p></section>`;
+  }
+  async function todoExtend(b) {
+    const l = (T.lic || []).find((x) => x.id === b.dataset.id); if (!l) return; b.disabled = true; b.textContent = 'Prolongation…';
+    try { const base = Math.max(Date.now(), tms(l.expiresAt)), until = new Date(base + 365 * DAYS);
+      await (await PD()).adminExtendLicense(l.id, until); T.lic = T.lic.filter((x) => x.id !== l.id); renderTodo(); toast(`${l.productName} prolongée jusqu’au ${until.toLocaleDateString('fr-FR')}.`);
+    } catch (e) { toast(errMsg(e)); b.disabled = false; b.textContent = 'Prolonger d’un an'; }
+  }
+  document.addEventListener('input', (e) => { if (e.target.id === 'todo-q') { T.q = e.target.value; todoSearch(); } });
   /* ---- actions ---- */
   Object.assign(A, {
     'org-reload': () => loadOrgs(),
+    'todo-reload': () => { T.at = 0; loadTodo(); },
+    'todo-approve': (b) => quickApprove(b),
+    'todo-member': (b) => quickMember(b),
+    'todo-extend': (b) => todoExtend(b),
+    'todo-users': () => { window.SP_ADM_Q = T.q.trim(); location.hash = '#/admin'; },
     'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
     'org-approve': (b) => approveForm(b.dataset.uid),
     'org-req-ok': (b) => memberForm(b.dataset.id),
@@ -544,6 +639,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 
   /* ================================================================== UTILISATEUR : ACTIVER UNE CLÉ */
   const PENDING = 'sp.pendingKey';
+  const OPEN_URL = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archivision: 'https://groupestudioprism.github.io/ArchiVision/', nexus: 'https://groupestudioprism.github.io/Nexus/' };
   function activatePage() {
     const a = st.auth, pre = (() => { try { return sessionStorage.getItem(PENDING) || ''; } catch (e) { return ''; } })();
     const shell = (inner) => `<section class="pg"><div class="w" style="max-width:640px"><p class="crumb"><a href="#/">Studio Prism</a> / Activer une clé</p><h1>Activer une clé de licence</h1>${inner}</div></section>`;
@@ -578,12 +674,13 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       if (res.length > 1) return V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Pack activé</h1><div class="panel"><ul class="acc-sumul">${res.map((r) => `<li><b>${esc(r.productName || pname(r.productId))}</b> — ${r.ok ? `${esc(tLabel(r.licenseType))} activée (${esc(dur(r))})` : esc(errMsg({ code: r.code }))}</li>`).join('')}</ul>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
         <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a></p></div></div></section>`);
       V(`<section class="pg"><div class="w" style="max-width:640px"><h1>Licence activée</h1><div class="panel"><p><b>${esc(k.productName)}</b> — ${esc(tLabel(k.licenseType))} est activée sur votre compte (${esc(dur(k))}).</p>${k.orgName ? `<p>Votre compte est rattaché à <b>${esc(k.orgName)}</b>.</p>` : ''}
-        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${k.productId === 'archiplan' ? ' <a class="btn b4" href="https://archiplan.studio-prism.com/" target="_blank" rel="noopener">Ouvrir ARCHIPLAN</a>' : ''}</p></div></div></section>`);
+        <p style="margin-top:12px"><a class="btn b1" href="#/compte">Mon compte</a>${OPEN_URL[k.productId] ? ` <a class="btn b4" href="${OPEN_URL[k.productId]}" target="_blank" rel="noopener">Ouvrir ${esc(k.productName)}</a>` : ''}</p></div></div></section>`);
     } catch (e) { console.error('[Studio Prism] Activation de clé :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Activer'; }
   }
   /* Clé saisie avant la connexion : on reprend l'activation dès que le compte est ouvert. */
 
-  const scol = () => K.adminGate('orgs', (p, sh) => orgsTab('scol', p, sh)), ents = () => K.adminGate('ents', (p, sh) => orgsTab('ent', p, sh));
-  Object.assign(R, { 'admin/scolaire': scol, 'admin/etablissements': scol, 'admin/entreprises': ents, activer: activatePage });
+  const scol = () => K.adminGate('orgs', (p, sh) => orgsTab('scol', p, sh)), ents = () => K.adminGate('ents', (p, sh) => orgsTab('ent', p, sh));   // onglet « Écoles et entreprises », sous-onglet Entreprises
+  const todo = () => K.adminGate('todo', todoTab);
+  Object.assign(R, { 'admin/a-traiter': todo, 'admin/scolaire': scol, 'admin/etablissements': scol, 'admin/entreprises': ents, activer: activatePage });
   import(K.MOD('orgsdata.js')).then((m) => { window.SP_ORG_KINDS = m.ORG_KINDS; }).catch(() => {});
 })();

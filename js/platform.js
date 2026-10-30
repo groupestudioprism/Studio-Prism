@@ -164,12 +164,13 @@
   A['acc-lic-retry'] = () => accountPage();
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
-  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/' };   // sous-domaines (CNAME de chaque dépôt)
+  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', nexus: 'https://groupestudioprism.github.io/Nexus/' };   // sous-domaines (CNAME de chaque dépôt)
   /* ARCHITRAFIC : licence gratuite liée au compte (pour l'instant), affichée même sans document de licence */
-  const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' }];
+  const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' },
+    { id: 'nexus', name: 'NEXUS', tagline: 'Automatisations entre vos applications Studio Prism, avec l’assistant AXION', lic: 'Offre gratuite (une licence augmente le quota AXION)' }];
   function freeAppCards(lics) {
     return FREE_APPS.filter((a) => !lics.some((l) => l.productId === a.id)).map((a) => `<article class="app-card"><div class="app-b"><h3>${esc(a.name)}</h3><p class="mt2">${esc(a.tagline)}</p>` +
-      `<dl class="app-d"><div><dt>Licence</dt><dd>Gratuite</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>`).join('');
+      `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(a.lic || 'Gratuite')}</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>`).join('');
   }
 
   function fillAccount(lics) {
@@ -305,7 +306,7 @@
   const pickBtn = (target) => `<p style="margin-top:6px"><button type="button" class="btn b4" data-a="cms-pick-into" data-target="${target}">Choisir dans la médiathèque</button></p>`;
 
   const adminCache = { offers: null, prods: null };
-  const findUser = (uid) => AD.users.find((u) => u.uid === uid);
+  const findUser = (uid) => AD.users.find((u) => u.uid === uid) || (window.SP_TODO_USERS || {})[uid];   // depuis l'écran « À traiter » : comptes lus à part
 
   async function openFiche(uid) {
     const u = findUser(uid);
@@ -316,7 +317,7 @@
       ['Abonnement Studio Prism', badge(K.SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')],
       ['Rôle', esc(L.role[u.role] || u.role || '—')], ['Statut', badge(u.status === 'active' ? 'bd-ok' : 'bd-off', L.status[u.status] || u.status || '—')],
       ['Compte créé le', esc(fdate(u.createdAt))], ['Dernière connexion', esc(fdate(u.lastLogin, true))]
-    ])}${u.status === 'active' ? '' : '<p class="acc-h" role="note">Compte désactivé : l’utilisateur ne peut plus se connecter ni accéder à ses licences. Ses données sont conservées ; vous pouvez le réactiver à tout moment.</p>'}<div class="fiche-h"><h4>Applications / licences</h4><button class="btn b1" data-a="adm-lic-add" data-uid="${esc(uid)}">+ Ajouter une licence</button></div>` +
+    ])}${u.status === 'active' ? '' : '<p class="acc-h" role="note">Compte désactivé : l’utilisateur ne peut plus se connecter ni accéder à ses licences. Ses données sont conservées ; vous pouvez le réactiver à tout moment.</p>'}<div class="fiche-h"><h4>Applications / licences</h4><button class="btn b1" data-a="adm-lic-add" data-uid="${esc(uid)}">+ Donner l’accès à des applications</button></div>` +
       `<div id="fiche-lics" aria-live="polite"><p class="mut">Chargement des licences…</p></div>` +
       `<div class="fiche-act"><button class="btn b4" data-a="adm-edit" data-uid="${esc(uid)}">Modifier le compte</button>` +
       `<button class="btn b4" data-a="adm-send-reset" data-uid="${esc(uid)}">Envoyer un e-mail de réinitialisation</button>` +
@@ -413,7 +414,7 @@
       return;
     }
     const first = avail[0];
-    pmodal(`<h3>${edit ? 'Modifier la licence' : 'Ajouter une licence'}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>` +
+    pmodal(`<h3>${edit ? 'Modifier la licence' : 'Donner l’accès à des applications'}</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>` +
       `<form data-f="adm-lic" data-uid="${esc(uid)}" data-mode="${edit ? 'edit' : 'new'}" novalidate>` +
       (edit ? fld('lic-prod', 'Produit', sel('lic-prod', avail.map((p) => [p.id, p.name]), first.id, 'disabled'))
         : `<fieldset class="ok-apps"><legend>Applications <span class="mut">(cochez-en plusieurs : une licence par application, mêmes réglages)</span></legend><div class="ok-apps-l">${avail.map((p) => `<label class="opt"><input type="checkbox" name="lic-app" value="${esc(p.id)}"${p.id === first.id ? ' checked' : ''}> ${esc(p.name)}${p.status === 'hidden' || p.status === 'draft' ? '<span class="mut"> (brouillon)</span>' : ''}</label>`).join('')}</div><p class="fe" id="e-lic-app" role="alert"></p></fieldset>`) +

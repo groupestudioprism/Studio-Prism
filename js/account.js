@@ -112,7 +112,7 @@
   /* Où envoyer l'utilisateur après connexion : l'administration pour un administrateur, « Mon compte » pour les autres. */
   function spHome(profile) {
     try { if (sessionStorage.getItem('sp.pendingKey')) return '#/activer'; } catch (e) { /* stockage indisponible */ }   // clé saisie avant la connexion
-    return profile.role === 'admin' ? '#/admin' : '#/compte';
+    return profile.role === 'admin' ? '#/admin/a-traiter' : '#/compte';
   }
 
   function redirect(h) {
@@ -417,9 +417,15 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const SUBCLS = { free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' };
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
-  const ADMIN_TABS = [['users', 'Utilisateurs', '#/admin'], ['catalogue', 'Catalogue', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements'], ['orgs', 'Scolaire', '#/admin/scolaire'], ['ents', 'Entreprise', '#/admin/entreprises'], ['downloads', 'Téléchargements', '#/admin/telechargements']];
-  const adminShell = (inner, tab) => `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><div class="k">Comptes, produits, contenu du site et accès</div><h1>Administration Studio Prism</h1>` +
-    `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>${inner}</div></section>`;
+  /* Onglets : « À traiter » d'abord ; Écoles / Entreprises et Produits / Offres et prix regroupés (sous-onglets) */
+  const ADMIN_TABS = [['todo', 'À traiter', '#/admin/a-traiter'], ['users', 'Comptes', '#/admin'], ['orgs', 'Écoles et entreprises', '#/admin/entreprises', ['orgs', 'ents']], ['catalogue', 'Produits et prix', '#/admin/catalogue', ['catalogue', 'offers']], ['downloads', 'Téléchargements', '#/admin/telechargements']];
+  const ADMIN_SUB = { orgs: [['ents', 'Entreprises', '#/admin/entreprises'], ['orgs', 'Écoles et formations', '#/admin/scolaire']], catalogue: [['catalogue', 'Produits', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements']] };
+  const adminShell = (inner, tab) => {
+    const grp = ADMIN_TABS.find(([id, , , g]) => id === tab || (g && g.includes(tab))), sub = grp && ADMIN_SUB[grp[0]];
+    return `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><h1>Administration Studio Prism</h1>` +
+      `<div class="adm-tabs" role="navigation" aria-label="Sections de l’administration">${ADMIN_TABS.map(([id, t, h]) => `<a href="${h}"${grp && id === grp[0] ? ' class="on" aria-current="page"' : ''}>${t}${id === 'todo' ? '<span class="adm-todo-n" id="adm-todo-n" hidden></span>' : ''}</a>`).join('')}</div>` +
+      (sub ? `<div class="adm-sub" role="navigation" aria-label="Sous-sections">${sub.map(([id, t, h]) => `<a href="${h}"${id === tab ? ' class="on" aria-current="page"' : ''}>${t}</a>`).join('')}</div>` : '') + `${inner}</div></section>`;
+  };
 
   /* Garde commune aux pages d'administration : session en cours, déconnecté, service indisponible, accès refusé. */
   function adminGate(tab, render) {
@@ -447,11 +453,12 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
 
   function usersTab(p, shell) {
     Object.assign(AD, { users: [], cursor: null, hasMore: false, counts: null, error: '', busy: false, lic: {}, licError: false, products: null, sellable: null, orgs: null, cp: null }, AD_FILTERS);
+    if (window.SP_ADM_Q) { AD.q = window.SP_ADM_Q; window.SP_ADM_Q = ''; }   // recherche lancée depuis « À traiter »
     const sel = (id, label, opts) => `<div class="acc-f"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
     V(shell(`<p class="lead">Connecté en tant que ${esc(fullName(p))}. Les comptes ci-dessous proviennent de Firebase.</p>
 <div class="adm-stats" id="adm-stats" aria-live="polite"></div>
 <div id="adm-pending" aria-live="polite"></div>
-<div class="panel adm-bar"><div class="acc-f adm-q"><label for="adm-q">Rechercher</label><input id="adm-q" type="search" placeholder="Nom, prénom, e-mail ou entreprise" autocomplete="off"></div>
+<div class="panel adm-bar"><div class="acc-f adm-q"><label for="adm-q">Rechercher</label><input id="adm-q" type="search" placeholder="Nom, prénom, e-mail ou entreprise" autocomplete="off" value="${esc(AD.q || '')}"></div>
 ${sel('adm-kind', 'Compte', [['', 'Tous'], ['individual', 'Particulier'], ['company', 'Entreprise']])}
 ${sel('adm-sub', 'Abonnement', [['', 'Tous'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
 ${sel('adm-role', 'Rôle', [['', 'Tous'], ['user', 'Utilisateur'], ['admin', 'Administrateur']])}
