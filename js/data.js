@@ -259,6 +259,19 @@ export async function deleteLicense(id) {
 /* Copie le catalogue INTÉGRÉ au site (ArchiVision, concepts Prism Game et Prism 3D : js/catalog.js) dans Firestore, puis note dans
    settings/catalogue que c'est fait : le site cesse alors de l'afficher depuis le code (aucun doublon) et chaque produit devient
    modifiable, masquable et supprimable depuis l'administration. Ne remplace JAMAIS un produit existant. Renvoie le nombre créé. */
+/* Applications de la suite Studio Prism : toujours proposées dans l'administration (licences, clés). Celles absentes du catalogue
+   sont créées en BROUILLON (invisibles du public) la première fois que l'administration en a besoin : une licence exige une fiche produit. */
+export const SUITE_APPS = [
+  { id: "archiplan", name: "ARCHIPLAN", tagline: "Conception de plans et modélisation 3D" },
+  { id: "architrafic", name: "ARCHITRAFIC", tagline: "Routes barrées, déviations et simulation du trafic" },
+  { id: "archivision", name: "ArchiVision", tagline: "Maquettes BIM en visite 3D et réalité augmentée" },
+  { id: "nexus", name: "NEXUS", tagline: "Automatisations entre les applications Studio Prism, avec AXION" }
+];
+export async function ensureSuiteProducts() {
+  const have = new Set((await adminListProducts()).map((p) => p.id)), todo = SUITE_APPS.filter((a) => !have.has(a.id));
+  for (const [i, a] of todo.entries()) await setDoc(doc(db, "products", a.id), { ...productData({ ...a, category: "application", pole: "app", stage: "conception", status: "draft", displayOrder: 50 + i }), createdAt: serverTimestamp() });
+  return todo.map((a) => a.id);
+}
 export async function importBuiltins(items) {
   const have = new Set((await adminListProducts()).map((p) => p.id));
   const todo = items.filter((it) => !have.has(it.id));

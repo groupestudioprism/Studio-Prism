@@ -392,6 +392,7 @@
     let prods, lic;
     try {
       const d = await D();
+      await d.ensureSuiteProducts().catch(() => []);
       [prods, adminCache.offers] = await Promise.all([d.adminListProducts(), d.adminListOffers()]);
       AD.products = prods;
       AD.lic[uid] = await d.adminLicensesFor([uid]);
