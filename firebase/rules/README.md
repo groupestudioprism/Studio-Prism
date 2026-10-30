@@ -8,6 +8,7 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
 | Fichier | Contenu |
 |---|---|
 | `00-communes.rules` | en-tête, utilitaires, comptes, entreprises, catalogue, licences, CMS |
+| `05-devis.rules` | devis (`quotes`) et numérotation (`counters`) ; les informations légales (`settings/company`) sont dans `00-communes.rules` |
 | `10-archiplan.rules` | ARCHIPLAN : fiche client, cloud (`ap*`) |
 | `11-architrafic.rules` | ARCHITRAFIC : cloud (`at*`) |
 | `13-codes-pin.rules` | code PIN des comptes (`userSecrets`) |

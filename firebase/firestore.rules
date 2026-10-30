@@ -391,6 +391,17 @@ service cloud.firestore {
                             && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
+    // informations légales de Studio Prism (émetteur des devis) : administrateurs seulement ; recopiées dans chaque devis émis
+    match /settings/company {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin()
+                            && request.resource.data.keys().hasOnly(['legalName', 'tradeName', 'legalForm', 'capital', 'address', 'siret', 'rcs', 'vatMode',
+                                                                     'vatNumber', 'vatRate', 'email', 'phone', 'website', 'iban', 'bic', 'bank', 'paymentTerms',
+                                                                     'latePenalty', 'validDays', 'footer', 'updatedAt'])
+                            && request.resource.data.get('vatMode', 'tva') in ['tva', 'franchise']
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
 
     // ------------------------------------------------------------ licences : licenses/{userId_productId}
 
@@ -671,6 +682,79 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+
+    // =================================================================================================================
+    // DEVIS — quotes/{id} et compteurs de numérotation counters/quotes-AAAA
+    //
+    // Cycle : brouillon (draft) → émis (sent, numéro DEV-AAAA-NNNN définitif) → accepté (accepted) ou refusé (refused)
+    //         → payé (paid, clés générées) ; un devis émis peut être annulé (cancelled), jamais supprimé ni réécrit.
+    //  - Numérotation : continue et sans trou par année. Le numéro est attribué dans la même écriture que l'avancement du compteur
+    //    counters/quotes-AAAA (n = n + 1), et la règle vérifie que les deux concordent.
+    //  - Un devis émis est figé : seuls le statut et les champs de suivi (acceptation, paiement, annulation, clés) peuvent changer.
+    //  - Le client (clientUid, recopié de forUid à l'émission) lit SES devis émis et peut les accepter (bon pour accord en ligne) ou les refuser, avant la date de validité.
+    //  - Les informations de l'émetteur (settings/company) sont recopiées dans chaque devis : le client n'a pas besoin de les lire.
+    // =================================================================================================================
+    function quoteCounter(year) {
+      return /databases/$(database)/documents/counters/$('quotes-' + string(year));
+    }
+    function validQuote() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['status', 'client', 'lines', 'currency', 'totalHT', 'totalVAT', 'totalTTC', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['number', 'year', 'seq', 'status', 'clientUid', 'forUid', 'clientEmail', 'orgId', 'orgName', 'requestId', 'client', 'issuer',
+                             'lines', 'period', 'durationDays', 'vatMode', 'vatRate', 'totalHT', 'totalVAT', 'totalTTC', 'currency', 'validDays',
+                             'validUntil', 'issuedAt', 'paymentTerms', 'notes', 'acceptedAt', 'acceptedBy', 'refusedAt', 'paidAt', 'paymentRef',
+                             'keyIds', 'cancelledAt', 'cancelReason', 'createdAt', 'updatedAt'])
+        && d.status in ['draft', 'sent', 'accepted', 'refused', 'paid', 'cancelled']
+        && d.client is map && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 30
+        && d.currency == 'EUR' && d.totalHT is number && d.totalVAT is number && d.totalTTC is number
+        && isString(d.get('clientUid', ''), 0, 128) && isString(d.get('forUid', ''), 0, 128)
+        && (d.status != 'draft' || d.get('clientUid', '') == '') && isString(d.get('orgId', ''), 0, 40) && isString(d.get('requestId', ''), 0, 40)
+        && isString(d.get('paymentTerms', ''), 0, 2000) && isString(d.get('notes', ''), 0, 2000)
+        && d.get('vatMode', 'tva') in ['tva', 'franchise']
+        && d.updatedAt == request.time;
+    }
+    function quoteIssued() {
+      let d = request.resource.data;
+      let c = quoteCounter(d.year);
+      return d.year is int && d.year >= 2026 && d.year <= 2100 && d.seq is int && d.seq >= 1
+        && d.number is string && d.number.matches('DEV-[0-9]{4}-[0-9]{4,}') && d.number.matches('DEV-' + string(d.year) + '-0*' + string(d.seq))
+        && d.issuer is map && d.validUntil is timestamp && d.issuedAt == request.time
+        && getAfter(c).data.n == d.seq
+        && ((exists(c) && get(c).data.n == d.seq - 1) || (!exists(c) && d.seq == 1));
+    }
+    function quoteTrack(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    match /counters/{cid} {
+      allow get: if isAdmin() && cid.matches('quotes-[0-9]{4}');
+      allow create: if isAdmin() && cid.matches('quotes-[0-9]{4}') && request.resource.data.keys().hasOnly(['n', 'updatedAt'])
+                    && request.resource.data.n == 1 && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin() && cid.matches('quotes-[0-9]{4}') && request.resource.data.keys().hasOnly(['n', 'updatedAt'])
+                    && request.resource.data.n == resource.data.n + 1 && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /quotes/{qid} {
+      // un brouillon a toujours clientUid vide (le compte visé est dans forUid) : le client ne lit que les devis émis
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.get('clientUid', '') == request.auth.uid);
+      allow create: if isAdmin() && validQuote() && request.resource.data.createdAt == request.time
+                    && (request.resource.data.status == 'draft' || (request.resource.data.status == 'sent' && quoteIssued()));
+      allow update: if (isAdmin() && validQuote() && request.resource.data.createdAt == resource.data.createdAt
+                        && ((resource.data.status == 'draft' && (request.resource.data.status == 'draft' || (request.resource.data.status == 'sent' && quoteIssued())))
+                            || (resource.data.status == 'sent' && request.resource.data.status in ['accepted', 'cancelled']
+                                && quoteTrack(['status', 'acceptedAt', 'acceptedBy', 'cancelledAt', 'cancelReason', 'updatedAt']))
+                            || (resource.data.status == 'accepted' && request.resource.data.status in ['paid', 'cancelled']
+                                && quoteTrack(['status', 'paidAt', 'paymentRef', 'keyIds', 'cancelledAt', 'cancelReason', 'updatedAt']))))
+                    || (isSignedIn() && resource.data.get('clientUid', '') == request.auth.uid && resource.data.status == 'sent'
+                        && request.time < resource.data.validUntil && request.resource.data.updatedAt == request.time
+                        && ((request.resource.data.status == 'accepted' && quoteTrack(['status', 'acceptedAt', 'acceptedBy', 'updatedAt'])
+                             && request.resource.data.acceptedAt == request.time && request.resource.data.acceptedBy is map
+                             && request.resource.data.acceptedBy.uid == request.auth.uid && isString(request.resource.data.acceptedBy.get('name', ''), 2, 160))
+                            || (request.resource.data.status == 'refused' && quoteTrack(['status', 'refusedAt', 'updatedAt'])
+                                && request.resource.data.refusedAt == request.time)));
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+    }
     // ------------------------------------------------------------ ARCHIPLAN : fiche client clientProfiles/{uid}
     //
     function validClientProfile() {

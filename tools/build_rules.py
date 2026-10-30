@@ -27,6 +27,7 @@ REQUIRED = {
     'SPECTRA Slide':   ['ssDocs', 'ssUsage', 'ssFolders', 'ssShares', 'ssGrants', 'ssLibrary', 'ssPublic'],
     'SPECTRA Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
+    'devis':           ['quotes', 'counters'],
 }
 def build():
     return ''.join(p.read_text(encoding='utf-8') for p in PARTS)

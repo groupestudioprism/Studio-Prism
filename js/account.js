@@ -43,7 +43,7 @@
     'auth/user-disabled': 'Ce compte a été désactivé. Contactez Studio Prism.',
     'auth/operation-not-allowed': 'La connexion par e-mail et mot de passe n’est pas activée pour ce projet Firebase.',
     'app/suspended': 'Ce compte est désactivé. Contactez Studio Prism pour le réactiver.',
-    'app/pending': 'Votre compte entreprise est en attente de validation par Studio Prism. Vous recevrez une réponse rapidement ; vous pourrez ensuite vous connecter avec ce mot de passe.',
+    'app/pending': 'Votre demande de devis est en cours de traitement par Studio Prism. Dès que votre devis est émis, vous pourrez vous connecter avec ce mot de passe et le retrouver dans Mon compte › Mes devis.',
     'app/profile-missing': 'Votre profil Studio Prism est introuvable. Contactez Studio Prism.',
     'app/account-deleted': 'Ce compte a été supprimé par Studio Prism. Pour revenir, créez un compte avec la même adresse e-mail et le même mot de passe (mot de passe oublié ? Utilisez d’abord « Mot de passe oublié »).',
     'app/timeout': 'Le service met trop de temps à répondre. Réessayez.',
@@ -104,7 +104,7 @@
   }
 
   /* Le SDK n'est pas bloquant : chargé tout de suite sur les pages de compte, au repos sur les autres pages. */
-  const guarded = (k) => k === 'compte' || /^admin(\/|$)/.test(k);
+  const guarded = (k) => k === 'compte' || /^compte\/devis(\/|$)/.test(k) || /^admin(\/|$)/.test(k);
   const live = (k) => guarded(k) || k === 'activer' || /^abonnements(\/|$)/.test(k) || /^produits\/./.test(k); // pages qui dépendent de l'état de connexion (boutons des offres)
   if (AUTH_ROUTES.has(CUR) || live(CUR)) loadAuth().catch(() => {});
   else (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(() => loadAuth().catch(() => {}), { timeout: 3000 });
@@ -253,8 +253,8 @@
       field('coEmail', 'E-mail de l’entreprise', 'email', 'off', { opt: 1, attrs: 'maxlength="160" inputmode="email"' }) +
       `<div class="row">${field('coJob', 'Votre fonction', 'text', 'organization-title', { opt: 1, attrs: 'maxlength="80"' })}${field('coPhone', 'Téléphone professionnel', 'tel', 'tel', { opt: 1, attrs: 'maxlength="30"' })}</div>` +
       field('coSite', 'Site internet', 'text', 'url', { opt: 1, attrs: 'maxlength="200" inputmode="url" placeholder="www.exemple.fr"' }) +
-      `<h3 class="lh" style="margin-top:18px;font-size:18px">Licences demandées</h3><p class="acc-h">Pour chaque application, le nombre de licences Pro Entreprise souhaité. Studio Prism vérifie la demande puis vous délivre les clés de licence.</p>` +
-      `<div id="coLics" class="co-lics">${coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p></div>`;
+      `<h3 class="lh" style="margin-top:18px;font-size:18px">Votre demande de devis</h3><p class="acc-h">Indiquez les applications, le nombre de licences Pro Entreprise et la facturation souhaitée. Studio Prism vérifie votre entreprise et vous adresse un devis calculé selon ses tarifs : vous le retrouvez dans votre espace, où vous pouvez l’accepter en ligne. Les clés de licence sont délivrées après le paiement.</p>` +
+      `<div id="coLics" class="co-lics">${coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p>${coPeriod()}</div>`;
 
     const reg = `<fieldset class="acc-kind"><legend>Type de compte</legend>` +
       `<label class="acc-card on"><input type="radio" name="kind" value="individual" checked><span><b>Particulier</b><small>Usage personnel, non commercial, y compris avec la licence Pro.</small></span></label>` +
@@ -295,6 +295,8 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     return `<div class="row co-lic"><div class="acc-f"><label for="coProd${i}">Application</label><select id="coProd${i}" name="coProd${i}" data-co-prod>${coApps().map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>` +
       `<div class="acc-f"><label for="coQty${i}">Nombre de licences</label><input id="coQty${i}" name="coQty${i}" type="number" min="1" max="500" value="1" inputmode="numeric"></div></div>`;
   }
+  /* Facturation souhaitée pour le devis (reprise sur chaque ligne de la demande) */
+  const coPeriod = () => `<div class="acc-f"><label for="coPeriod">Facturation souhaitée</label><select id="coPeriod" name="coPeriod"><option value="yearly">Annuelle</option><option value="quarterly">Trimestrielle</option><option value="monthly">Mensuelle</option></select></div>`;
   A['co-lic-add'] = () => { const box = document.getElementById('coLics'); if (!box) return; const n = box.querySelectorAll('.co-lic').length; if (n >= 6) return toast('6 applications au maximum.'); box.insertAdjacentHTML('beforeend', coLicRow(n)); };
   const tierFor = (n) => n <= 1 ? '1' : n <= 10 ? '2-10' : n <= 25 ? '11-25' : n <= 50 ? '26-50' : n <= 100 ? '51-100' : '100+';
   /* SIRET : 14 chiffres, clé de Luhn (exception : La Poste, 356 000 000). */
@@ -310,12 +312,12 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     const site = normUrl(g('coSite'));
     if (site === null) er.coSite = 'Adresse de site internet invalide.';
     if (g('coPhone') && !/^[+(]?\d[\d\s().-]{4,28}$/.test(g('coPhone'))) er.coPhone = 'Numéro de téléphone invalide.';
-    const names = Object.fromEntries(coApps()), items = [];
+    const names = Object.fromEntries(coApps()), items = [], period = ['monthly', 'quarterly', 'yearly'].includes(g('coPeriod')) ? g('coPeriod') : 'yearly';
     fm.querySelectorAll('.co-lic').forEach((row) => {
       const pid = row.querySelector('select').value, qty = parseInt(row.querySelector('input').value, 10);
       if (!pid) return;
       if (!(qty >= 1 && qty <= 500)) { er.coLics = 'Nombre de licences : entre 1 et 500 par application.'; return; }
-      const ex = items.find((x) => x.productId === pid); if (ex) ex.qty += qty; else items.push({ productId: pid, productName: names[pid] || pid, licenseType: 'pro_entreprise', qty });
+      const ex = items.find((x) => x.productId === pid); if (ex) ex.qty += qty; else items.push({ productId: pid, productName: names[pid] || pid, licenseType: 'pro_entreprise', qty, period });
     });
     if (!items.length && !er.coLics) er.coLics = 'Indiquez au moins une application.';
     const total = items.reduce((t, x) => t + x.qty, 0), tier = TIERS.find((t) => t.id === tierFor(total));
@@ -328,6 +330,8 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     const co = !!sel && sel.value === 'company';
     const box = document.getElementById('co');
     if (box) box.hidden = !co;
+    const sb = document.querySelector('form[data-f="asu"] > button.btn.b1');
+    if (sb) sb.textContent = co ? 'Demander un devis' : 'Créer mon compte';
     const lb = document.querySelector('label[for=email]');
     if (lb) lb.textContent = co ? 'E-mail professionnel' : 'Adresse e-mail';
     document.querySelectorAll('.acc-card').forEach((c) => c.classList.toggle('on', c.contains(sel)));
@@ -366,8 +370,8 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
         catch (e2) {
           if (!(e2 && e2.code === 'app/pending')) throw e2;
           // Compte Entreprise : créé, mais en attente de validation manuelle (aucune connexion avant l'accord de Studio Prism).
-          formMsg('Demande envoyée. Votre compte entreprise doit être validé par Studio Prism avant la première connexion : nous revenons vers vous rapidement.', true);
-          toast('Demande de compte entreprise envoyée.');
+          formMsg('Demande de devis envoyée. Studio Prism vérifie votre entreprise et prépare votre devis : dès qu’il est émis, vous pouvez vous connecter avec ce mot de passe et le retrouver dans Mon compte › Mes devis.', true);
+          toast('Demande de devis envoyée.');
           return;
         }
         toast('Compte créé. Bienvenue chez Studio Prism !');
@@ -418,8 +422,8 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
   /* Onglets : « À traiter » d'abord ; Écoles / Entreprises et Produits / Offres et prix regroupés (sous-onglets) */
-  const ADMIN_TABS = [['todo', 'À traiter', '#/admin/a-traiter'], ['users', 'Comptes', '#/admin'], ['orgs', 'Écoles et entreprises', '#/admin/entreprises', ['orgs', 'ents']], ['catalogue', 'Produits et prix', '#/admin/catalogue', ['catalogue', 'offers']], ['downloads', 'Téléchargements', '#/admin/telechargements']];
-  const ADMIN_SUB = { orgs: [['ents', 'Entreprises', '#/admin/entreprises'], ['orgs', 'Écoles et formations', '#/admin/scolaire']], catalogue: [['catalogue', 'Produits', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements']] };
+  const ADMIN_TABS = [['todo', 'À traiter', '#/admin/a-traiter'], ['quotes', 'Devis', '#/admin/devis', ['quotes', 'legal']], ['users', 'Comptes', '#/admin'], ['orgs', 'Écoles et entreprises', '#/admin/entreprises', ['orgs', 'ents']], ['catalogue', 'Produits et prix', '#/admin/catalogue', ['catalogue', 'offers']], ['downloads', 'Téléchargements', '#/admin/telechargements']];
+  const ADMIN_SUB = { quotes: [['quotes', 'Devis', '#/admin/devis'], ['legal', 'Informations légales', '#/admin/infos-legales']], orgs: [['ents', 'Entreprises', '#/admin/entreprises'], ['orgs', 'Écoles et formations', '#/admin/scolaire']], catalogue: [['catalogue', 'Produits', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements']] };
   const adminShell = (inner, tab) => {
     const grp = ADMIN_TABS.find(([id, , , g]) => id === tab || (g && g.includes(tab))), sub = grp && ADMIN_SUB[grp[0]];
     return `<section class="pg adm"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Administration</p><h1>Administration Studio Prism</h1>` +
@@ -758,7 +762,7 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
   window.SP.kit = {
     st, AD, L, TIERS, esc, errMsg, loadAuth, redirect, guarded, field, clearErrors, showErrors, formMsg, setBusy, pwProblem, normUrl,
     EMAIL_RE, fdate, badge, SUBCLS, fullName, typeLabel, licState, LIC_STATUS, adminGate, licCell,
-    dataMod, guardAdminChange, readCompany, coLicRow, coApps, siretOk,
+    dataMod, guardAdminChange, readCompany, coLicRow, coApps, coPeriod, siretOk,
     serverOn: () => !!(st.data && st.data.ACCOUNT_SERVER === true),   // mode « avec Cloud Functions » ? (faux par défaut : forfait gratuit Spark)
     renderUsers: () => { if (CUR === 'admin') renderAdmin(); },
     refreshCounts, loadLicenses, MOD

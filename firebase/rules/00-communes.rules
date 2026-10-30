@@ -391,6 +391,17 @@ service cloud.firestore {
                             && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
+    // informations légales de Studio Prism (émetteur des devis) : administrateurs seulement ; recopiées dans chaque devis émis
+    match /settings/company {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin()
+                            && request.resource.data.keys().hasOnly(['legalName', 'tradeName', 'legalForm', 'capital', 'address', 'siret', 'rcs', 'vatMode',
+                                                                     'vatNumber', 'vatRate', 'email', 'phone', 'website', 'iban', 'bic', 'bank', 'paymentTerms',
+                                                                     'latePenalty', 'validDays', 'footer', 'updatedAt'])
+                            && request.resource.data.get('vatMode', 'tva') in ['tva', 'franchise']
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
 
     // ------------------------------------------------------------ licences : licenses/{userId_productId}
 

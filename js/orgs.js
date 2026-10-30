@@ -77,7 +77,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
     renderOrgs(); renderTodo(); todoCount();
   }
-  function todoCount() { const el = document.getElementById('adm-todo-n'); if (!el) return; const n = O.pending.length + O.requests.filter((r) => r.kind === 'member').length; el.hidden = !n; el.textContent = n; }
+  function todoCount() { const el = document.getElementById('adm-todo-n'); if (!el) return; const n = O.pending.length + O.requests.filter((r) => r.kind === 'member').length + (window.SP.quotesUI?.todoN?.() || 0); el.hidden = !n; el.textContent = n; }
   function renderOrgs() {
     const list = document.getElementById('org-list'); if (!list) return;
     if (O.err) { list.innerHTML = `<div class="panel"><p>${esc(O.err)}</p><p class="mut">Les règles Firestore du site doivent inclure les blocs « organizations » et « licenseKeys ».</p><p><button class="btn b1" data-a="org-reload">Réessayer</button></p></div>`; return; }
@@ -107,7 +107,8 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
      2) demandes d'ajout de personnes par le responsable d'une entreprise validée (kind « member »). */
   const ROLE_REP = { representant: 'Représentant de l’entreprise', responsable: 'Responsable d’agence, de service ou de branche' };
   const reqOf = (uid) => O.requests.find((r) => r.kind === 'signup' && r.requesterUid === uid);
-  const itemsTxt = (items) => (items || []).map((x) => `${x.qty} × ${x.productName || x.productId}`).join(', ');
+  const PERL = { monthly: 'mensuel', quarterly: 'trimestriel', yearly: 'annuel' };
+  const itemsTxt = (items) => (items || []).map((x) => `${x.qty} × ${x.productName || x.productId}${x.period && PERL[x.period] ? ' (' + PERL[x.period] + ')' : ''}`).join(', ');
   const DUR = [['365', '1 an après activation'], ['730', '2 ans après activation'], ['1095', '3 ans après activation'], ['', 'Sans limite']];
   function renderPending() {
     const members = O.requests.filter((r) => r.kind === 'member');
@@ -437,7 +438,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     loadTodo();
   }
   async function loadTodo() {
-    await loadOrgs();
+    await Promise.all([loadOrgs(), window.SP.quotesUI?.load?.().catch?.(() => {})]);
     renderTodo();
   }
   const sec = (title, n, body, more) => `<section class="panel todo-s"><h2 class="lh">${esc(title)} ${n ? `<span class="org-pend-n">${n}</span>` : ''}</h2>${more ? `<p class="mut">${more}</p>` : ''}${body}</section>`;
@@ -448,13 +449,14 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     const oldKeys = O.keys.filter((k) => k.status === 'available' && tms(k.createdAt) && tms(k.createdAt) < now - 30 * DAYS);
     const parts = [];
     if (O.pending.length) parts.push(sec('Inscriptions d’entreprise', O.pending.length, `<ul class="adm-pend-l">${O.pending.map((u) => { const r = reqOf(u.uid); return `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${r && r.siret ? ' · SIRET ' + esc(r.siret) : ''} · le ${esc(fdate(u.createdAt))}</small><small>${r ? 'Licences demandées : ' + esc(itemsTxt(r.items)) : 'Aucune licence demandée'}</small></div>` +
-      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn b4" data-a="org-approve" data-uid="${esc(u.uid)}">Détails…</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`; }).join('')}</ul>`,
-      '« Valider » crée la fiche entreprise (ou rattache à celle du même nom), nomme le demandeur responsable et génère les clés demandées pour 1 an.'));
+      `<span class="adm-pend-b">${r ? `<button class="btn b1" data-a="q-from-req" data-id="${esc(r.id)}">Préparer le devis</button> <button class="btn b4" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider sans devis</button>` : `<button class="btn b1" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider</button>`} <button class="btn b4" data-a="org-approve" data-uid="${esc(u.uid)}">Détails…</button> <button class="btn btn-danger" data-a="org-refuse" data-uid="${esc(u.uid)}">Refuser</button></span></li>`; }).join('')}</ul>`,
+      '« Préparer le devis » calcule le prix d’après vos offres ; à l’émission du devis, l’entreprise est validée (fiche créée, demandeur responsable) et le client le retrouve dans son espace. Les clés sont générées quand vous enregistrez le paiement. « Valider sans devis » génère tout de suite les clés pour 1 an.'));
     if (members.length) parts.push(sec('Ajouts de personnes', members.length, `<ul class="adm-pend-l">${members.map((r) => `<li><div><b>${esc(r.companyName || '—')}</b><small>Demandé par ${esc(r.requesterName || r.requesterEmail)} · ${esc(itemsTxt(r.items).replace(/^\d+ × /, ''))} · le ${esc(fdate(r.createdAt))}</small><small>${esc((r.emails || []).join(', '))}</small></div>` +
-      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-member" data-id="${esc(r.id)}">Accepter</button> <button class="btn b4" data-a="org-req-ok" data-id="${esc(r.id)}">Détails…</button> <button class="btn btn-danger" data-a="org-req-no" data-id="${esc(r.id)}">Refuser</button></span></li>`).join('')}</ul>`,
-      '« Accepter » génère une clé d’un an par adresse.'));
+      `<span class="adm-pend-b"><button class="btn b1" data-a="q-from-req" data-id="${esc(r.id)}">Préparer le devis</button> <button class="btn b4" data-a="todo-member" data-id="${esc(r.id)}">Accepter sans devis</button> <button class="btn b4" data-a="org-req-ok" data-id="${esc(r.id)}">Détails…</button> <button class="btn btn-danger" data-a="org-req-no" data-id="${esc(r.id)}">Refuser</button></span></li>`).join('')}</ul>`,
+      '« Préparer le devis » chiffre l’ajout ; « Accepter sans devis » génère tout de suite une clé d’un an par adresse.'));
+    (window.SP.quotesUI?.todoParts?.(sec) || []).forEach((x) => parts.push(x));
     if (oldKeys.length) parts.push(sec('Clés jamais activées', oldKeys.length, `<p>${oldKeys.length} clé${oldKeys.length > 1 ? 's' : ''} générée${oldKeys.length > 1 ? 's' : ''} il y a plus de 30 jours ${oldKeys.length > 1 ? 'n’ont' : 'n’a'} pas été activée${oldKeys.length > 1 ? 's' : ''} : ${esc([...new Set(oldKeys.map((k) => k.orgName || 'sans établissement'))].slice(0, 6).join(', '))}.</p><p><a class="btn b4" href="#/admin/entreprises">Voir les clés</a></p>`, 'À relancer, ou à révoquer depuis la fiche de l’établissement.'));
-    box.innerHTML = parts.length ? parts.join('') : '<div class="panel"><p><b>Tout est à jour.</b> Aucune inscription ni demande d’ajout à traiter.</p></div>';
+    box.innerHTML = parts.length ? parts.join('') : '<div class="panel"><p><b>Tout est à jour.</b> Aucune inscription, demande d’ajout ni paiement de devis à traiter.</p></div>';
     todoSearch();
   }
   function todoSearch() {
@@ -597,14 +599,14 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       <div class="acc-f"><label for="coRole">Vous êtes</label><select id="coRole" name="coRole"><option value="">Choisir…</option><option value="representant">Représentant de l’entreprise (gérant, président, directeur…)</option><option value="responsable">Responsable d’une agence, d’un service ou d’une branche</option></select><p class="fe" id="e-coRole" role="alert"></p></div>
       ${f('coName', 'Nom de l’entreprise', 'text', 'organization', { attrs: 'maxlength="120"' })}${f('coSiret', 'Numéro SIRET', 'text', 'off', { attrs: 'maxlength="17" inputmode="numeric" placeholder="14 chiffres"' })}
       ${f('coEmail', 'E-mail de l’entreprise', 'email', 'off', { opt: 1, attrs: 'maxlength="160"' })}<div class="row">${f('coJob', 'Votre fonction', 'text', 'organization-title', { opt: 1, attrs: 'maxlength="80"' })}${f('coPhone', 'Téléphone professionnel', 'tel', 'tel', { opt: 1, attrs: 'maxlength="30"' })}</div>
-      <h4 style="margin-top:12px">Licences demandées</h4><div id="coLics" class="co-lics">${K.coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p>
-      <p class="fe" id="cv-err" role="alert"></p><p><button class="btn b1" type="submit">Envoyer la demande</button></p></form>`, true);
+      <h4 style="margin-top:12px">Votre demande de devis</h4><p class="acc-h">Studio Prism vérifie votre entreprise et vous adresse un devis selon ses tarifs ; vous le retrouvez ici, dans Mon compte. Les clés sont délivrées après le paiement.</p><div id="coLics" class="co-lics">${K.coLicRow(0)}</div><p><button type="button" class="lk" data-a="co-lic-add">+ Ajouter une application</button></p><p class="fe" id="e-coLics" role="alert"></p>${K.coPeriod ? K.coPeriod() : ''}
+      <p class="fe" id="cv-err" role="alert"></p><p><button class="btn b1" type="submit">Demander un devis</button></p></form>`, true);
   };
   async function submitConvert(fm) {
     K.clearErrors(); const a = st.auth, rc = K.readCompany(fm, a.user.email);
     if (K.showErrors(fm, rc.er)) return;
     const btn = fm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Envoi…';
-    try { await (await OD()).requestCompanyConversion(a.user, a.profile, rc.company); A.x(); toast('Demande envoyée : votre compte est en attente de validation.'); }
+    try { await (await OD()).requestCompanyConversion(a.user, a.profile, rc.company); A.x(); toast('Demande de devis envoyée : votre compte est en attente de validation.'); }
     catch (e) { fm.querySelector('#cv-err').textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
   }
   async function submitAdd(fm) {
@@ -620,6 +622,15 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
   }
   window.SP.companyUI = { mount: mountCompany };
+  /* Outils partagés avec js/quotes.js (devis) */
+  window.SP.orgsKit = {
+    state: O, reload: loadOrgs, renderTodo: () => { renderTodo(); todoCount(); }, orgById, reqOf, pendById, keysResult, genKeys,
+    /* entreprise validée sans clés (le devis les déclenchera au paiement) : fiche de même nom réutilisée, sinon créée */
+    approveOnly: async (uid) => { const u = pendById(uid); if (!u) return null;
+      const same = O.orgs.find((o) => segOfKind(o.kind) === 'ent' && String(o.name).trim().toLowerCase() === String(u.companyName || '').trim().toLowerCase());
+      return (await doApprove(u, same ? 'existing' : 'new', same && same.id, false, null)).org; },
+    closeRequest: async (id, orgId) => (await OD()).adminCloseRequest(id, 'accepted', orgId)
+  };
 
   /* ================================================================== UTILISATEUR : ACTIVER UNE CLÉ */
   const PENDING = 'sp.pendingKey';
