@@ -437,20 +437,14 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     loadTodo();
   }
   async function loadTodo() {
-    const fresh = Date.now() - T.at < 60000;
-    await Promise.all([loadOrgs(), fresh ? null : (async () => {
-      try { const pd = await PD(), all = await pd.adminListAllLicenses(), now = Date.now();
-        T.lic = all.filter((l) => l.status !== 'suspended' && tms(l.expiresAt) && tms(l.expiresAt) < now + 30 * DAYS && tms(l.expiresAt) > now - 60 * DAYS).sort((a, b) => tms(a.expiresAt) - tms(b.expiresAt));
-        T.users = await pd.adminUsersByIds(T.lic.slice(0, 80).map((l) => l.userId)); window.SP_TODO_USERS = T.users; T.at = Date.now();
-      } catch (e) { console.warn('[Studio Prism] Licences :', e); T.lic = T.lic || []; }
-    })()]);
+    await loadOrgs();
     renderTodo();
   }
   const sec = (title, n, body, more) => `<section class="panel todo-s"><h2 class="lh">${esc(title)} ${n ? `<span class="org-pend-n">${n}</span>` : ''}</h2>${more ? `<p class="mut">${more}</p>` : ''}${body}</section>`;
   function renderTodo() {
     const box = document.getElementById('todo'); if (!box) return;
     if (O.err) { box.innerHTML = `<div class="panel"><p>${esc(O.err)}</p><p><button class="btn b1" data-a="todo-reload">Réessayer</button></p></div>`; return; }
-    const members = O.requests.filter((r) => r.kind === 'member'), lic = T.lic || [], now = Date.now();
+    const members = O.requests.filter((r) => r.kind === 'member'), now = Date.now();
     const oldKeys = O.keys.filter((k) => k.status === 'available' && tms(k.createdAt) && tms(k.createdAt) < now - 30 * DAYS);
     const parts = [];
     if (O.pending.length) parts.push(sec('Inscriptions d’entreprise', O.pending.length, `<ul class="adm-pend-l">${O.pending.map((u) => { const r = reqOf(u.uid); return `<li><div><b>${esc(u.companyName || '—')}</b><small>${esc(fullName(u))} · ${esc(u.email)}${r && r.siret ? ' · SIRET ' + esc(r.siret) : ''} · le ${esc(fdate(u.createdAt))}</small><small>${r ? 'Licences demandées : ' + esc(itemsTxt(r.items)) : 'Aucune licence demandée'}</small></div>` +
@@ -459,12 +453,8 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     if (members.length) parts.push(sec('Ajouts de personnes', members.length, `<ul class="adm-pend-l">${members.map((r) => `<li><div><b>${esc(r.companyName || '—')}</b><small>Demandé par ${esc(r.requesterName || r.requesterEmail)} · ${esc(itemsTxt(r.items).replace(/^\d+ × /, ''))} · le ${esc(fdate(r.createdAt))}</small><small>${esc((r.emails || []).join(', '))}</small></div>` +
       `<span class="adm-pend-b"><button class="btn b1" data-a="todo-member" data-id="${esc(r.id)}">Accepter</button> <button class="btn b4" data-a="org-req-ok" data-id="${esc(r.id)}">Détails…</button> <button class="btn btn-danger" data-a="org-req-no" data-id="${esc(r.id)}">Refuser</button></span></li>`).join('')}</ul>`,
       '« Accepter » génère une clé d’un an par adresse.'));
-    if (T.lic === null) parts.push(sec('Licences qui expirent', 0, '<p class="mut" role="status">Chargement des licences…</p>'));
-    else if (lic.length) parts.push(sec('Licences qui expirent', lic.length, `<ul class="adm-pend-l">${lic.slice(0, 80).map((l) => { const u = T.users[l.userId] || {}, gone = tms(l.expiresAt) < now; return `<li><div><b>${esc(fullName(u) !== '—' ? fullName(u) : (u.email || l.userId))}</b><small>${esc(u.email || '')}${u.orgName ? ' · ' + esc(u.orgName) : ''}</small><small>${esc(l.productName)} · ${esc(tLabel(l.licenseType))} · ${gone ? 'expirée le' : 'expire le'} ${esc(fdate(l.expiresAt))}</small></div>` +
-      `<span class="adm-pend-b"><button class="btn b1" data-a="todo-extend" data-id="${esc(l.id)}">Prolonger d’un an</button> <button class="btn b4" data-a="adm-fiche" data-uid="${esc(l.userId)}">Fiche</button></span></li>`; }).join('')}</ul>`,
-      'Expirées depuis moins de 60 jours, ou qui expirent dans les 30 prochains jours. « Prolonger » ajoute un an à partir de la date de fin (ou d’aujourd’hui si elle est passée).'));
     if (oldKeys.length) parts.push(sec('Clés jamais activées', oldKeys.length, `<p>${oldKeys.length} clé${oldKeys.length > 1 ? 's' : ''} générée${oldKeys.length > 1 ? 's' : ''} il y a plus de 30 jours ${oldKeys.length > 1 ? 'n’ont' : 'n’a'} pas été activée${oldKeys.length > 1 ? 's' : ''} : ${esc([...new Set(oldKeys.map((k) => k.orgName || 'sans établissement'))].slice(0, 6).join(', '))}.</p><p><a class="btn b4" href="#/admin/entreprises">Voir les clés</a></p>`, 'À relancer, ou à révoquer depuis la fiche de l’établissement.'));
-    box.innerHTML = parts.length ? parts.join('') : '<div class="panel"><p><b>Tout est à jour.</b> Aucune inscription, demande ni licence à traiter.</p></div>';
+    box.innerHTML = parts.length ? parts.join('') : '<div class="panel"><p><b>Tout est à jour.</b> Aucune inscription ni demande d’ajout à traiter.</p></div>';
     todoSearch();
   }
   function todoSearch() {
@@ -480,12 +470,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       (pend.length ? `<h3 class="todo-h">Inscriptions en attente</h3><ul class="adm-pend-l">${pend.map((u) => `<li><div><b>${esc(u.companyName || fullName(u))}</b><small>${esc(u.email)}</small></div><span class="adm-pend-b"><button class="btn b1" data-a="todo-approve" data-uid="${esc(u.uid)}">Valider</button></span></li>`).join('')}</ul>` : '') +
       `<p style="margin-top:10px"><button class="btn b4" data-a="todo-users">Chercher « ${esc(T.q.trim())} » dans les comptes utilisateurs →</button></p></section>`;
   }
-  async function todoExtend(b) {
-    const l = (T.lic || []).find((x) => x.id === b.dataset.id); if (!l) return; b.disabled = true; b.textContent = 'Prolongation…';
-    try { const base = Math.max(Date.now(), tms(l.expiresAt)), until = new Date(base + 365 * DAYS);
-      await (await PD()).adminExtendLicense(l.id, until); T.lic = T.lic.filter((x) => x.id !== l.id); renderTodo(); toast(`${l.productName} prolongée jusqu’au ${until.toLocaleDateString('fr-FR')}.`);
-    } catch (e) { toast(errMsg(e)); b.disabled = false; b.textContent = 'Prolonger d’un an'; }
-  }
+
   document.addEventListener('input', (e) => { if (e.target.id === 'todo-q') { T.q = e.target.value; todoSearch(); } });
   /* ---- actions ---- */
   Object.assign(A, {
@@ -493,7 +478,6 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     'todo-reload': () => { T.at = 0; loadTodo(); },
     'todo-approve': (b) => quickApprove(b),
     'todo-member': (b) => quickMember(b),
-    'todo-extend': (b) => todoExtend(b),
     'todo-users': () => { window.SP_ADM_Q = T.q.trim(); location.hash = '#/admin'; },
     'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
     'org-approve': (b) => approveForm(b.dataset.uid),
