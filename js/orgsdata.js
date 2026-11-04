@@ -172,9 +172,24 @@ export async function adminCreateKeys(keys, spec) {
   }
   return out;
 }
-export async function adminSetKeyStatus(id, status) { await updateDoc(doc(db, "licenseKeys", id), { status, updatedAt: serverTimestamp() }); }
+/* Une clé pack = UNE clé visible ; les fiches des autres applications (dérivées) sont cachées et suivent la clé pack. */
+export const isDerivedPackKey = (k) => /^Pack PACK-/.test(String((k && k.label) || ""));
+async function packMemberIds(id) {
+  const s = await getDoc(doc(db, "licenseKeys", id)); const k = s.exists() ? s.data() : null;
+  const apps = k ? packApps(k.label) : [];
+  if (!k || apps.length < 2 || !k.key) return [];
+  return Promise.all(apps.slice(1).map(async (pid) => keyHash(await derivePackKey(k.key, pid))));
+}
+export async function adminSetKeyStatus(id, status) {
+  const ids = [id, ...await packMemberIds(id)];
+  for (const i of ids) { try { await updateDoc(doc(db, "licenseKeys", i), { status, updatedAt: serverTimestamp() }); } catch (e) { if (i === id) throw e; } }
+}
 export async function adminSetKeyLabel(id, label, role, classe) { await updateDoc(doc(db, "licenseKeys", id), { label: String(label || "").slice(0, 120), role: role || "", classe: String(classe || "").slice(0, 60), updatedAt: serverTimestamp() }); }
-export async function adminDeleteKey(id) { await deleteDoc(doc(db, "licenseKeys", id)); }
+export async function adminDeleteKey(id) {
+  const ids = await packMemberIds(id);
+  await deleteDoc(doc(db, "licenseKeys", id));
+  for (const i of ids) { try { await deleteDoc(doc(db, "licenseKeys", i)); } catch (e) { /* déjà supprimée */ } }
+}
 export const ROLES = { eleve: "Élève / étudiant", enseignant: "Enseignant" };
 
 /* ------------------------------------------------------------------ utilisateur : activer une clé */

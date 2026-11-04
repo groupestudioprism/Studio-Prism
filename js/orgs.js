@@ -73,6 +73,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       const [od, pd] = await Promise.all([OD(), PD()]);
       await pd.ensureSuiteProducts?.().catch(() => []);   // NEXUS et les apps de la suite toujours proposés
       [O.orgs, O.keys, O.prods, O.offers, O.pending, O.requests] = await Promise.all([od.adminListOrgs(), od.adminListKeys(null), pd.adminListProducts(), pd.adminListOffers().catch(() => []), od.adminListPending().catch(() => []), od.adminListRequests().catch(() => [])]);
+      O.keys = O.keys.filter((k) => !od.isDerivedPackKey(k));   // pack = une seule clé affichée
       O.err = ''; O.at = Date.now();
     } catch (e) { console.error('[Studio Prism] Établissements :', e); O.err = errMsg(e); }
     renderOrgs(); renderTodo(); todoCount();
@@ -371,7 +372,6 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       pmodal(`<h3>${out.length} clé${out.length > 1 ? 's' : ''} pack générée${out.length > 1 ? 's' : ''}</h3><p class="mut">${esc(names)} · ${esc(tLabel(spec.licenseType))}${oid ? ' · ' + esc(orgById(oid).name) : ''}.
         Une clé par compte : la personne la saisit une seule fois (Mon compte → Activer une clé, ou dans ARCHIPLAN, ARCHITRAFIC ou ArchiVision) et toutes ces applications s’activent.</p>
         <textarea id="ok-out" readonly rows="${Math.min(12, out.length + 1)}" style="width:100%;font-family:monospace">${esc(out.map((x) => x.key).join('\n'))}</textarea>
-        <details style="margin-top:8px"><summary>Détail : clé de chaque application (activables aussi une par une)</summary><pre style="font-size:12px;white-space:pre-wrap">${esc(out.map((x) => x.key + '\n' + x.apps.map((a) => '   ' + a.productName + ' : ' + a.key).join('\n')).join('\n\n'))}</pre></details>
         <p style="margin-top:10px"><button class="btn b1" data-a="org-copy-out">Copier les clés pack</button> ${oid ? `<button class="btn b4" data-a="org-open" data-org="${esc(oid)}">Retour à la fiche</button>` : ''}</p>`, true);
     } catch (e) { fm.querySelector('#ok-err').textContent = errMsg(e) + (e.key ? ' (' + e.key + ')' : ''); btn.disabled = false; btn.textContent = 'Générer'; }
   }

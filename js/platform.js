@@ -1105,7 +1105,7 @@
     V(shell(`${lede('Formules (gratuit, achat unique, abonnement, sur devis) et prix de chaque produit. Tout est facultatif : un produit peut n’avoir aucune offre, une seule, ou plusieurs. Les prix sont enregistrés ici (Firestore) et nulle part ailleurs.')}` +
       `<div class="panel adm-bar of-bar"><div class="acc-f"><label for="ot-prod">Produit</label><select id="ot-prod"><option value="">Tous</option></select></div>` +
       `<div class="acc-f"><label for="ot-status">Statut</label><select id="ot-status"><option value="">Tous</option><option value="active">Actives</option><option value="inactive">Inactives</option></select></div>` +
-      `<div class="acc-f adm-rs"><button type="button" class="btn b1" data-a="of-add">+ Ajouter une formule</button></div></div>` +
+      `<div class="acc-f adm-rs"><button type="button" class="btn b1" data-a="of-multi">+ Créer les offres d’un produit</button> <button type="button" class="btn b4" data-a="of-add">+ Une seule formule</button></div></div>` +
       `<div id="of-list" aria-live="polite"><p class="mut">Chargement des offres…</p></div>`));
     loadOffersAdmin();
   }
@@ -1230,6 +1230,39 @@
     if (!pl) offerAutoId();
   }
 
+  /* Toutes les offres d'un produit en une seule fois (une ligne par offre : cochez, nommez, mettez les prix) */
+  const MULTI = [['free', 'Gratuit', 'free', 'free'], ['pro', 'Pro', 'pro', 'subscription'], ['pro_entreprise', 'Pro Entreprise', 'pro_entreprise', 'subscription']];
+  A['of-multi'] = () => {
+    if (!OT.prods.length) return toast('Créez d’abord un produit (onglet Produits).');
+    const rows = MULTI.map(([k, name, type, mode], i) => `<tr><td><label class="opt"><input type="checkbox" name="m-on${i}" ${k === 'free' ? '' : 'checked'}> <b>${esc(name)}</b></label><input type="hidden" name="m-type${i}" value="${type}"><input type="hidden" name="m-mode${i}" value="${mode}"></td>` +
+      `<td><input type="text" name="m-name${i}" value="${esc(name)}" maxlength="80" aria-label="Nom ${esc(name)}"></td>` +
+      (mode === 'free' ? '<td colspan="3" class="mut">Aucun prix</td>' : `<td><input type="number" name="m-mon${i}" min="0" step="0.01" placeholder="€ / mois" aria-label="Prix mensuel ${esc(name)}"></td><td><input type="number" name="m-qua${i}" min="0" step="0.01" placeholder="€ / trimestre" aria-label="Prix trimestriel ${esc(name)}"></td><td><input type="number" name="m-yea${i}" min="0" step="0.01" placeholder="€ / an" aria-label="Prix annuel ${esc(name)}"></td>`) + '</tr>').join('');
+    pmodal(`<h3>Créer les offres d’un produit</h3><p class="mut">Choisissez le produit, cochez les offres à créer et indiquez les prix (laissez une période vide pour ne pas la proposer). Tout est enregistré en une fois.</p>` +
+      `<form data-f="of-multi" novalidate>${fld('m-prod', 'Produit', sel('m-prod', OT.prods.map((x) => [x.id, x.name]), OT.prod || OT.prods[0].id))}` +
+      `<div class="adm-tw"><table class="adm-t" style="min-width:0"><thead><tr><th>Offre</th><th>Nom affiché</th><th>Mensuel</th><th>Trimestriel</th><th>Annuel</th></tr></thead><tbody>${rows}</tbody></table></div>` +
+      fld('m-cur', 'Devise', inp('m-cur', 'text', 'EUR', 'maxlength="3"')) +
+      `<p class="fe" id="m-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">Créer les offres</button></p></form>`, true);
+  };
+  async function submitMulti(fm) {
+    const err = fm.querySelector('#m-err'); err.textContent = '';
+    const prodId = fm.elements['m-prod'].value, prod = OT.prods.find((p) => p.id === prodId), cur = fm.elements['m-cur'].value.trim().toUpperCase(), made = [];
+    if (!prod) { err.textContent = 'Produit inexistant.'; return; }
+    if (!/^[A-Z]{3}$/.test(cur)) { err.textContent = 'Devise : code à 3 lettres (ex. EUR).'; return; }
+    for (let i = 0; i < MULTI.length; i++) {
+      if (!fm.elements['m-on' + i].checked) continue;
+      const mode = fm.elements['m-mode' + i].value, name = fm.elements['m-name' + i].value.trim() || MULTI[i][1], prices = [];
+      if (mode === 'subscription') {
+        [['m-mon', 'monthly'], ['m-qua', 'quarterly'], ['m-yea', 'yearly']].forEach(([k, period]) => { const v = fm.elements[k + i].value.trim(); if (v) { const n = Number(v); if (isFinite(n) && n > 0 && n < 1000000) prices.push({ period, amount: n, currency: cur }); else made.bad = name; } });
+        if (!prices.length) { err.textContent = `${name} : saisissez au moins un prix, ou décochez cette offre.`; return; }
+      }
+      made.push({ plan: { id: slugify(`${prodId}-${MULTI[i][0]}`), productId: prodId, productName: prod.name, name, description: '', mode, features: [], licenseType: MULTI[i][2], status: 'active', featured: MULTI[i][0] === 'pro', displayOrder: i + 1 }, prices });
+    }
+    if (made.bad) { err.textContent = `${made.bad} : un prix doit être supérieur à 0.`; return; }
+    if (!made.length) { err.textContent = 'Cochez au moins une offre.'; return; }
+    const btn = fm.querySelector('button[type=submit]'); btn.disabled = true;
+    try { const d = await D(); for (const m of made) await d.savePlan(m.plan, m.prices, true, null); resetCatalogue(); A.x(); toast(`${made.length} offre${made.length > 1 ? 's' : ''} créée${made.length > 1 ? 's' : ''}.`); loadOffersAdmin(); }
+    catch (e) { err.textContent = errMsg(e) + ' (si l’offre existe déjà, modifiez-la depuis la liste)'; btn.disabled = false; }
+  }
   A['of-add'] = () => offerForm('');
   A['of-edit'] = (btn) => offerForm(btn.dataset.id);
 
@@ -1326,6 +1359,7 @@
     if (f === 'acc-pw') submitPassword(e.target);
     else if (f === 'acc-del') submitDeleteAccount(e.target);
     else if (f === 'acc-com') submitCommercial(e.target);
+    else if (f === 'of-multi') submitMulti(e.target);
     else if (f === 'adm-lic') submitLicense(e.target);
     else if (f === 'adm-newuser') submitNewUser(e.target);
     else if (f === 'cat-prod') submitProduct(e.target);
