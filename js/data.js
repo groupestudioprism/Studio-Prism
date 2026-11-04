@@ -480,3 +480,13 @@ export async function deleteMyAccount(password) {
   catch (e) { throw fail("app/self-delete-partial", { cause: e && e.code }); }
   return { ok: true, authDeleted: true, profileDeleted: prof.exists(), licensesDeleted: lics.size, server: false };
 }
+
+/* Demande de passage en compte commercial (particulier) : examinée par l'administration (Comptes › Demande commerciale). */
+export async function requestCommercial(uid, r) {
+  const clean = (v, n) => String(v || "").trim().slice(0, n);
+  await updateDoc(doc(db, "users", uid), {
+    commercialStatus: "pending",
+    commercialRequest: { siret: clean(r.siret, 20), activity: clean(r.activity, 120), website: clean(r.website, 200), purpose: clean(r.purpose, 500) },
+    updatedAt: serverTimestamp()
+  });
+}

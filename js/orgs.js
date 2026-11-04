@@ -480,7 +480,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     'todo-reload': () => { T.at = 0; loadTodo(); },
     'todo-approve': (b) => quickApprove(b),
     'todo-member': (b) => quickMember(b),
-    'todo-users': () => { window.SP_ADM_Q = T.q.trim(); location.hash = '#/admin'; },
+    'todo-users': () => { window.SP_ADM_Q = T.q.trim(); location.hash = '#/admin/comptes'; },
     'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
     'org-approve': (b) => approveForm(b.dataset.uid),
     'org-req-ok': (b) => memberForm(b.dataset.id),

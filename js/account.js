@@ -112,7 +112,7 @@
   /* Où envoyer l'utilisateur après connexion : l'administration pour un administrateur, « Mon compte » pour les autres. */
   function spHome(profile) {
     try { if (sessionStorage.getItem('sp.pendingKey')) return '#/activer'; } catch (e) { /* stockage indisponible */ }   // clé saisie avant la connexion
-    return profile.role === 'admin' ? '#/admin/a-traiter' : '#/compte';
+    return profile.role === 'admin' ? '#/admin' : '#/compte';
   }
 
   function redirect(h) {
@@ -263,6 +263,7 @@
       field('email', 'Adresse e-mail', 'email', 'email', { attrs: 'maxlength="160" inputmode="email"' }) +
       field('mdp', 'Mot de passe', 'password', 'new-password', { hint: '8 caractères minimum, avec au moins une lettre et un chiffre.' }) +
       field('mdp2', 'Confirmation du mot de passe', 'password', 'new-password') +
+      comFields() +
       company +
       `<label class="opt"><input type="checkbox" id="cgu" aria-describedby="e-cgu"><span>J’accepte les <a class="more" href="#/conditions-utilisation">conditions d’utilisation</a> et la <a class="more" href="#/confidentialite">politique de confidentialité</a>.</span></label><p class="fe" id="e-cgu" role="alert"></p>`;
 
@@ -325,11 +326,31 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       siret: g('coSiret').replace(/\s/g, ''), repRole: g('coRole'), items, userRange: tier.id, userLimit: tier.limit } };
   }
 
+  /* Particulier : usage commercial ou non (sinon compte non commercial). Une demande commerciale est examinée par Studio Prism. */
+  const comFields = () => `<fieldset class="acc-kind acc-use" id="useBox"><legend>Utilisation du compte</legend>` +
+    `<label class="acc-card on"><input type="radio" name="usage" value="non" checked><span><b>Non commercial</b><small>Usage personnel, études, loisirs, apprentissage. Accès immédiat, sans vente de ce que vous réalisez.</small></span></label>` +
+    `<label class="acc-card"><input type="radio" name="usage" value="com"><span><b>Commercial</b><small>Vous utilisez les logiciels pour des travaux facturés (indépendant, auto-entrepreneur, freelance…). Votre demande est examinée par Studio Prism.</small></span></label>` +
+    `<div id="comBox" hidden><p class="acc-note">En attendant la décision de Studio Prism, votre compte fonctionne avec les options <b>non commerciales</b>. Vous serez prévenu dans « Mon compte ». Si vous changez d’avis, vous pourrez aussi faire cette demande plus tard depuis Mon compte.</p>` +
+    field('cmSiret', 'Numéro SIRET', 'text', 'off', { attrs: 'maxlength="17" inputmode="numeric" placeholder="14 chiffres"' }) +
+    field('cmActivity', 'Votre activité', 'text', 'off', { attrs: 'maxlength="120" placeholder="Ex. : architecte indépendant, bureau d’études…"' }) +
+    field('cmSite', 'Site internet', 'text', 'url', { opt: 1, attrs: 'maxlength="200" placeholder="www.exemple.fr"' }) +
+    `<div class="acc-f"><label for="cmPurpose">Usage prévu <span class="mut">(facultatif)</span></label><textarea id="cmPurpose" name="cmPurpose" rows="3" maxlength="500" placeholder="Pour quels types de projets utiliserez-vous les logiciels ?"></textarea></div></div></fieldset>`;
+  /* Lecture de la demande commerciale ; null si usage non commercial. */
+  function readCommercial(fm, er) {
+    const g = (id) => ((fm.elements[id] && fm.elements[id].value) || '').trim();
+    if (!fm.elements.usage || fm.elements.usage.value !== 'com') return null;
+    if (!siretOk(g('cmSiret'))) er.cmSiret = g('cmSiret') ? 'Numéro SIRET invalide (14 chiffres).' : 'Renseignez votre numéro SIRET.';
+    if (!g('cmActivity')) er.cmActivity = 'Décrivez brièvement votre activité.';
+    const site = normUrl(g('cmSite')); if (site === null) er.cmSite = 'Adresse de site internet invalide.';
+    return { siret: g('cmSiret').replace(/\s/g, ''), activity: g('cmActivity'), website: site || '', purpose: g('cmPurpose').slice(0, 500) };
+  }
+
   function kindChanged() {
     const sel = document.querySelector('input[name=kind]:checked');
     const co = !!sel && sel.value === 'company';
     const box = document.getElementById('co');
     if (box) box.hidden = !co;
+    const ub = document.getElementById('useBox'); if (ub) ub.hidden = co;
     const sb = document.querySelector('form[data-f="asu"] > button.btn.b1');
     if (sb) sb.textContent = co ? 'Demander un devis' : 'Créer mon compte';
     const lb = document.querySelector('label[for=email]');
@@ -342,7 +363,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     clearErrors();
     const email = g('email').toLowerCase(), pw = fm.elements.mdp.value, er = {};
     if (!EMAIL_RE.test(email)) er.email = g('email') ? 'Adresse e-mail invalide.' : 'Renseignez votre adresse e-mail.';
-    let isCo = false, tier = null, site = '';
+    let isCo = false, tier = null, site = '', commercial = null;
     if (up) {
       isCo = fm.elements.kind.value === 'company';
       if (!g('prenom')) er.prenom = 'Renseignez votre prénom.';
@@ -351,7 +372,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       if (pb) er.mdp = pb;
       if (!fm.elements.mdp2.value) er.mdp2 = 'Confirmez votre mot de passe.';
       else if (fm.elements.mdp2.value !== pw) er.mdp2 = 'Les mots de passe ne correspondent pas.';
-      if (isCo) { const rc = readCompany(fm, email); Object.assign(er, rc.er); tier = rc.company; }
+      if (isCo) { const rc = readCompany(fm, email); Object.assign(er, rc.er); tier = rc.company; } else commercial = readCommercial(fm, er);
       if (!fm.elements.cgu.checked) er.cgu = 'Acceptez les conditions pour continuer.';
     } else if (!pw) {
       er.mdp = 'Saisissez votre mot de passe.';
@@ -365,6 +386,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
       window.SP.pwLogin = true;   // connexion par mot de passe : pas de code PIN demandé ensuite dans cet onglet
       if (up) {
         const payload = { firstName: g('prenom'), lastName: g('nom'), email, password: pw, accountKind: isCo ? 'company' : 'individual' };
+        if (commercial) payload.commercial = commercial;
         if (isCo) payload.company = tier;   // { name, email, siret, repRole, items, userRange, userLimit… } (readCompany)
         try { await api.signUp(payload); }
         catch (e2) {
@@ -422,7 +444,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   const fullName = (u) => [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
 
   /* Onglets : « À traiter » d'abord ; Écoles / Entreprises et Produits / Offres et prix regroupés (sous-onglets) */
-  const ADMIN_TABS = [['todo', 'À traiter', '#/admin/a-traiter'], ['quotes', 'Devis', '#/admin/devis', ['quotes', 'legal']], ['users', 'Comptes', '#/admin'], ['orgs', 'Écoles et entreprises', '#/admin/entreprises', ['orgs', 'ents']], ['catalogue', 'Produits et prix', '#/admin/catalogue', ['catalogue', 'offers']], ['downloads', 'Téléchargements', '#/admin/telechargements']];
+  const ADMIN_TABS = [['dash', 'Tableau de bord', '#/admin'], ['todo', 'À traiter', '#/admin/a-traiter'], ['users', 'Comptes', '#/admin/comptes'], ['quotes', 'Devis', '#/admin/devis', ['quotes', 'legal']], ['orgs', 'Écoles et entreprises', '#/admin/entreprises', ['orgs', 'ents']], ['catalogue', 'Produits et prix', '#/admin/catalogue', ['catalogue', 'offers']], ['downloads', 'Téléchargements', '#/admin/telechargements']];
   const ADMIN_SUB = { quotes: [['quotes', 'Devis', '#/admin/devis'], ['legal', 'Informations légales', '#/admin/infos-legales']], orgs: [['ents', 'Entreprises', '#/admin/entreprises'], ['orgs', 'Écoles et formations', '#/admin/scolaire']], catalogue: [['catalogue', 'Produits', '#/admin/catalogue'], ['offers', 'Offres et prix', '#/admin/abonnements']] };
   const adminShell = (inner, tab) => {
     const grp = ADMIN_TABS.find(([id, , , g]) => id === tab || (g && g.includes(tab))), sub = grp && ADMIN_SUB[grp[0]];
@@ -452,7 +474,7 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
   }
 
   function adminPage() {
-    adminGate('users', (p, shell) => usersTab(p, shell));
+    adminGate('users', (p, shell) => { if (window.SP.kit.ensureLive) window.SP.kit.ensureLive(); usersTab(p, shell); });
   }
 
   function usersTab(p, shell) {
@@ -462,20 +484,22 @@ ${av ? '<p class="acc-note">ArchiVision est un service de Studio Prism : votre c
     V(shell(`<p class="lead">Connecté en tant que ${esc(fullName(p))}. Les comptes ci-dessous proviennent de Firebase.</p>
 <div class="adm-stats" id="adm-stats" aria-live="polite"></div>
 <div id="adm-pending" aria-live="polite"></div>
-<div class="panel adm-bar"><div class="acc-f adm-q"><label for="adm-q">Rechercher</label><input id="adm-q" type="search" placeholder="Nom, prénom, e-mail ou entreprise" autocomplete="off" value="${esc(AD.q || '')}"></div>
+<div class="panel adm-bar"><div class="adm-row1"><div class="acc-f adm-q"><label for="adm-q">Rechercher</label><input id="adm-q" type="search" placeholder="Nom, e-mail, entreprise…" autocomplete="off" value="${esc(AD.q || '')}"></div>
+${sel('adm-sub', 'Type de compte', [['', 'Tous'], ['free', 'Free'], ['commercial', 'Commercial'], ['entreprise', 'Entreprise']])}
+${sel('adm-status', 'Statut', [['', 'Tous'], ['pending', 'Entreprise en attente'], ['comreq', 'Demande commerciale'], ['active', 'Actif'], ['suspended', 'Désactivé']])}
+${sel('adm-prod', 'Logiciel', [['', 'Tous']])}
+${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A → Z)'], ['login', 'Dernière connexion'], ['email', 'E-mail']])}
+<div class="acc-f adm-rs"><button type="button" class="btn b4" data-a="adm-reset">Réinitialiser</button></div></div>
+<details class="adm-more-f"><summary>Plus de filtres</summary><div class="adm-row2">
 ${sel('adm-kind', 'Compte', [['', 'Tous'], ['individual', 'Particulier'], ['company', 'Entreprise']])}
-${sel('adm-sub', 'Abonnement', [['', 'Tous'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
 ${sel('adm-role', 'Rôle', [['', 'Tous'], ['user', 'Utilisateur'], ['admin', 'Administrateur']])}
-${sel('adm-status', 'Statut', [['', 'Tous'], ['pending', 'En attente'], ['active', 'Actif'], ['suspended', 'Désactivé']])}
-${sel('adm-prod', 'Application', [['', 'Toutes']])}
 ${sel('adm-licf', 'Licence', [['', 'Toutes'], ['with', 'Avec licence'], ['none', 'Sans licence'], ['free', 'Free'], ['pro', 'Pro'], ['pro_entreprise', 'Pro Entreprise']])}
 ${sel('adm-org', 'Rattachement', [['', 'Tous'], ['scol', 'Scolaire (tous)'], ['ent', 'Entreprise (toutes)'], ['none', 'Aucun rattachement']])}
 ${sel('adm-orole', 'Profil scolaire', [['', 'Tous'], ['eleve', 'Élève'], ['enseignant', 'Enseignant']])}
 ${sel('adm-created', 'Inscription', [['', 'Toutes'], ['7', '7 derniers jours'], ['30', '30 derniers jours'], ['365', '12 derniers mois']])}
 ${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours'], ['-90', 'Inactif depuis 90 jours'], ['-365', 'Inactif depuis 1 an']])}
-${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A → Z)'], ['login', 'Dernière connexion'], ['email', 'E-mail']])}
-<div class="acc-f adm-rs"><button type="button" class="btn b4" data-a="adm-reset">Réinitialiser</button></div></div>
-<div class="adm-tools"><p class="mt2" id="adm-info" role="status" aria-live="polite"></p><button type="button" class="btn b4" data-a="adm-svc-open">Gestion des comptes : état du service</button> <button type="button" class="btn b1" data-a="adm-add-user">+ Ajouter un utilisateur</button></div><div id="adm-list"></div>
+</div></details></div>
+<div class="adm-tools"><p class="mt2" id="adm-info" role="status" aria-live="polite"></p><button type="button" class="btn b1" data-a="adm-add-user">+ Ajouter un utilisateur</button></div><div id="adm-list"></div>
 <p class="c"><button class="btn b4" id="adm-more" data-a="adm-more" hidden>Charger plus d’utilisateurs</button></p>`));
     renderStats();
     $('#adm-info').textContent = 'Chargement des utilisateurs…';
@@ -517,7 +541,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
       // produits « commercialisables » = au moins une formule active (une panne ici ne bloque rien : on n'affiche alors que les licences existantes)
       if (!AD.sellable) { try { AD.sellable = new Set((await d.adminListOffers()).filter((o) => o.status === 'active').map((o) => o.productId)); } catch (e2) { console.warn('[Studio Prism] Formules indisponibles :', e2); } }
       users.forEach((u) => { AD.lic[u.uid] = []; });
-      (await d.adminLicensesFor(users.map((u) => u.uid))).forEach((l) => { if (AD.lic[l.userId]) AD.lic[l.userId].push(l); });
+      (await d.adminLicensesFor(users.map((u) => u.uid))).forEach((l) => { if (AD.lic[l.userId] && !licGone(l)) AD.lic[l.userId].push(l); });
       AD.licError = false;
       const sel = document.getElementById('adm-prod');
       if (sel && sel.options.length <= 1) AD.products.forEach((p) => sel.add(new Option(p.name, p.id)));
@@ -550,9 +574,9 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   function renderStats() {
     const el = document.getElementById('adm-stats');
     if (!el) return;
-    const c = AD.counts;
-    el.innerHTML = [['Utilisateurs', 'total'], ['Free', 'free'], ['Pro', 'pro'], ['Pro Entreprise', 'proEntreprise'], ['Administrateurs', 'admins']]
-      .map(([l, k]) => `<div class="adm-stat"><span class="adm-n">${c ? c[k] : '—'}</span><span class="adm-l">${l}</span></div>`).join('');
+    const U = AD.users, n = (f) => U.filter(f).length;
+    el.innerHTML = [['Comptes', U.length], ['Free', n((u) => acctType(u) === 'free')], ['Commercial', n((u) => acctType(u) === 'commercial')], ['Entreprise', n((u) => acctType(u) === 'entreprise')], ['Administrateurs', n((u) => u.role === 'admin')]]
+      .map(([l, v]) => `<div class="adm-stat"><span class="adm-n">${v}</span><span class="adm-l">${l}</span></div>`).join('');
     renderPending();
   }
 
@@ -560,9 +584,10 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   function renderPending() {
     const pb = document.getElementById('adm-pending');
     if (!pb) return;
-    const list = AD.users.filter((u) => u.status === 'pending'), np = Math.max((AD.counts && AD.counts.pending) || 0, list.length);
-    if (!np) { pb.innerHTML = ''; return; }
-    pb.innerHTML = `<div class="panel adm-pend adm-pend-row"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation${list.length ? ' : ' + list.slice(0, 3).map((u) => esc(u.companyName || u.email)).join(', ') + (list.length > 3 ? '…' : '') : ''}.</p><a class="btn b1" href="#/admin/entreprises" data-a="adm-go-pending">Traiter dans l’onglet Entreprise</a></div>`;
+    const list = AD.users.filter((u) => u.status === 'pending'), np = list.length, cr = AD.users.filter((u) => u.commercialStatus === 'pending');
+    const crHtml = cr.length ? `<div class="panel adm-pend"><p><b>${cr.length} demande${cr.length > 1 ? 's' : ''} de compte commercial</b> à examiner :</p><ul class="adm-pend-l">${cr.map((u) => { const r = u.commercialRequest || {}; return `<li><div><b>${esc(fullName(u))}</b><small>${esc(u.email)}${r.siret ? ' · SIRET ' + esc(r.siret) : ''}${r.activity ? ' · ' + esc(r.activity) : ''}${r.website ? ' · ' + esc(r.website) : ''}</small>${r.purpose ? `<small>${esc(r.purpose)}</small>` : ''}</div><span class="adm-pend-b"><button class="btn b1" data-a="adm-com-ok" data-uid="${esc(u.uid)}">Accepter</button> <button class="btn btn-danger" data-a="adm-com-no" data-uid="${esc(u.uid)}">Refuser</button></span></li>`; }).join('')}</ul></div>` : '';
+    if (!np) { pb.innerHTML = crHtml; return; }
+    pb.innerHTML = `<div class="panel adm-pend adm-pend-row"><p><b>${np} demande${np > 1 ? 's' : ''} de compte entreprise</b> en attente de validation${list.length ? ' : ' + list.slice(0, 3).map((u) => esc(u.companyName || u.email)).join(', ') + (list.length > 3 ? '…' : '') : ''}.</p><a class="btn b1" href="#/admin/entreprises" data-a="adm-go-pending">Traiter dans l’onglet Entreprise</a></div>` + crHtml;
   }
 
   function licenseMatch(u) {
@@ -600,15 +625,37 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
   };
   function filtered() {
     const q = AD.q.trim().toLowerCase();
-    return AD.users.filter((u) => (!AD.kind || u.accountKind === AD.kind) && (!AD.sub || u.subscription === AD.sub) &&
-      (!AD.role || u.role === AD.role) && (!AD.status || u.status === AD.status) && licenseMatch(u) && orgMatch(u) &&
+    return AD.users.filter((u) => (!AD.kind || u.accountKind === AD.kind) && (!AD.sub || acctType(u) === AD.sub) &&
+      (!AD.role || u.role === AD.role) && (!AD.status || (AD.status === 'comreq' ? u.commercialStatus === 'pending' : u.status === AD.status)) && licenseMatch(u) && orgMatch(u) &&
       (!AD.orole || u.orgRole === AD.orole) && dateMatch(u) &&
       (!q || [u.firstName, u.lastName, u.firstName + ' ' + u.lastName, u.email, u.companyName, u.orgName, u.orgClass].some((v) => String(v || '').toLowerCase().indexOf(q) >= 0)))
       .sort(SORTS[AD.sort] || SORTS.recent);
   }
 
+  /* Type de compte : Free (non commercial) / Commercial (accepté par Studio Prism) / Entreprise */
+  const ACCT = { free: 'Free', commercial: 'Commercial', entreprise: 'Entreprise' };
+  function acctType(u) {
+    if (u.accountKind === 'company' || u.subscription === 'pro_entreprise') return 'entreprise';
+    return u.commercialStatus === 'approved' ? 'commercial' : 'free';
+  }
+  /* Données en direct (js/live.js) : remplace la liste paginée par l'ensemble des comptes, mis à jour à chaque changement. */
+  function applyLive(S) {
+    if (CUR !== 'admin/comptes' || !S.ready.users || S.errors.users) return;
+    AD.users = S.users; AD.hasMore = false; AD.cursor = null; AD.error = '';
+    if (S.ready.licenses && !S.errors.licenses) { AD.lic = {}; S.users.forEach((u) => { AD.lic[u.uid] = []; }); S.licenses.forEach((l) => { if (AD.lic[l.userId] && !licGone(l)) AD.lic[l.userId].push(l); }); AD.licError = false; }
+    if (S.ready.products && S.products.length) AD.products = S.products;
+    const sel = document.getElementById('adm-prod');
+    if (sel && AD.products) { const cur = sel.value; sel.length = 1; AD.products.forEach((p) => sel.add(new Option(p.name, p.id))); sel.value = cur; }
+    AD.counts = null; renderAdmin();
+  }
   const typeLabel = (t) => L.sub[t] || String(t || '—').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
   const LIC_STATUS = { active: 'Active', suspended: 'Suspendue', expired: 'Expirée' };
+  /* Licence expirée : « Expirée » reste affiché 7 jours, puis la licence disparaît (compte repassé en Free). Décompte dès 30 jours restants. */
+  const GRACE_MS = 7 * 86400000;
+  const expMs = (l) => (l && l.expiresAt && typeof l.expiresAt.toMillis === 'function' ? l.expiresAt.toMillis() : 0);
+  const licGone = (l) => { const e = expMs(l); return !!e && e + GRACE_MS < Date.now(); };
+  const daysLeft = (l) => { const e = expMs(l); return e ? Math.ceil((e - Date.now()) / 86400000) : null; };
+  const countdownTxt = (l) => { const d = daysLeft(l); return d !== null && d >= 0 && d <= 30 && l.status === 'active' ? (d === 0 ? 'Expire aujourd’hui' : `Expire dans ${d} jour${d > 1 ? 's' : ''}`) : ''; };
   /* Une licence « active » dont la date d'expiration est passée est affichée comme expirée. */
   const licState = (l) => {
     const exp = l.expiresAt && typeof l.expiresAt.toDate === 'function' ? l.expiresAt.toDate() : null;
@@ -625,7 +672,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const nameOf = (l) => ((AD.products || []).find((p) => p.id === l.productId) || {}).name || l.productName || l.productId;
     return mine.slice().sort((a, b) => String(nameOf(a)).localeCompare(String(nameOf(b)), 'fr')).map((l) => {
       const stt = licState(l);
-      return `<div class="adm-lic"><b>${esc(nameOf(l))}</b> — ${esc(typeLabel(l.licenseType))}${stt !== 'active' ? ` <span class="bd bd-off">${esc(LIC_STATUS[stt] || stt)}</span>` : ''}</div>`;
+      return `<div class="adm-lic"><b>${esc(nameOf(l))}</b> — ${esc(typeLabel(l.licenseType))}${stt !== 'active' ? ` <span class="bd bd-off">${esc(LIC_STATUS[stt] || stt)}</span>` : countdownTxt(l) ? ` <span class="bd bd-pend">${esc(countdownTxt(l))}</span>` : ''}</div>`;
     }).join('');
   }
 
@@ -645,19 +692,16 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     return `<tr role="row">` +
       cell('Utilisateur', `<b>${esc(fullName(u))}</b><small class="adm-mail">${esc(u.email)}</small>`) +
-      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}${(x => `<small class="adm-co${x.ok ? '' : ''}">${esc(x.txt)}</small>`)(usageOf(u))}`) +
-      cell('Abonnement', badge(SUBCLS[u.subscription] || '', L.sub[u.subscription] || u.subscription || '—')) +
-      cell('Rôle', badge(u.role === 'admin' ? 'bd-admin' : 'bd-user', L.role[u.role] || u.role || '—')) +
+      cell('Compte', `${badge('bd-kind', L.kind[u.accountKind] || '—')}${co ? `<small class="adm-co">${esc(u.companyName)}</small>` : ''}${u.orgName ? `<small class="adm-co">🏢 ${esc(u.orgName)}${u.orgClass ? ' · ' + esc(u.orgClass) : ''}</small>` : ''}`) +
+      cell('Type de compte', badge({ free: 'bd-free', commercial: 'bd-pro', entreprise: 'bd-ent' }[acctType(u)], ACCT[acctType(u)]) + (u.commercialStatus === 'pending' ? '<small>Demande commerciale en attente</small>' : '') + (u.role === 'admin' ? '<small>Administrateur</small>' : ''), 'adm-ty') +
       cell('Applications / Licences', licCell(u), 'adm-l') +
-      cell('Comptes demandés', esc(tier), 'adm-d') +
-      cell('Créé le', fdate(u.createdAt), 'adm-d') +
-      cell('Dernière connexion', fdate(u.lastLogin, true), 'adm-d') +
+      cell('Activité', `${esc(fdate(u.lastLogin, true))}<small>Créé le ${esc(fdate(u.createdAt))}${co && tier !== '—' ? ' · ' + esc(tier) : ''}</small>`, 'adm-d') +
       cell('Statut', badge(u.status === 'active' ? 'bd-ok' : u.status === 'pending' ? 'bd-pend' : 'bd-off', L.status[u.status] || u.status || '—')) +
       `<td role="cell" class="adm-act">${u.status === 'pending' ? `<button class="btn b1" data-a="adm-approve" data-uid="${esc(u.uid)}">Valider</button> <button class="btn btn-danger" data-a="adm-refuse" data-uid="${esc(u.uid)}">Refuser</button> ` : ''}<button class="btn b4" data-a="adm-fiche" data-uid="${esc(u.uid)}" aria-label="Ouvrir la fiche de ${esc(fullName(u))}">Fiche</button> <button class="btn b4" data-a="adm-edit" data-uid="${esc(u.uid)}" aria-label="Modifier le compte de ${esc(fullName(u))}">Modifier</button>${u.role !== 'admin' && !(st.auth.user && st.auth.user.uid === u.uid) ? ` <button class="btn btn-danger" data-a="adm-del-user" data-uid="${esc(u.uid)}" aria-label="Supprimer le compte de ${esc(fullName(u))}">Supprimer</button>` : ''}</td></tr>`;
   }
 
   function renderAdmin() {
-    if (CUR !== 'admin') return;
+    if (CUR !== 'admin/comptes') return;
     renderStats();
     renderList();
   }
@@ -676,7 +720,7 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     info.textContent = `${rows.length} utilisateur${rows.length > 1 ? 's' : ''} affiché${rows.length > 1 ? 's' : ''}` +
       (AD.hasMore ? ` sur ${AD.users.length} chargés${active ? ' — la recherche et les filtres portent sur les utilisateurs chargés : utilisez « Charger plus » pour en inclure d’autres' : ''}.` : '.');
     list.innerHTML = rows.length
-      ? `<div class="adm-tw"><table class="adm-t" role="table"><caption class="sr">Utilisateurs Studio Prism</caption><thead><tr role="row"><th scope="col" role="columnheader">Utilisateur</th><th scope="col" role="columnheader">Compte</th><th scope="col" role="columnheader">Abonnement</th><th scope="col" role="columnheader">Rôle</th><th scope="col" role="columnheader">Applications / Licences</th><th scope="col" role="columnheader">Comptes demandés</th><th scope="col" role="columnheader">Créé le</th><th scope="col" role="columnheader">Dernière connexion</th><th scope="col" role="columnheader">Statut</th><th scope="col" role="columnheader"><span class="sr">Actions</span></th></tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`
+      ? `<div class="adm-tw"><table class="adm-t adm-t-users" role="table"><caption class="sr">Utilisateurs Studio Prism</caption><thead><tr role="row"><th scope="col" role="columnheader">Utilisateur</th><th scope="col" role="columnheader">Compte</th><th scope="col" role="columnheader">Type de compte</th><th scope="col" role="columnheader">Licences</th><th scope="col" role="columnheader">Activité</th><th scope="col" role="columnheader">Statut</th><th scope="col" role="columnheader"><span class="sr">Actions</span></th></tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`
       : `<div class="panel"><p>${AD.users.length ? 'Aucun utilisateur ne correspond à cette recherche.' : 'Aucun utilisateur enregistré pour le moment.'}</p></div>`;
     more.hidden = !AD.hasMore;
     more.disabled = AD.busy;
@@ -691,6 +735,13 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     try { await st.admin.updateUser(u, { status: 'active' }); u.status = 'active'; renderAdmin(); refreshCounts(); toast(`Compte entreprise validé : ${u.email}. La personne peut maintenant se connecter.`); }
     catch (e) { console.error('[Studio Prism] Validation :', e); toast(errMsg(e)); btn.disabled = false; }
   };
+  const comDecide = async (btn, status) => {
+    const u = AD.users.find((x) => x.uid === btn.dataset.uid); if (!u) return; btn.disabled = true;
+    try { await st.admin.updateUser(u, { commercialStatus: status }); u.commercialStatus = status; renderAdmin(); toast(status === 'approved' ? 'Compte commercial accepté : ' + u.email : 'Demande refusée : ' + u.email); }
+    catch (e) { toast(errMsg(e)); btn.disabled = false; }
+  };
+  A['adm-com-ok'] = (b) => comDecide(b, 'approved');
+  A['adm-com-no'] = (b) => comDecide(b, 'refused');
   A['adm-refuse'] = (btn) => { if (A['adm-del-user']) A['adm-del-user'](btn); };   // refus = suppression de la demande (confirmation demandée)
   A['adm-retry'] = () => { AD.error = ''; loadAdmin(false); };
   A['acc-retry'] = async () => { try { if (st.api) await st.api.refresh(); else { await loadAuth(); } } catch (e) { route(); } };
@@ -707,8 +758,9 @@ ${sel('adm-sort', 'Trier par', [['recent', 'Plus récents'], ['name', 'Nom (A �
     const opts = (map, cur) => Object.keys(map).map((k) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${map[k]}</option>`).join('');
     modal(`<h3>Modifier le compte</h3><p class="mut">${esc(fullName(u))} · ${esc(u.email)}</p>
 <form data-f="adm-edit" data-uid="${esc(u.uid)}" novalidate>
-<label for="ed-sub">Abonnement</label><select id="ed-sub" name="ed-sub">${opts(L.sub, u.subscription)}</select>
+<label for="ed-sub">Niveau de licence</label><select id="ed-sub" name="ed-sub">${opts(L.sub, u.subscription)}</select>
 ${u.accountKind !== 'company' && !u.orgId ? '<p class="acc-h">Particulier : l’abonnement Pro reste un usage personnel (pas de vente). Pro Entreprise est réservé aux entreprises.</p>' : ''}
+<label for="ed-com">Usage commercial</label><select id="ed-com" name="ed-com">${opts({ none: 'Non commercial (Free)', pending: 'Demande en attente', approved: 'Commercial accepté', refused: 'Demande refusée' }, u.commercialStatus || 'none')}</select>
 <label for="ed-role">Rôle</label><select id="ed-role" name="ed-role" ${self ? 'disabled' : ''}>${opts(L.role, u.role)}</select>
 <label for="ed-status">Statut</label><select id="ed-status" name="ed-status" ${self ? 'disabled' : ''}>${opts(u.status === 'pending' ? L.status : { active: L.status.active, suspended: L.status.suspended }, u.status)}</select>
 ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni votre propre statut.</p>' : '<p class="acc-h">Un administrateur peut consulter et modifier tous les comptes. <b>Désactivé</b> : l’utilisateur ne peut plus se connecter à Studio Prism ni accéder à ses licences ; ses données sont conservées et le compte peut être réactivé à tout moment. Ce n’est pas une suppression : son compte de connexion Firebase Authentication continue d’exister.</p>'}
@@ -734,7 +786,8 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
   async function saveEdit(fm) {
     const u = AD.users.find((x) => x.uid === fm.dataset.uid), err = fm.querySelector('#ed-err');
     if (!u) return;
-    const next = { subscription: fm.elements['ed-sub'].value, role: fm.elements['ed-role'].value, status: fm.elements['ed-status'].value };
+    const next = { subscription: fm.elements['ed-sub'].value, role: fm.elements['ed-role'].value, status: fm.elements['ed-status'].value, commercialStatus: fm.elements['ed-com'].value };
+    if (next.commercialStatus === (u.commercialStatus || 'none')) delete next.commercialStatus;
     if (next.subscription === 'pro_entreprise' && u.accountKind !== 'company' && !u.orgId) { fm.querySelector('#ed-err').textContent = 'Pro Entreprise est réservée aux entreprises : un particulier peut avoir l’abonnement Pro, sans usage commercial.'; return; }
     const patch = {};
     Object.keys(next).forEach((k) => { if (next[k] !== u[k]) patch[k] = next[k]; });
@@ -761,10 +814,11 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
   /* ------------------------------------------------------------------ outils partagés avec js/platform.js */
   window.SP.kit = {
     st, AD, L, TIERS, esc, errMsg, loadAuth, redirect, guarded, field, clearErrors, showErrors, formMsg, setBusy, pwProblem, normUrl,
-    EMAIL_RE, fdate, badge, SUBCLS, fullName, typeLabel, licState, LIC_STATUS, adminGate, licCell,
+    EMAIL_RE, fdate, badge, SUBCLS, fullName, typeLabel, licState, LIC_STATUS, licGone, daysLeft, countdownTxt, ACCT, adminGate, licCell,
     dataMod, guardAdminChange, readCompany, coLicRow, coApps, coPeriod, siretOk,
     serverOn: () => !!(st.data && st.data.ACCOUNT_SERVER === true),   // mode « avec Cloud Functions » ? (faux par défaut : forfait gratuit Spark)
-    renderUsers: () => { if (CUR === 'admin') renderAdmin(); },
+    renderUsers: () => { if (CUR === 'admin/comptes') renderAdmin(); },
+    V, MOD, acctType, applyLive,
     refreshCounts, loadLicenses, MOD
   };
 
@@ -775,6 +829,7 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
     const k = AD_SEL[e.target.id];
     if (k) { AD[k] = e.target.value; renderList(); }
     if (e.target.name === 'kind' && e.target.closest('.acc-kind')) kindChanged();
+    if (e.target.name === 'usage') { const cb = document.getElementById('comBox'); if (cb) cb.hidden = e.target.value !== 'com'; document.querySelectorAll('#useBox .acc-card').forEach((c) => c.classList.toggle('on', c.contains(e.target))); }
   });
 
   Object.assign(R, {
@@ -782,6 +837,6 @@ ${self ? '<p class="acc-h">Vous ne pouvez pas modifier votre propre rôle ni vot
     'compte/inscription': () => authPage(1),
     'archivision/connexion': () => authPage(0),
     'archivision/inscription': () => authPage(1),
-    'admin': adminPage
+    'admin/comptes': adminPage
   });
 })();

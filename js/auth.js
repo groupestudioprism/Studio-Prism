@@ -278,6 +278,11 @@ export async function signUp(p) {
         lastLogin: serverTimestamp(),
         termsAcceptedAt: serverTimestamp()
       };
+      if (p.accountKind === "individual") {
+        // usage commercial demandé à l'inscription : le compte reste non commercial tant que l'administration n'a pas accepté
+        profile.commercialStatus = p.commercial ? "pending" : "none";
+        if (p.commercial) profile.commercialRequest = p.commercial;
+      }
       if (p.accountKind === "company" && p.company) {
         const c = p.company;
         const companyRef = doc(collection(db, "companies"));

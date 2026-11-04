@@ -52,7 +52,7 @@
     if (MY.uid !== uid) { MY.uid = uid; MY.lic = null; MY.p = null; }
     if (MY.lic && !force) return Promise.resolve(MY.lic);
     if (MY.p) return MY.p;
-    MY.p = D().then((d) => d.listMyLicenses(uid)).then((l) => { if (MY.uid === uid) MY.lic = l; return l; }).finally(() => { MY.p = null; });
+    MY.p = D().then((d) => d.listMyLicenses(uid)).then((l) => l.filter((x) => !K.licGone(x))).then((l) => { if (MY.uid === uid) MY.lic = l; return l; }).finally(() => { MY.p = null; });
     return MY.p;
   }
 
@@ -133,19 +133,20 @@
       return;
     }
     const p = a.profile, co = p.accountKind === 'company', admin = p.role === 'admin';
-    V(accShell(`${lede(`Bonjour ${esc(p.firstName || '')}. Retrouvez votre profil, vos applications et vos licences Studio Prism.`)}` +
-      `${admin ? '<p><a class="btn b4" href="#/admin">Administration</a></p>' : ''}` +
+    const ty = K.acctType(p), nm = [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email || '', ini = nm.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+    V(accShell(`<div class="acc2-hero"><span class="acc2-av" aria-hidden="true">${esc(ini)}</span><div class="acc2-id"><h2>${esc(nm)}</h2><p>${esc(p.email || '')}</p><p>${badge(({ free: 'bd-free', commercial: 'bd-pro', entreprise: 'bd-ent' })[ty], K.ACCT[ty])}${p.orgName ? ` <span class="bd bd-kind">${esc(p.orgName)}</span>` : ''}${admin ? ' <span class="bd bd-admin">Administrateur</span>' : ''}</p></div>` +
+      `<div class="acc2-act">${admin ? '<a class="btn b4" href="#/admin">Administration</a>' : ''}<button class="btn b4" data-a="logout">Se déconnecter</button></div></div>` +
+      `<div id="acc-alerts" aria-live="polite"></div>` +
+      `<nav class="acc2-nav" aria-label="Sections de mon compte"><a href="#/compte" data-a="acc-jump" data-t="s-type">Type de compte</a><a href="#/compte" data-a="acc-jump" data-t="s-apps">Applications</a><a href="#/compte" data-a="acc-jump" data-t="s-lic">Licences</a><a href="#/compte" data-a="acc-jump" data-t="acc-q-sec">Devis</a><a href="#/compte" data-a="acc-jump" data-t="s-sec">Sécurité</a></nav>` +
       `<div class="acc-grid">` +
       `<section class="panel acc-sec" aria-labelledby="s-profil"><h2 id="s-profil" class="lh">Profil</h2>${spec([
         ['Prénom', esc(p.firstName || '—')], ['Nom', esc(p.lastName || '—')], ['E-mail', esc(p.email || '—')],
-        ['Type de compte', esc(L.kind[p.accountKind] || '—')], ['Entreprise', esc((co && p.companyName) || '—')],
+        ['Compte', esc(L.kind[p.accountKind] || '—')], ...(co ? [['Entreprise', esc(p.companyName || '—')], ['Fonction', esc(p.jobTitle || '—')]] : []),
         ...(p.orgName ? [['Établissement', esc(p.orgName)]] : []),
-        ['Fonction', esc((co && p.jobTitle) || '—')], ['Compte créé le', esc(fdate(p.createdAt))], ['Dernière connexion', esc(fdate(p.lastLogin, true))]
+        ['Créé le', esc(fdate(p.createdAt))], ['Dernière connexion', esc(fdate(p.lastLogin, true))]
       ])}</section>` +
-      `<section class="panel acc-sec" aria-labelledby="s-abo"><h2 id="s-abo" class="lh">Mon abonnement</h2>${spec([
-        ['Abonnement Studio Prism', badge(({ free: 'bd-free', pro: 'bd-pro', pro_entreprise: 'bd-ent' })[p.subscription] || '', L.sub[p.subscription] || '—')]
-      ])}<p class="mt2" style="margin-top:10px">Votre abonnement est géré par Studio Prism : il ne peut pas être modifié depuis cette page.</p><div id="acc-sum" class="acc-sum" aria-live="polite"></div>` +
-      `<p style="margin-top:14px"><a class="btn b4 ar" href="#/abonnements">Voir tous les abonnements</a></p></section></div>` +
+      `<section class="panel acc-sec" aria-labelledby="s-type"><h2 id="s-type" class="lh">Type de compte</h2><p>${badge(({ free: 'bd-free', commercial: 'bd-pro', entreprise: 'bd-ent' })[ty], K.ACCT[ty])}</p>${comBlock(p, ty)}<div id="acc-sum" class="acc-sum" aria-live="polite"></div>` +
+      `<p style="margin-top:14px"><a class="btn b4 ar" href="#/abonnements">Voir les abonnements</a></p></section></div>` +
       `<section class="acc-sec" id="acc-q-sec" aria-live="polite" hidden></section>` +
       `<section class="acc-sec" id="acc-co-sec" aria-live="polite"></section>` +
       `<section class="acc-sec" aria-labelledby="s-apps"><h2 id="s-apps" class="lh">Mes applications</h2><div id="acc-apps" class="acc-apps" aria-live="polite"><p class="mut">Chargement de vos applications…</p></div></section>` +
@@ -164,6 +165,44 @@
   }
 
   A['acc-lic-retry'] = () => accountPage();
+  A['acc-jump'] = (b) => { const el = document.getElementById(b.dataset.t); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+
+  /* Compte commercial : Free = non commercial ; demande examinée par Studio Prism depuis Comptes › Demande commerciale */
+  function comBlock(p, ty) {
+    if (ty === 'entreprise') return '<p class="mt2">Compte Entreprise : usage commercial inclus selon les licences de votre entreprise.</p>';
+    const cs = p.commercialStatus || 'none';
+    if (ty === 'commercial') return '<p class="mt2">Votre compte est <b>commercial</b> : Studio Prism a accepté votre demande.</p>';
+    if (cs === 'pending') return '<p class="mt2">Votre <b>demande de compte commercial</b> est en cours d’examen par Studio Prism. En attendant, votre compte fonctionne avec les options non commerciales.</p>';
+    return `<p class="mt2">Votre compte est <b>non commercial</b> (usage personnel, études, loisirs).${cs === 'refused' ? ' Votre dernière demande commerciale n’a pas été acceptée ; vous pouvez en refaire une.' : ''}</p>` +
+      `<details class="acc2-com"><summary>Qu’apporte un compte commercial ?</summary><p class="mut">Il permet d’utiliser les logiciels pour des travaux facturés à des clients. Studio Prism examine votre activité (SIRET, domaine, usage prévu) avant d’accepter. Le compte reste non commercial pendant l’examen.</p></details>` +
+      `<p style="margin-top:10px"><button class="btn b1" data-a="acc-com-open">Demander un compte commercial</button></p>`;
+  }
+  A['acc-com-open'] = () => pmodal(`<h3>Demande de compte commercial</h3><p class="mut">Studio Prism examine votre demande. En attendant, votre accès reste non commercial.</p>` +
+    `<form data-f="acc-com" novalidate>${field('cmSiret', 'Numéro SIRET', 'text', 'off', { attrs: 'maxlength="17" inputmode="numeric" placeholder="14 chiffres"' })}${field('cmActivity', 'Votre activité', 'text', 'off', { attrs: 'maxlength="120"' })}${field('cmSite', 'Site internet', 'text', 'url', { opt: 1, attrs: 'maxlength="200"' })}` +
+    `<div class="acc-f"><label for="cmPurpose">Usage prévu <span class="mut">(facultatif)</span></label><textarea id="cmPurpose" name="cmPurpose" rows="3" maxlength="500"></textarea></div>` +
+    `<p class="fe" id="cm-err" role="alert"></p><p style="margin-top:12px"><button class="btn b1" type="submit">Envoyer la demande</button></p></form>`);
+  async function submitCommercial(fm) {
+    clearErrors();
+    const g = (id) => ((fm.elements[id] && fm.elements[id].value) || '').trim(), er = {};
+    if (!K.siretOk(g('cmSiret'))) er.cmSiret = g('cmSiret') ? 'Numéro SIRET invalide (14 chiffres).' : 'Renseignez votre numéro SIRET.';
+    if (!g('cmActivity')) er.cmActivity = 'Décrivez brièvement votre activité.';
+    const site = K.normUrl(g('cmSite')); if (site === null) er.cmSite = 'Adresse de site internet invalide.';
+    if (showErrors(fm, er)) return;
+    setBusy(fm, true, 'Envoi…');
+    try {
+      await (await D()).requestCommercial(st.auth.user.uid, { siret: g('cmSiret').replace(/\s/g, ''), activity: g('cmActivity'), website: site || '', purpose: g('cmPurpose') });
+      A.x(); toast('Demande envoyée à Studio Prism.');
+      const api = await K.loadAuth(); if (api.refresh) await api.refresh();
+    } catch (e) { document.getElementById('cm-err').textContent = errMsg(e); setBusy(fm, false); }
+  }
+  /* Alertes : licences qui expirent dans moins de 30 jours (compteur de jours) ou expirées depuis moins de 7 jours */
+  function licAlerts(lics) {
+    const el = document.getElementById('acc-alerts'); if (!el) return;
+    el.innerHTML = lics.map((l) => {
+      const c = K.countdownTxt(l), s = licState(l), n = l.productName || l.productId;
+      return c ? `<p class="acc2-alert warn"><b>${esc(n)}</b> : ${esc(c.toLowerCase())} (le ${esc(fdate(l.expiresAt))}).</p>` : s === 'expired' ? `<p class="acc2-alert err"><b>${esc(n)}</b> : licence expirée le ${esc(fdate(l.expiresAt))}. Contactez Studio Prism pour la renouveler.</p>` : '';
+    }).join('');
+  }
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
   const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', nexus: 'https://groupestudioprism.github.io/Nexus/' };   // sous-domaines (CNAME de chaque dépôt)
@@ -176,6 +215,7 @@
   }
 
   function fillAccount(lics) {
+    licAlerts(lics);
     const prods = new Map(CATLG.all().map((p) => [p.id, p]));
     const sorted = lics.slice().sort((x, y) => String(x.productName).localeCompare(String(y.productName), 'fr'));
     const apps = document.getElementById('acc-apps'), tbl = document.getElementById('acc-lics'), sum = document.getElementById('acc-sum');
@@ -203,7 +243,7 @@
     if (sum) sum.innerHTML = `<ul class="acc-sumul">${sorted.map((l) => `<li><b>${esc((prods.get(l.productId) || {}).name || l.productName)}</b> — ${esc(typeLabel(l.licenseType))} ${licBadge(l)}</li>`).join('')}</ul>`;
   }
 
-  const licBadge = (l) => { const s = licState(l); return badge(s === 'active' ? 'bd-ok' : 'bd-off', LIC_STATUS[s] || s); };
+  const licBadge = (l) => { const s = licState(l), c = K.countdownTxt(l); return badge(s === 'active' ? 'bd-ok' : 'bd-off', LIC_STATUS[s] || s) + (c ? ' ' + badge('bd-pend', c) : ''); };
 
   /* ---- Sécurité : mot de passe, réinitialisation, déconnexion, suppression du compte */
   function securityHtml(p) {
@@ -1285,6 +1325,7 @@
     const f = e.target.dataset && e.target.dataset.f;
     if (f === 'acc-pw') submitPassword(e.target);
     else if (f === 'acc-del') submitDeleteAccount(e.target);
+    else if (f === 'acc-com') submitCommercial(e.target);
     else if (f === 'adm-lic') submitLicense(e.target);
     else if (f === 'adm-newuser') submitNewUser(e.target);
     else if (f === 'cat-prod') submitProduct(e.target);

@@ -76,10 +76,19 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ users/{uid}
 
+    // Demande de compte commercial (particulier) : examinée par l'administration, qui passe commercialStatus à approved / refused.
+    function validCommercialRequest(r) {
+      return r is map && r.keys().hasOnly(['siret', 'activity', 'website', 'purpose'])
+        && isString(r.get('siret', ''), 0, 20) && isString(r.get('activity', ''), 0, 120)
+        && isString(r.get('website', ''), 0, 200) && isString(r.get('purpose', ''), 0, 500);
+    }
+
     function validIndividualProfile(d) {
       return d.accountKind == 'individual'
         && d.keys().hasOnly(['firstName', 'lastName', 'email', 'accountKind', 'subscription', 'role', 'status',
-                             'createdAt', 'updatedAt', 'lastLogin', 'termsAcceptedAt']);
+                             'createdAt', 'updatedAt', 'lastLogin', 'termsAcceptedAt', 'commercialStatus', 'commercialRequest'])
+        && d.get('commercialStatus', 'none') in ['none', 'pending']
+        && (d.get('commercialStatus', 'none') == 'none' || validCommercialRequest(d.get('commercialRequest', null)));
     }
 
     function validCompanyProfile(d) {
@@ -126,11 +135,20 @@ service cloud.firestore {
         && (!changed.hasAny(['jobTitle']) || (resource.data.accountKind == 'company' && isString(d.jobTitle, 0, 80)));
     }
 
+    function ownerCommercialOk() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return resource.data.status == 'active' && resource.data.get('accountKind', 'individual') == 'individual'
+        && resource.data.get('commercialStatus', 'none') in ['none', 'refused']
+        && changed.hasOnly(['commercialStatus', 'commercialRequest', 'updatedAt'])
+        && d.commercialStatus == 'pending' && d.updatedAt == request.time && validCommercialRequest(d.commercialRequest);
+    }
+
     // Sur SON propre compte : seul l'abonnement peut changer (pas d'auto-promotion, pas d'auto-verrouillage).
     function adminUpdateOk(uid) {
       let d = request.resource.data;
       let changed = d.diff(resource.data).affectedKeys();
-      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName', 'orgRole', 'orgClass'])
+      return changed.hasOnly(['subscription', 'role', 'status', 'updatedAt', 'orgId', 'orgName', 'orgRole', 'orgClass', 'commercialStatus'])
         && d.updatedAt == request.time
         && isString(d.get('orgId', ''), 0, 40) && isString(d.get('orgName', ''), 0, 120)
         && d.get('orgRole', '') in ['', 'eleve', 'enseignant', 'responsable'] && isString(d.get('orgClass', ''), 0, 60)
@@ -138,6 +156,7 @@ service cloud.firestore {
         && d.subscription in ['free', 'pro', 'pro_entreprise']
         && d.role in ['user', 'admin']
         && d.status in ['active', 'suspended']
+        && d.get('commercialStatus', 'none') in ['none', 'pending', 'approved', 'refused']
         && (request.auth.uid != uid || changed.hasOnly(['subscription', 'updatedAt']));
     }
 
@@ -174,7 +193,7 @@ service cloud.firestore {
                     && (!exists(/databases/$(database)/documents/deletedAccounts/$(uid))
                         || request.resource.data.get('termsAcceptedAt', null) == request.time);
       allow update: if isSignedIn() && (
-                         (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid) || ownerToCompanyOk(uid)))
+                         (request.auth.uid == uid && (ownerUpdateOk() || ownerOrgJoinOk(uid) || ownerToCompanyOk(uid) || ownerCommercialOk()))
                          || (isAdmin() && adminUpdateOk(uid))
                        );
       allow delete: if (isSignedIn() && request.auth.uid == uid

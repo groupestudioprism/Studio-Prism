@@ -56,7 +56,7 @@ export async function countActiveAdmins() {
 /* patch ⊂ { subscription, role, status }. Les règles refusent tout autre champ et toute valeur hors liste. */
 export async function updateUser(user, patch) {
   const data = {};
-  ["subscription", "role", "status"].forEach((k) => { if (k in patch) data[k] = patch[k]; });
+  ["subscription", "role", "status", "commercialStatus"].forEach((k) => { if (k in patch) data[k] = patch[k]; });
   await updateDoc(doc(db, "users", user.uid), { ...data, updatedAt: serverTimestamp() });
   // Cohérence : l'abonnement d'une entreprise suit celui de son responsable (meilleur effort, ne bloque pas la mise à jour).
   if (data.subscription && user.companyId) {
