@@ -74,7 +74,7 @@
     const type = (u) => K.acctType(u);
     const cnt = (f) => U.filter(f).length;
     const act = (l) => l.status === 'active' && (!ms(l.expiresAt) || ms(l.expiresAt) > now);
-    const L = S.licenses, la = L.filter(act), usersById = new Map(U.map((u) => [u.uid, u]));
+    const L = S.licenses.filter((l) => !K.licGone(l)), la = L.filter(act), usersById = new Map(U.map((u) => [u.uid, u]));
     const seen24 = (u) => ms(u.lastLogin) > now - DAY, seen7 = (u) => ms(u.lastLogin) > now - 7 * DAY;
     const prods = new Map();
     L.forEach((l) => { const id = l.productId, o = prods.get(id) || { name: nameOf(id) || l.productName || id, lic: 0, users: new Set(), on: new Set(), sub: 0 }; prods.set(id, o);

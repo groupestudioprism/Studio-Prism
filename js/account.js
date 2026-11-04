@@ -503,7 +503,8 @@ ${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours']
 <p class="c"><button class="btn b4" id="adm-more" data-a="adm-more" hidden>Charger plus d’utilisateurs</button></p>`));
     renderStats();
     $('#adm-info').textContent = 'Chargement des utilisateurs…';
-    loadAdmin(false);
+    const LS = window.SP.liveStore && window.SP.liveStore();
+    if (LS) applyLive(LS); else loadAdmin(false);
   }
 
   async function loadAdmin(more) {
@@ -524,6 +525,8 @@ ${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours']
       AD.error = errMsg(e);
     }
     AD.busy = false;
+    const LS = window.SP.liveStore && window.SP.liveStore();
+    if (LS) return applyLive(LS);   // données en direct disponibles : elles remplacent la liste paginée
     renderAdmin();
     if (!more && !AD.error) refreshCounts();
   }
@@ -566,10 +569,7 @@ ${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours']
     } catch (e) { AD.orgs = []; console.warn('[Studio Prism] Établissements indisponibles pour le filtre :', e); }
   }
 
-  async function refreshCounts() {
-    try { AD.counts = await st.admin.countUsers(); } catch (e) { console.warn('[Studio Prism] Compteurs indisponibles :', e); AD.counts = null; }
-    renderStats();
-  }
+  async function refreshCounts() { renderStats(); }   // compteurs calculés sur les comptes chargés (en direct)
 
   function renderStats() {
     const el = document.getElementById('adm-stats');
