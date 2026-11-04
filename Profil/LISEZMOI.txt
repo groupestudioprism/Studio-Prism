@@ -1,0 +1,12 @@
+DOSSIER PROFIL — page « Équipe » du site
+
+1. Photos : déposer ici une photo par personne, nommée uniquement avec le prénom :
+     Kéliann.jpg   et   Paul.jpg      (formats acceptés : jpg, jpeg, png, webp)
+   Format conseillé : portrait 4/5 (ex. 800 x 1000 px).
+
+2. Descriptions : écrire le texte après les deux-points dans description.txt (une ligne par personne) :
+     Kéliann : Texte de présentation...
+     Paul : Texte de présentation...
+   Tant qu'il reste « …… », rien n'est affiché sur le site.
+
+Aucun autre fichier à modifier : le site lit ce dossier tout seul.

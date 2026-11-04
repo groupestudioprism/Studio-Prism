@@ -327,11 +327,8 @@
   function paintCatalogue(box) {
     const chips = box.querySelector('#cat-chips'), count = box.querySelector('#cat-count'), grid = box.querySelector('#cat-grid');
     if (!chips || !grid) return;
-    const types = Object.keys(TYPES).filter((t) => C.products.some((p) => p.category === t));
-    const modes = Object.keys(MODES).filter((m) => C.products.some((p) => (p.plans || []).some((pl) => pl.mode === m)));
-    chips.innerHTML = chipRow('Pôle', 'pole', [['', 'Tous les pôles']].concat(POLE_ORDER.map((k) => [k, POLES[k]]))) +
-      (types.length > 1 ? chipRow('Type de produit', 'type', [['', 'Tous les types']].concat(types.map((t) => [t, TYPES[t]]))) : '') +
-      (modes.length ? chipRow('Mode d’accès', 'mode', [['', 'Tous les accès']].concat(modes.map((m) => [m, MODES[m]]))) : '');
+    // Un seul filtre, clair : la catégorie (Prism App / Prism Game / Prism 3D). Recherche par mot-clé au-dessus.
+    chips.innerHTML = chipRow('Catégorie', 'pole', [['', 'Tout voir']].concat(POLE_ORDER.filter((k) => C.products.some((p) => p.pole === k)).map((k) => [k, POLES[k]])));
     const l = filtered();
     count.textContent = `${l.length} produit${l.length > 1 ? 's' : ''}`;
     if (!l.length) {
@@ -346,7 +343,7 @@
 
   function cataloguePage() {
     V(`<section class="pg cat"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Produits</p><div class="k">Catalogue Studio Prism</div><h1>Produits</h1>` +
-      `<p class="lead">Tous les produits Studio Prism, réunis au même endroit : applications, jeux, créations 3D et services. Chacun appartient à un pôle — Prism App, Prism Game ou Prism 3D.</p>` +
+      `<p class="lead">Choisissez une catégorie ou cherchez un produit, puis ouvrez sa fiche pour voir ses offres.</p>` +
       `<div id="cat-box"><div class="acc-f cat-s"><label for="cat-q">Rechercher un produit</label><input id="cat-q" type="search" maxlength="80" autocomplete="off" placeholder="Nom, mot-clé…" value="${esc(F.q)}"></div>` +
       `<div id="cat-chips"></div><p class="mut cat-cnt" id="cat-count" role="status" aria-live="polite"></p><div id="cat-grid"></div></div></div></section>`);
     mount($id('cat-box'), { catalogue: true });

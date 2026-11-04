@@ -6,6 +6,7 @@ Une seule source pour le code partagé par les apps. On modifie **ici**, jamais 
 |---|---|---|
 | `device-lock.js` | Verrouillage de l'appareil : code PIN chiffré, Face ID / Touch ID / empreinte (clé d'accès commune à `*.studio-prism.com`) | ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer, Calc, Slide |
 | `prism-settings.js` | Panneau Réglages commun | ARCHIPLAN, ARCHITRAFIC |
+| `license-countdown.js` | Compteur de jours restants (≤ 30 j) en haut à droite, sans déplacer l'interface — à brancher sur la date `expiresAt` de la licence (pas encore dans `manifest.json`) | toutes les apps |
 
 Après une modification :
 
