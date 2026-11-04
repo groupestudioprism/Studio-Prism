@@ -1,0 +1,21 @@
+name: Manifeste des téléchargements
+on:
+  push:
+    branches: [main]
+    paths: ['telechargements/**', '!telechargements/manifest.json']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Générer telechargements/manifest.json
+        run: python3 tools/build_downloads_manifest.py
+      - name: Publier le manifeste
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add telechargements/manifest.json
+          git diff --cached --quiet || (git commit -m "Manifeste des téléchargements (automatique)" && git push)

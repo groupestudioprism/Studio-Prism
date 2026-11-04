@@ -46,7 +46,7 @@
       .catch(() => {});
     return f._p;
   }
-  const meta = (f) => `Version ${f.version} · ${f.date} · ${f.size}`;
+  const meta = (f) => f.version ? `Version ${f.version} · ${f.date} · ${f.size}` : `${f.date} · ${f.size}`;
 
   const isAdmin = () => st.auth.status === 'in' && !!st.auth.profile && st.auth.profile.role === 'admin';
   const how = '<p class="mut dl-how">Le fichier se télécharge directement sur l’appareil, après confirmation. ' +
@@ -74,13 +74,34 @@
   const card = (f) => `<div class="panel dl-card">
     <div class="dl-h"><h3>${esc(f.name)}</h3><span class="bd bd-admin">Administrateurs</span></div>
     <p>${esc(f.desc)}</p>
-    <p class="mut" data-dl-meta="${esc(f.id)}">${esc(meta(f))}</p>
+    <p class="mut" data-dl-meta="${esc(f.id)}">${esc(meta2(f))}</p>
     <p class="mut">${esc(f.needs)}</p>
     <p class="dl-act">${btn(f)}</p>${how}</div>`;
 
+  /* Liste AUTOMATIQUE : tous les .apk du dossier telechargements/ du dépôt GitHub (API publique « contents »), à défaut le manifeste
+     telechargements/manifest.json (généré par le workflow GitHub Actions « Manifeste des téléchargements »). Aucune liste à tenir à jour. */
+  const REPO = 'groupestudioprism/studio-prism';
+  const slug = (n) => String(n).toLowerCase().replace(/\.apk$/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  async function discover() {
+    let list = null;
+    try { const r = await fetch(`https://api.github.com/repos/${REPO}/contents/telechargements`, { headers: { Accept: 'application/vnd.github+json' } }); if (r.ok) list = (await r.json()).filter((x) => x.type === 'file' && /\.apk$/i.test(x.name)).map((x) => ({ name: x.name, size: x.size })); } catch (e) { /* hors ligne ou limite atteinte */ }
+    if (!list) { try { const r = await fetch('telechargements/manifest.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) list = (await r.json()).files || []; } catch (e) { /* ignore */ } }
+    if (!list) return;
+    list.forEach((x) => {
+      let f = FILES.find((y) => y.asset.toLowerCase() === x.name.toLowerCase());
+      if (!f) { f = { id: 'apk-' + slug(x.name), name: x.name.replace(/\.apk$/i, '').replace(/[_-]+/g, ' '), desc: 'Application Android (APK) déposée dans le dossier telechargements/ du site.', asset: x.name, version: '', date: x.date ? new Date(x.date).toLocaleDateString('fr-FR') : '—', size: mo(x.size), needs: 'Téléphone ou tablette Android.', auto: true }; FILES.push(f); }
+      else if (x.size && !f.info) f.size = mo(x.size);
+      f.url = 'telechargements/' + encodeURIComponent(x.name) + '?v=' + (x.size || ''); f.file = x.name; f.listed = true;
+    });
+    FILES.forEach((f) => { if (f.auto && !list.some((x) => x.name === f.asset)) f.gone = true; });
+  }
+  const meta2 = (f) => (f.version ? meta(f) : `${f.date} · ${f.size}`);
   function tab(p, shell) {
+    const draw = () => { const el = document.getElementById('dl-list'); if (el) el.innerHTML = FILES.filter((f) => !f.gone).map(card).join(''); };
+    V(shell(`<h2 class="dl-t">Téléchargements</h2><p class="lead">Tous les fichiers .apk du dossier <code>telechargements/</code> du dépôt GitHub apparaissent ici automatiquement.</p><div class="dl-list" id="dl-list"></div>`));
+    draw();
     FILES.forEach(refresh);
-    V(shell(`<h2 class="dl-t">Téléchargements</h2><p class="lead">Versions internes des applications Studio Prism, réservées aux administrateurs pour l’instant.</p><div class="dl-list">${FILES.map(card).join('')}</div>`));
+    discover().then(draw);
   }
   Object.assign(R, { 'admin/telechargements': () => K.adminGate('downloads', tab) });
 
