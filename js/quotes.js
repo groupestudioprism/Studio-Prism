@@ -155,9 +155,26 @@
       notes: r.kind === 'member' && (r.emails || []).length ? `Licences pour : ${(r.emails || []).join(', ')}.` : ''
     };
   }
+  /* Clients proposés : établissements / entreprises, puis comptes utilisateurs (données en direct de l'administration). */
+  function clientChoices() {
+    const ok = OK(), out = [], orgs = (ok && ok.state.orgs) || [], LVs = window.SP.liveStore && window.SP.liveStore(), users = (LVs && LVs.users) || (K.AD && K.AD.users) || [];
+    orgs.forEach((o) => out.push({ label: `${o.name} (${['ecole', 'etablissement'].includes(o.kind) ? 'établissement' : 'entreprise'}${o.siret ? ', SIRET ' + o.siret : ''})`, org: o }));
+    users.filter((u) => u.role !== 'admin').forEach((u) => out.push({ label: `${fullName(u)} — ${u.email}${u.companyName ? ' (' + u.companyName + ')' : ''}`, user: u }));
+    return out;
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'q-pick') return;
+    const x = clientChoices().find((c) => c.label === e.target.value); if (!x) return;
+    const fm = e.target.form, set = (id, v) => { if (fm.elements[id] && v != null && v !== '') fm.elements[id].value = v; };
+    const org = x.org || (x.user && x.user.orgId && ((OK() && OK().state.orgs) || []).find((o) => o.id === x.user.orgId));
+    if (x.user) { set('q-cname', x.user.companyName || (org && org.name) || fullName(x.user)); set('q-ccontact', fullName(x.user)); set('q-cemail', x.user.email); set('q-cacct', x.user.email); }
+    if (org) { set('q-cname', org.name); set('q-csiret', org.siret); set('q-caddr', org.address); if (!x.user) { set('q-ccontact', org.contactName); set('q-cemail', org.email); } if (Q.mod && Q.mod.base) { Q.mod.base.orgId = org.id; Q.mod.base.orgName = org.name; } }
+    recalc(fm);
+  });
   async function openEditor(opt) {
     const qd = await mods(); let q;
     try {
+      if (OK() && !(OK().state.orgs || []).length) await OK().reload().catch(() => {});
       await Promise.all([loadCompany(), loadPlans()]);
       q = opt.id ? await qd.getQuote(opt.id) : opt.req ? await fromRequest(opt.req) : opt.dup ? { ...(await qd.getQuote(opt.dup)) } : { client: {}, lines: [], period: 'yearly' };
     } catch (e) { return toast(errMsg(e)); }
@@ -169,6 +186,7 @@
       ${miss.length ? `<p class="q-warn-s">Émission impossible tant que les informations légales sont incomplètes (il manque ${esc(miss.join(', '))}) : vous pouvez enregistrer un brouillon.</p>` : ''}
       <form data-f="q-edit" novalidate data-vm="${esc(vatMode)}" data-vr="${esc(vatRate)}">
       <fieldset class="acc-f"><legend>Client</legend>
+        ${opt.id || opt.req ? '' : `<div class="acc-f q-pick"><label for="q-pick">Choisir un client existant</label><input id="q-pick" list="q-clients" placeholder="Tapez un nom d’entreprise, d’établissement ou d’utilisateur…" autocomplete="off"><datalist id="q-clients">${clientChoices().map((x) => `<option value="${esc(x.label)}"></option>`).join('')}</datalist><p class="acc-h">Les informations du client se remplissent toutes seules : il ne reste qu’à saisir les lignes du devis.</p></div>`}
         <div class="row">${fld('q-cname', 'Raison sociale', inp('q-cname', 'text', c.name, 'maxlength="160"'))}${fld('q-csiret', 'SIRET', inp('q-csiret', 'text', c.siret, 'maxlength="17" inputmode="numeric"'), '<button type="button" class="lk" data-a="q-siret">Remplir l’adresse d’après le SIRET</button>')}</div>
         ${fld('q-caddr', 'Adresse', area('q-caddr', c.address, 'rows="2" maxlength="400"'))}
         <div class="row">${fld('q-ccontact', 'À l’attention de', inp('q-ccontact', 'text', c.contact, 'maxlength="160"'))}${fld('q-cemail', 'E-mail', inp('q-cemail', 'email', c.email, 'maxlength="160"'))}</div>
@@ -440,5 +458,5 @@
   /* ------------------------------------------------------------------ routes */
   const adminDevis = () => { const id = hashId(3); return id ? K.adminGate('quotes', (p, sh) => viewAdmin(id, sh)) : K.adminGate('quotes', listTab); };
   Object.assign(R, { 'admin/devis': adminDevis, 'admin/infos-legales': () => K.adminGate('legal', legalTab), 'compte/devis': clientPage });
-  window.SP.quotesUI = { load: async () => { await mods(); return load(true); }, todoParts, todoN: () => accepted().length, mountMine, docHtml };
+  window.SP.quotesUI = { refresh: () => renderList(), load: async () => { await mods(); return load(true); }, todoParts, todoN: () => accepted().length, mountMine, docHtml };
 })();

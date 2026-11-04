@@ -105,5 +105,6 @@ ${kpi(S.keys.filter((k) => k.status === 'available').length, 'Clés disponibles'
 <section class="panel"><h2 class="lh">Dernières inscriptions</h2><ul class="adm-pend-l">${U.slice(0, 6).map((u) => `<li><div><b>${esc(K.fullName(u))}</b><small>${esc(u.email)} · ${esc(fdate(u.createdAt, true))}</small></div><span class="bd bd-kind">${esc({ free: 'Free', commercial: 'Commercial', entreprise: 'Entreprise' }[type(u)])}</span></li>`).join('') || '<li class="mut">Aucune inscription.</li>'}</ul></section>`;
   }
   window.SP.dashboard = { render: renderDash };
+  window.SP.liveStore = () => (LV && LV.store.ready.users ? LV.store : null);
   Object.assign(R, { 'admin': dashPage, 'admin/tableau': dashPage });
 })();
