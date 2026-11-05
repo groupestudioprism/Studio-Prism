@@ -4,6 +4,7 @@
 //   scDocs/{id} (+ content/main)   spreadsheet record + JSON content      scFolders/{id}   folders
 //   scShares / scGrants             email and link sharing                  scUsage/{uid}    bytes used (quota)
 //   scLibrary/{uid}                 personal templates                      scPublic/{id}    community templates (moderated)
+//   scScripts/{id}                  community scripts: macros and custom functions (moderated, code in content/main)
 // Licence: licenses/{uid}_spectracalc. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
 // =====================================================================================================================
 
@@ -348,4 +349,85 @@
       }
     }
 
+    // ---- Community scripts (macros and custom functions): scScripts/{id} (+ content/main = the code) ----
+    // Any active user can submit a script: it is created 'pending' and stays invisible to others.
+    // ONLY Studio Prism administrators (isAdmin(): active profile with role 'admin', same criterion as the website) can set
+    // 'published' or 'rejected'. After submission the author can no longer change the code of a published script
+    // (any edit sends it back to 'pending'). Signed-in users can read published scripts, count an install (+1) and report once.
+    function scScr(id) {
+      return /databases/$(database)/documents/scScripts/$(id);
+    }
 
+    function scValidScript(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'cat', 'kind', 'status', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerName', 'name', 'desc', 'cat', 'kind', 'status', 'reason', 'size',
+                             'installs', 'reports', 'reporters', 'createdAt', 'updatedAt', 'reviewedAt', 'reviewedBy'])
+        && isString(d.name, 2, 60)
+        && isString(d.get('desc', ''), 0, 200)
+        && isString(d.cat, 1, 40)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && d.kind in ['macro', 'function']
+        && d.status in ['pending', 'published', 'rejected']
+        && isString(d.get('reason', ''), 0, 300)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 60000
+        && d.get('installs', 0) is int && d.get('installs', 0) >= 0
+        && d.get('reports', 0) is int && d.get('reports', 0) >= 0
+        && d.get('reporters', []) is list && d.get('reporters', []).size() <= 200;
+    }
+
+    function scScriptReadable(d) {
+      return isSignedIn() && (d.status == 'published' || d.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /scScripts/{id} {
+      allow get, list: if scScriptReadable(resource.data);
+      // submission: always 'pending', counters at zero, never pre-reviewed
+      allow create: if isSignedIn() && isActiveUser()
+                    && scValidScript(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.get('reason', '') == ''
+                    && request.resource.data.get('installs', 0) == 0
+                    && request.resource.data.get('reports', 0) == 0
+                    && request.resource.data.get('reporters', []).size() == 0
+                    && !('reviewedAt' in request.resource.data) && !('reviewedBy' in request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isSignedIn() && scValidScript(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (
+                      // administrators: review (publish, reject, keep a reported script)
+                      isAdmin()
+                      // the author: edit and resubmit (back to 'pending')
+                      || (resource.data.ownerUid == request.auth.uid && isActiveUser()
+                          && request.resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['name', 'desc', 'cat', 'kind', 'status', 'reason', 'size', 'updatedAt'])
+                          && request.resource.data.updatedAt == request.time)
+                      // any member: one more install of a published script
+                      || (resource.data.status == 'published'
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['installs'])
+                          && request.resource.data.installs == resource.data.get('installs', 0) + 1)
+                      // any member: report a published script, once per account
+                      || (resource.data.status == 'published' && isActiveUser()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reports', 'reporters'])
+                          && !(request.auth.uid in resource.data.get('reporters', []))
+                          && request.resource.data.reports == resource.data.get('reports', 0) + 1
+                          && request.resource.data.reporters == resource.data.get('reporters', []).concat([request.auth.uid]))
+                    );
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && scScriptReadable(get(scScr(id)).data);
+        // the code can only be written by the author while the script is 'pending', or by an administrator
+        allow create, update: if cid == 'main' && isSignedIn()
+                              && ((getAfter(scScr(id)).data.ownerUid == request.auth.uid && getAfter(scScr(id)).data.status == 'pending')
+                                  || isAdmin())
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 40000
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(scScr(id)) || get(scScr(id)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
