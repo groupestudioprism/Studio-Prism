@@ -293,18 +293,51 @@ export async function importBuiltins(items) {
   return todo.length;
 }
 
-/* Formules d'EXEMPLE d'ArchiVision (Free, Pro mensuel + annuel, Pro Entreprise sur devis), créées seulement si absentes.
-   Facultatif : aucun produit n'a besoin de formule. Renvoie le nombre de formules créées. */
+/* Offres de DÉPART de toutes les applications (js/seed.js : propositions modifiables dans l'administration). Crée les produits absents
+   (publiés, avec leur logo) puis leurs formules absentes ; ne remplace jamais rien. Renvoie { products, plans } = nombres créés. */
 export async function seedExamplePlans() {
   const { SEED } = await import("./seed.js");
-  const have = new Set((await adminListOffers()).map((o) => o.id));
-  let n = 0;
+  const prodList = await adminListProducts(), haveP = new Set(prodList.map((p) => p.id)), haveO = new Set((await adminListOffers()).map((o) => o.id));
+  let np = 0, n = 0;
+  for (const p of SEED.products) {
+    if (haveP.has(p.id)) {   // produit déjà là (ex. brouillon créé pour une licence) : on complète seulement son logo / visuel s'ils sont vides
+      const cur = prodList.find((x) => x.id === p.id), fix = {};
+      if (!cur.logo && p.logo) fix.logo = p.logo;
+      if (!cur.image && p.image) fix.image = p.image;
+      if (Object.keys(fix).length) await updateDoc(doc(db, "products", p.id), { ...fix, updatedAt: serverTimestamp() });
+      continue;
+    }
+    await setDoc(doc(db, "products", p.id), { ...productData({ ...p, category: "application", pole: "app", stage: "released", status: "published" }), createdAt: serverTimestamp() });
+    np += 1;
+  }
   for (const it of SEED.plans) {
-    if (have.has(it.plan.id)) continue;
+    if (haveO.has(it.plan.id)) continue;
     await savePlan(it.plan, it.prices, true, null);
     n += 1;
   }
-  return n;
+  return { products: np, plans: n };
+}
+
+/* Catalogue de fonctionnalités prédéfinies et modèles de fiches produit (document settings/offerKit, administrateurs seulement).
+   Repli sur le stockage local du navigateur si Firestore refuse (règles pas encore publiées) : { features: [{label, group}], templates: [{id, name, fields}] }. */
+const KIT_LS = "sp-offerkit";
+export async function getOfferKit() {
+  const seed = await import("./seed.js");
+  let kit = null;
+  try { const s = await getDoc(doc(db, "settings", "offerKit")); if (s.exists()) kit = s.data(); } catch (e) { /* repli local */ }
+  if (!kit) { try { kit = JSON.parse(localStorage.getItem(KIT_LS) || "null"); } catch (e) { kit = null; } }
+  return {
+    features: kit && Array.isArray(kit.features) && kit.features.length ? kit.features : seed.DEFAULT_FEATURES,
+    templates: kit && Array.isArray(kit.templates) && kit.templates.length ? kit.templates : seed.DEFAULT_TEMPLATES
+  };
+}
+export async function saveOfferKit(kit) {
+  const clean = {
+    features: kit.features.slice(0, 300).map((f) => ({ label: String(f.label).slice(0, 120), group: String(f.group || "").slice(0, 40) })),
+    templates: kit.templates.slice(0, 30)
+  };
+  try { await setDoc(doc(db, "settings", "offerKit"), { ...clean, updatedAt: serverTimestamp() }); localStorage.removeItem(KIT_LS); return { local: false }; }
+  catch (e) { localStorage.setItem(KIT_LS, JSON.stringify(clean)); return { local: true }; }
 }
 
 /* ------------------------------------------------------------------ Cloud Functions */

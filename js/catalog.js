@@ -341,9 +341,18 @@
     }).join('');
   }
 
+  /* Bandeau d'arguments commerciaux (modèle tarifaire : abonnement mensuel ou annuel, jamais d'achat à vie). */
+  const PERKS = [['', 'Essai gratuit 1 mois', 'Testez chaque application sans carte bancaire'], ['', 'Mises à jour incluses', 'Toutes les nouveautés, sans supplément'], ['', 'Offre étudiant', 'Toutes les applications dans un seul pack'], ['', 'Sans engagement', 'Abonnement mensuel ou annuel (2 mois offerts)']];
+  const perks = () => `<ul class="perks" aria-label="Nos engagements">${PERKS.map((x) => `<li><span class="pk-i" aria-hidden="true"></span><b>${x[1]}</b><small>${x[2]}</small></li>`).join('')}</ul>`;
+  document.addEventListener('click', (e) => { const q = e.target.closest && e.target.closest('[data-quote]'); if (q) { try { sessionStorage.setItem('spQuote', q.dataset.quote); } catch (x) { /* ignoré */ } } });
+  window.addEventListener('hashchange', () => {
+    if (location.hash !== '#/contact') return;
+    setTimeout(() => { let v = ''; try { v = sessionStorage.getItem('spQuote') || ''; sessionStorage.removeItem('spQuote'); } catch (x) { /* ignoré */ } const t = v && document.querySelector('form[data-f="ct"] textarea'); if (t && !t.value) t.value = 'Bonjour, je souhaite recevoir un devis pour : ' + v + '.\n'; }, 120);
+  });
+
   function cataloguePage() {
     V(`<section class="pg cat"><div class="w"><p class="crumb"><a href="#/">Studio Prism</a> / Produits</p><div class="k">Catalogue Studio Prism</div><h1>Produits</h1>` +
-      `<p class="lead">Choisissez une catégorie ou cherchez un produit, puis ouvrez sa fiche pour voir ses offres.</p>` +
+      `<p class="lead">Choisissez une catégorie ou cherchez un produit, puis ouvrez sa fiche pour voir ses offres.</p>${perks()}` +
       `<div id="cat-box"><div class="acc-f cat-s"><label for="cat-q">Rechercher un produit</label><input id="cat-q" type="search" maxlength="80" autocomplete="off" placeholder="Nom, mot-clé…" value="${esc(F.q)}"></div>` +
       `<div id="cat-chips"></div><p class="mut cat-cnt" id="cat-count" role="status" aria-live="polite"></p><div id="cat-grid"></div></div></div></section>`);
     mount($id('cat-box'), { catalogue: true });
@@ -363,12 +372,12 @@
 
   function planCta(plan, prod) {
     if (prod.status === 'unavailable') return '<button class="btn b4" type="button" disabled aria-disabled="true">Indisponible pour le moment</button>';
-    if (plan.mode === 'quote' || (plan.mode !== 'free' && !livePrices(plan).length)) return '<a class="btn b4 ar" href="#/contact">Nous contacter</a>';
+    if (plan.mode === 'quote' || (plan.mode !== 'free' && !livePrices(plan).length)) return `<a class="btn b1 ar" href="#/contact" data-quote="${esc(prod.name + ' — ' + plan.name)}">Demander un devis</a>`;
     const a = K.st.auth;
     if (a.status === 'loading') return '<span class="mut">Chargement…</span>';
     if (a.status !== 'in') return '<a class="btn b1 ar" href="#/compte/inscription">Créer un compte</a>';
     if (hooks.myLic().some((l) => l.productId === prod.id)) return `<a class="btn b1 ar" href="#/compte">${plan.mode === 'one_time' ? 'Voir ma licence' : 'Gérer mon abonnement'}</a>`;
-    if (a.profile.accountKind === 'company') return '<a class="btn b4 ar" href="#/contact">Nous contacter</a>';
+    if (a.profile.accountKind === 'company') return `<a class="btn b4 ar" href="#/contact" data-quote="${esc(prod.name + ' — ' + plan.name)}">Demander un devis</a>`;
     return `<button class="btn b1" type="button" data-a="plan-detail" data-pid="${esc(prod.id)}" data-id="${esc(plan.id)}">Découvrir l’offre</button>`;
   }
 
@@ -376,7 +385,7 @@
     const pp = planPrice(plan, period), feats = plan.features || [], shown = many ? feats.slice(0, 6) : feats;
     const mine = K.st.auth.status === 'in' ? hooks.myLic().find((l) => l.productId === prod.id && l.licenseType === plan.licenseType) : null;
     return `<article class="pc ab-card${plan.featured ? ' pro' : ''}" id="plan-${esc(plan.id)}">` +
-      `${plan.featured ? '<span class="ab-flag">Recommandé</span>' : ''}<p class="no">${esc(plan.name)}</p>` +
+      `${plan.featured ? '<span class="ab-flag">Recommandé</span>' : ''}<p class="no">${esc(plan.name)}${plan.mode === 'free' ? ' <span class="ab-try">Essai 1 mois</span>' : ''}</p>` +
       `<p class="pp2">${esc(pp.main)}${pp.per ? `<small> ${esc(pp.per)}</small>` : ''}</p>` +
       `<p class="mt2">${esc(pp.note || (plan.mode === 'subscription' ? 'Abonnement' : ''))}</p>` +
       `${plan.description ? `<p class="ab-d">${esc(plan.description)}</p>` : ''}` +
@@ -524,7 +533,7 @@
 
   window.SP.catalog = {
     POLES, POLE_ORDER, POLE_PAGE, TYPES, STATUS, STAGES, MODES, PERIODS, PER, PERIOD_ORDER,
-    BUILTIN, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
+    BUILTIN, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
     load, reset, find, featured, all: () => C.products, state: C, mount, pcard, commercial, repaintAll, productHref, hooks, refresh: refreshSlots, picUrl
   };
 })();

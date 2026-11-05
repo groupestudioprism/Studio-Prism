@@ -18,7 +18,7 @@
   const { safeUrl, money, POLES, TYPES, STATUS, STAGES, MODES, PERIODS } = CATLG;
 
   /* ------------------------------------------------------------------ libellés & petits utilitaires */
-  const BASE_TYPES = ['free', 'pro', 'pro_entreprise'];
+  const BASE_TYPES = ['free', 'pro', 'etudiant', 'pro_entreprise'];
   const D = () => K.dataMod();
   const id2 = (n) => String(n).padStart(2, '0');
 
@@ -93,7 +93,7 @@
     }
     const jump = sections.length > 1 ? `<div class="chips ab-jump" role="navigation" aria-label="Produits">${sections.map((p) => `<a class="chip" href="#/abonnements/${esc(p.id)}">${esc(p.name)}</a>`).join('')}</div>` : '';
     const open = new Set(slug ? [slug] : sections.length === 1 ? [sections[0].id] : []);
-    V(abShell(`${lede('Un seul compte Studio Prism, des licences par produit. Choisissez l’offre adaptée à chaque application ou service. Tous les produits sont dans le <a class="more" href="#/produits">catalogue</a>.')}` +
+    V(abShell(`${lede('Un seul compte Studio Prism, des licences par produit. Choisissez l’offre adaptée à chaque application ou service. Tous les produits sont dans le <a class="more" href="#/produits">catalogue</a>.')}${CATLG.perks()}` +
       `<div class="ab-list">${sections.map((p) => {
         const on = open.has(p.id), chips = CATLG.planChips(p.plans || []);
         // une ligne par produit : logo, nom, accroche, résumé des offres, puis « Voir plus » qui déplie tout le détail (formules, prix, comparatif)
@@ -912,7 +912,7 @@
       `<p class="fe" id="imp-err" role="alert"></p><p style="margin-top:12px"><button class="btn b1" data-a="cat-import">Importer maintenant</button></p>`);
   }
 
-  const INITIAL_OFFERS = [['', 'Aucune offre pour le moment'], ['free', 'Gratuit'], ['one_time', 'Achat unique'], ['subscription', 'Abonnement'], ['quote', 'Sur devis']];
+  const INITIAL_OFFERS = [['', 'Aucune offre pour le moment'], ['free', 'Essai gratuit'], ['subscription', 'Abonnement'], ['quote', 'Sur devis']];
 
   function productForm(id) {
     const x = id ? CT.prods.find((p) => p.id === id) : null;
@@ -920,6 +920,7 @@
     const plans = x ? CT.plans.plans.filter((pl) => pl.productId === x.id) : [];
     pmodal(`<h3>${x ? 'Modifier le produit' : 'Ajouter un produit'}</h3>` +
       `<form data-f="cat-prod" data-mode="${x ? 'edit' : 'new'}" data-prev="${esc(x ? x.name : '')}" novalidate>` +
+      (x ? '' : `<div class="acc-f"><label for="pf-tpl">Partir d’un modèle de fiche</label><select id="pf-tpl" name="pf-tpl"><option value="">Chargement…</option></select><p class="acc-h">Préremplit le type, le pôle, l’accroche, les informations et les points forts.</p></div>`) +
       fld('pf-name', 'Nom', inp('pf-name', 'text', x && x.name, 'maxlength="80" autocomplete="off"')) +
       fld('pf-id', 'Identifiant', inp('pf-id', 'text', x && x.id, `maxlength="60" autocomplete="off" ${x ? 'readonly' : ''}`), x ? 'L’identifiant ne peut plus être modifié.' : 'Lettres minuscules, chiffres et tirets. Il sert d’adresse (#/produits/identifiant).') +
       `<div class="row">${fld('pf-pole', 'Pôle responsable', sel('pf-pole', CATLG.POLE_ORDER.map((k) => [k, POLES[k]]), x ? x.pole : 'app'))}` +
@@ -944,7 +945,9 @@
         : `<fieldset class="pf-offers"><legend>Offre initiale <span class="mut">(facultative)</span></legend>${fld('pf-offer', 'Mode de commercialisation', sel('pf-offer', INITIAL_OFFERS, ''), 'Un produit n’a besoin d’aucune offre : vous pourrez en ajouter, ou non, plus tard (onglet Offres et prix).')}` +
           `<div id="pf-prices" hidden><div class="row">${fld('pf-pone', 'Prix (achat unique)', inp('pf-pone', 'number', '', 'min="0" step="0.01"'))}${fld('pf-pmon', 'Prix mensuel', inp('pf-pmon', 'number', '', 'min="0" step="0.01"'))}${fld('pf-pyear', 'Prix annuel', inp('pf-pyear', 'number', '', 'min="0" step="0.01"'))}</div>` +
           `${fld('pf-cur', 'Devise', inp('pf-cur', 'text', 'EUR', 'maxlength="3" autocomplete="off"'))}</div></fieldset>`) +
+      `<div class="row"><div class="acc-f"><label for="pf-tplname">Enregistrer cette fiche comme modèle <span class="mut">(facultatif)</span></label>${inp('pf-tplname', 'text', '', 'maxlength="60" placeholder="Nom du modèle"')}</div><div class="acc-f"><button type="button" class="btn b4" data-a="pf-tpl-save">Enregistrer comme modèle</button></div></div>` +
       `<p class="fe" id="pf-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">${x ? 'Enregistrer' : 'Ajouter le produit'}</button></p></form>`, true);
+    withKit(fillTplSelect);
   }
 
   A['cat-add'] = () => productForm('');
@@ -1102,10 +1105,10 @@
 
   function offersTab(p, shell) {
     OT.prods = null; OT.plans = null; OT.error = '';
-    V(shell(`${lede('Formules (gratuit, achat unique, abonnement, sur devis) et prix de chaque produit. Tout est facultatif : un produit peut n’avoir aucune offre, une seule, ou plusieurs. Les prix sont enregistrés ici (Firestore) et nulle part ailleurs.')}` +
+    V(shell(`${lede('Formules (essai gratuit, abonnement mensuel / annuel, sur devis) et prix de chaque produit. Tout est facultatif : un produit peut n’avoir aucune offre, une seule, ou plusieurs. Les prix sont enregistrés ici (Firestore) et nulle part ailleurs.')}` +
       `<div class="panel adm-bar of-bar"><div class="acc-f"><label for="ot-prod">Produit</label><select id="ot-prod"><option value="">Tous</option></select></div>` +
       `<div class="acc-f"><label for="ot-status">Statut</label><select id="ot-status"><option value="">Tous</option><option value="active">Actives</option><option value="inactive">Inactives</option></select></div>` +
-      `<div class="acc-f adm-rs"><button type="button" class="btn b1" data-a="of-multi">+ Créer les offres d’un produit</button> <button type="button" class="btn b4" data-a="of-add">+ Une seule formule</button></div></div>` +
+      `<div class="acc-f adm-rs"><button type="button" class="btn b1" data-a="of-multi">+ Créer les offres d’un produit</button> <button type="button" class="btn b4" data-a="of-add">+ Une seule formule</button> <button type="button" class="btn b4" data-a="of-kit">Catalogue de fonctionnalités</button> <button type="button" class="btn b4" data-a="of-tpl">Modèles de fiches</button></div></div>` +
       `<div id="of-list" aria-live="polite"><p class="mut">Chargement des offres…</p></div>`));
     loadOffersAdmin();
   }
@@ -1141,8 +1144,8 @@
     const box = document.getElementById('of-list');
     if (!box) return;
     if (OT.error) { box.innerHTML = `<div class="panel"><p>${esc(OT.error)}</p><p style="margin-top:12px"><button class="btn b1" data-a="of-retry">Réessayer</button></p></div>`; return; }
-    const hasAv = OT.prods.some((x) => x.id === 'archivision') && !OT.plans.some((pl) => pl.productId === 'archivision');
-    const demo = hasAv ? `<p style="margin-top:12px"><button class="btn b4" data-a="of-example">Ajouter les formules d’exemple d’ArchiVision</button></p><p class="fe" id="of-seed-err" role="alert"></p>` : '';
+    const hasAv = !['archiplan', 'architrafic', 'archivision', 'nexus', 'spectrawriter'].every((id) => OT.plans.some((pl) => pl.productId === id));
+    const demo = hasAv ? `<p style="margin-top:12px"><button class="btn b4" data-a="of-example">Ajouter les offres de départ de toutes les applications</button></p><p class="mut">Propose des produits et des prix cohérents (essai 1 mois, Pro mensuel / annuel, Étudiant, Entreprise sur devis) : tout reste modifiable ensuite.</p><p class="fe" id="of-seed-err" role="alert"></p>` : '';
     if (!OT.plans.length) {
       box.innerHTML = `<div class="panel"><p>Aucune formule pour le moment.</p><p class="mut" style="margin-top:6px">${OT.prods.length ? 'Les produits n’ont pas besoin d’offre : ajoutez une formule seulement si vous voulez en proposer une (« + Ajouter une formule »).' : 'Commencez par créer ou importer des produits (onglet Catalogue).'}</p>${demo}</div>`;
       return;
@@ -1174,7 +1177,7 @@
     try {
       const n = await (await D()).seedExamplePlans();
       resetCatalogue();
-      toast(n ? `Formules d’exemple ajoutées (${n}).` : 'Rien à ajouter : tout existe déjà.');
+      toast(n.plans || n.products ? `Offres de départ ajoutées : ${n.plans} formule(s), ${n.products} produit(s).` : 'Rien à ajouter : tout existe déjà.');
       await loadOffersAdmin();
     } catch (e) {
       console.error('[Studio Prism] Formules d’exemple :', e);
@@ -1215,33 +1218,86 @@
       `<div class="row">${fld('of-name', 'Nom de la formule', inp('of-name', 'text', pl && pl.name, 'maxlength="80" autocomplete="off" placeholder="Pro"'))}` +
       `${fld('of-id', 'Identifiant', inp('of-id', 'text', pl && pl.id, `maxlength="60" autocomplete="off" ${pl ? 'readonly' : ''}`), pl ? 'Non modifiable.' : 'Généré à partir du produit et du nom.')}</div>` +
       fld('of-desc', 'Description', txa('of-desc', pl && pl.description, 2, 'maxlength="500"')) +
-      fld('of-mode', 'Mode de commercialisation', sel('of-mode', Object.keys(MODES).map((k) => [k, MODES[k]]), pl ? pl.mode : 'subscription'), 'Gratuit et sur devis : aucun prix. Achat unique : un seul prix. Abonnement : une ou plusieurs périodes.') +
+      fld('of-mode', 'Mode de commercialisation', sel('of-mode', Object.keys(MODES).filter((k) => k !== 'one_time' || (pl && pl.mode === 'one_time')).map((k) => [k, MODES[k]]), pl ? pl.mode : 'subscription'), 'Gratuit (essai) et sur devis : aucun prix, le bouton « Demander un devis » remplace le prix. Abonnement : mensuel et/ou annuel (jamais d’achat à vie).') +
       `<div id="of-prices"><div class="row">${fld('of-pone', 'Prix (achat unique)', inp('of-pone', 'number', amount('once'), 'min="0" step="0.01"'))}${fld('of-pmon', 'Prix mensuel', inp('of-pmon', 'number', amount('monthly'), 'min="0" step="0.01"'))}` +
       `${fld('of-pqua', 'Prix trimestriel', inp('of-pqua', 'number', amount('quarterly'), 'min="0" step="0.01"'))}${fld('of-pyear', 'Prix annuel', inp('of-pyear', 'number', amount('yearly'), 'min="0" step="0.01"'))}</div>` +
       `${fld('of-cur', 'Devise', inp('of-cur', 'text', cur, 'maxlength="3" autocomplete="off"'), 'Laissez une période vide pour ne pas la proposer.')}</div>` +
       fld('of-type', 'Type de licence', `<input id="of-type" name="of-type" list="of-types" value="${esc(pl ? pl.licenseType : 'pro')}" maxlength="40" autocomplete="off"><datalist id="of-types">${types.map((t) => `<option value="${esc(t)}"></option>`).join('')}</datalist>`,
         'Droit accordé par la licence activée pour cette formule (minuscules, chiffres, underscore). Extensible : free, pro, pro_entreprise ou un nouveau type.') +
       fld('of-feat', 'Fonctionnalités <span class="mut">(une par ligne)</span>', txa('of-feat', (pl ? pl.features || [] : []).join('\n'), 7), 'Alimentent la carte de la formule et le tableau comparatif. 40 lignes maximum, 120 caractères par ligne.') +
+      `<div id="of-kit"></div>` +
       `<div class="row">${fld('of-status', 'Statut', sel('of-status', [['active', 'Active (visible)'], ['inactive', 'Inactive']], pl ? pl.status : 'active'))}` +
       `${fld('of-order', 'Ordre d’affichage', inp('of-order', 'number', pl ? pl.displayOrder : (OT.plans.length + 1), 'min="0" max="9999" step="1"'))}</div>` +
       chk('of-feat-on', 'Mettre cette formule en avant (« Recommandé »)', pl && pl.featured) +
       `<p class="fe" id="of-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">${pl ? 'Enregistrer' : 'Ajouter la formule'}</button></p></form>`, true);
     offerModeChanged();
     if (!pl) offerAutoId();
+    withKit((kit) => { const b = document.getElementById('of-kit'), t = document.getElementById('of-feat'); if (b && t) b.innerHTML = kitChecks('of-feat', kit.features, t.value); });
   }
 
-  /* Toutes les offres d'un produit en une seule fois (une ligne par offre : cochez, nommez, mettez les prix) */
-  const MULTI = [['free', 'Gratuit', 'free', 'free'], ['pro', 'Pro', 'pro', 'subscription'], ['pro_entreprise', 'Pro Entreprise', 'pro_entreprise', 'subscription']];
+  /* ---- catalogue de fonctionnalités prédéfinies + modèles de fiches (settings/offerKit, voir js/data.js) ---- */
+  const KIT = { v: null };
+  function withKit(cb) {
+    if (KIT.v) { cb(KIT.v); return; }
+    D().then((d) => d.getOfferKit()).then((k) => { KIT.v = k; cb(k); }).catch((e) => console.error('[Studio Prism] Catalogue de fonctionnalités :', e));
+  }
+  /* cases à cocher groupées ; le textarea (une fonctionnalité par ligne) reste la référence : cocher ajoute la ligne, décocher la retire */
+  function kitChecks(taId, features, current) {
+    const have = new Set(String(current || '').split('\n').map((x) => x.trim()).filter(Boolean)), groups = {};
+    features.forEach((f) => { (groups[f.group || 'Général'] = groups[f.group || 'Général'] || []).push(f.label); });
+    return `<details class="kit"><summary>Choisir dans le catalogue de fonctionnalités (${features.length})</summary>` + Object.keys(groups).map((g) =>
+      `<fieldset class="kit-g"><legend>${esc(g)}</legend>${groups[g].map((l) => `<label class="opt"><input type="checkbox" data-kit="${esc(taId)}" value="${esc(l)}"${have.has(l) ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</fieldset>`).join('') + '</details>';
+  }
+  document.addEventListener('change', (e) => {
+    const t = e.target, ta = t.dataset && t.dataset.kit && document.getElementById(t.dataset.kit);
+    if (ta) {
+      const lines = ta.value.split('\n').map((x) => x.trim()).filter(Boolean).filter((x) => x !== t.value);
+      if (t.checked) lines.push(t.value);
+      ta.value = lines.join('\n');
+    } else if (t.dataset && t.dataset.mm !== undefined) {   // formules « en une fois » : le mode d'une offre détermine ses champs de prix
+      const row = t.closest('.mo');
+      row.querySelectorAll('.mo-p input').forEach((x) => { x.disabled = t.value !== 'subscription'; });
+      row.querySelector('.mo-q').hidden = t.value !== 'quote';
+    } else if (t.id === 'm-prod') prefillMulti(t.form);
+  });
+
+  const MULTI = [['essai', 'Essai gratuit', 'free', 'free', 'Testez toute l’application pendant 1 mois, sans carte bancaire.'],
+    ['pro', 'Pro', 'pro', 'subscription', 'Toutes les fonctionnalités, mises à jour gratuites. Sans engagement en mensuel.'],
+    ['etudiant', 'Étudiant', 'etudiant', 'subscription', 'Tarif étudiant (justificatif demandé). Idéalement un seul pack pour toutes les applications.'],
+    ['entreprise', 'Entreprise', 'pro_entreprise', 'quote', 'Pour les équipes : nombre d’utilisateurs adapté, accompagnement. Sur devis.']];
+  const MODE_OPTS = [['free', 'Essai gratuit (1 mois)'], ['subscription', 'Abonnement mensuel / annuel'], ['quote', 'Sur devis']];
+
+  /* Propose les prix et fonctionnalités de départ (js/seed.js) du produit choisi ; tout reste modifiable avant d'enregistrer. */
+  async function prefillMulti(fm) {
+    if (!fm) return;
+    const seed = await import('./seed.js'), app = seed.APPS.find((a) => a.id === fm.elements['m-prod'].value);
+    const set = (n, v) => { const el = fm.elements[n]; if (el) { el.value = v; el.dispatchEvent(new Event('input')); } };
+    const feats = [seed.COMMON.trial, app ? app.features.concat(seed.COMMON.pro) : seed.COMMON.pro, seed.COMMON.student, app ? app.features.concat(seed.COMMON.team) : seed.COMMON.team];
+    MULTI.forEach((m, i) => {
+      set('m-feat' + i, feats[i].join('\n'));
+      document.querySelectorAll(`[data-kit="m-feat${i}"]`).forEach((c) => { c.checked = feats[i].includes(c.value); });
+      if (m[0] === 'pro') { set('m-mon' + i, app ? app.monthly : ''); set('m-yea' + i, app ? app.yearly : ''); }
+      if (m[0] === 'etudiant') { fm.elements['m-on' + i].checked = false; set('m-mon' + i, 4.9); set('m-yea' + i, 49); }
+    });
+  }
+
+  /* Toutes les offres d'un produit en une seule fois : essai gratuit, abonnements mensuel / annuel, sur devis ; fonctionnalités cochées dans le catalogue */
   A['of-multi'] = () => {
     if (!OT.prods.length) return toast('Créez d’abord un produit (onglet Produits).');
-    const rows = MULTI.map(([k, name, type, mode], i) => `<tr><td><label class="opt"><input type="checkbox" name="m-on${i}" ${k === 'free' ? '' : 'checked'}> <b>${esc(name)}</b></label><input type="hidden" name="m-type${i}" value="${type}"><input type="hidden" name="m-mode${i}" value="${mode}"></td>` +
-      `<td><input type="text" name="m-name${i}" value="${esc(name)}" maxlength="80" aria-label="Nom ${esc(name)}"></td>` +
-      (mode === 'free' ? '<td colspan="3" class="mut">Aucun prix</td>' : `<td><input type="number" name="m-mon${i}" min="0" step="0.01" placeholder="€ / mois" aria-label="Prix mensuel ${esc(name)}"></td><td><input type="number" name="m-qua${i}" min="0" step="0.01" placeholder="€ / trimestre" aria-label="Prix trimestriel ${esc(name)}"></td><td><input type="number" name="m-yea${i}" min="0" step="0.01" placeholder="€ / an" aria-label="Prix annuel ${esc(name)}"></td>`) + '</tr>').join('');
-    pmodal(`<h3>Créer les offres d’un produit</h3><p class="mut">Choisissez le produit, cochez les offres à créer et indiquez les prix (laissez une période vide pour ne pas la proposer). Tout est enregistré en une fois.</p>` +
-      `<form data-f="of-multi" novalidate>${fld('m-prod', 'Produit', sel('m-prod', OT.prods.map((x) => [x.id, x.name]), OT.prod || OT.prods[0].id))}` +
-      `<div class="adm-tw"><table class="adm-t" style="min-width:0"><thead><tr><th>Offre</th><th>Nom affiché</th><th>Mensuel</th><th>Trimestriel</th><th>Annuel</th></tr></thead><tbody>${rows}</tbody></table></div>` +
-      fld('m-cur', 'Devise', inp('m-cur', 'text', 'EUR', 'maxlength="3"')) +
-      `<p class="fe" id="m-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">Créer les offres</button></p></form>`, true);
+    withKit((kit) => {
+      const rows = MULTI.map(([k, name, type, mode, desc], i) => `<fieldset class="mo" data-i="${i}"><legend><label class="opt"><input type="checkbox" name="m-on${i}" ${k === 'etudiant' ? '' : 'checked'}> <b>${esc(name)}</b></label></legend>` +
+        `<input type="hidden" name="m-type${i}" value="${type}"><input type="hidden" name="m-key${i}" value="${k}">` +
+        `<div class="row">${fld('m-name' + i, 'Nom affiché', inp('m-name' + i, 'text', name, 'maxlength="80"'))}${fld('m-mode' + i, 'Formule', sel('m-mode' + i, MODE_OPTS, mode, 'data-mm'))}</div>` +
+        `<div class="row mo-p">${fld('m-mon' + i, 'Prix mensuel', inp('m-mon' + i, 'number', '', `min="0" step="0.01" placeholder="€ / mois" ${mode === 'subscription' ? '' : 'disabled'}`))}${fld('m-yea' + i, 'Prix annuel', inp('m-yea' + i, 'number', '', `min="0" step="0.01" placeholder="€ / an" ${mode === 'subscription' ? '' : 'disabled'}`))}</div>` +
+        `<p class="acc-h mo-q"${mode === 'quote' ? '' : ' hidden'}>Aucun prix affiché : le bouton « Demander un devis » le remplace.</p>` +
+        fld('m-desc' + i, 'Description', txa('m-desc' + i, desc, 2, 'maxlength="500"')) +
+        fld('m-feat' + i, 'Fonctionnalités <span class="mut">(une par ligne)</span>', txa('m-feat' + i, '', 4)) + kitChecks('m-feat' + i, kit.features, '') + '</fieldset>').join('');
+      pmodal(`<h3>Créer les offres d’un produit</h3><p class="mut">Abonnement mensuel ou annuel uniquement, jamais d’achat à vie. Les prix et fonctionnalités de départ du produit sont préremplis : ajustez, cochez, puis tout est enregistré en une fois.</p>` +
+        `<form data-f="of-multi" novalidate>${fld('m-prod', 'Produit', sel('m-prod', OT.prods.map((x) => [x.id, x.name]), OT.prod || OT.prods[0].id))}${rows}` +
+        fld('m-cur', 'Devise', inp('m-cur', 'text', 'EUR', 'maxlength="3"')) +
+        `<p class="fe" id="m-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">Créer les offres</button></p></form>`, true);
+      prefillMulti(document.querySelector('form[data-f="of-multi"]'));
+    });
   };
   async function submitMulti(fm) {
     const err = fm.querySelector('#m-err'); err.textContent = '';
@@ -1251,11 +1307,13 @@
     for (let i = 0; i < MULTI.length; i++) {
       if (!fm.elements['m-on' + i].checked) continue;
       const mode = fm.elements['m-mode' + i].value, name = fm.elements['m-name' + i].value.trim() || MULTI[i][1], prices = [];
+      const feats = fm.elements['m-feat' + i].value.split('\n').map((x) => x.trim()).filter(Boolean);
+      if (feats.length > 40 || feats.some((f) => f.length > 120)) { err.textContent = `${name} : 40 fonctionnalités maximum, 120 caractères par ligne.`; return; }
       if (mode === 'subscription') {
-        [['m-mon', 'monthly'], ['m-qua', 'quarterly'], ['m-yea', 'yearly']].forEach(([k, period]) => { const v = fm.elements[k + i].value.trim(); if (v) { const n = Number(v); if (isFinite(n) && n > 0 && n < 1000000) prices.push({ period, amount: n, currency: cur }); else made.bad = name; } });
-        if (!prices.length) { err.textContent = `${name} : saisissez au moins un prix, ou décochez cette offre.`; return; }
+        [['m-mon', 'monthly'], ['m-yea', 'yearly']].forEach(([k, period]) => { const v = fm.elements[k + i].value.trim(); if (v) { const n = Number(v); if (isFinite(n) && n > 0 && n < 1000000) prices.push({ period, amount: n, currency: cur }); else made.bad = name; } });
+        if (!prices.length && !made.bad) { err.textContent = `${name} : saisissez au moins un prix, ou décochez cette offre.`; return; }
       }
-      made.push({ plan: { id: slugify(`${prodId}-${MULTI[i][0]}`), productId: prodId, productName: prod.name, name, description: '', mode, features: [], licenseType: MULTI[i][2], status: 'active', featured: MULTI[i][0] === 'pro', displayOrder: i + 1 }, prices });
+      made.push({ plan: { id: slugify(`${prodId}-${MULTI[i][0]}`), productId: prodId, productName: prod.name, name, description: fm.elements['m-desc' + i].value.trim().slice(0, 500), mode, features: feats, licenseType: fm.elements['m-type' + i].value, status: 'active', featured: MULTI[i][0] === 'pro', displayOrder: i + 1 }, prices });
     }
     if (made.bad) { err.textContent = `${made.bad} : un prix doit être supérieur à 0.`; return; }
     if (!made.length) { err.textContent = 'Cochez au moins une offre.'; return; }
@@ -1263,6 +1321,54 @@
     try { const d = await D(); for (const m of made) await d.savePlan(m.plan, m.prices, true, null); resetCatalogue(); A.x(); toast(`${made.length} offre${made.length > 1 ? 's' : ''} créée${made.length > 1 ? 's' : ''}.`); loadOffersAdmin(); }
     catch (e) { err.textContent = errMsg(e) + ' (si l’offre existe déjà, modifiez-la depuis la liste)'; btn.disabled = false; }
   }
+
+  /* Éditeur du catalogue de fonctionnalités : une ligne par fonctionnalité, « Groupe | Libellé » */
+  A['of-kit'] = () => withKit((kit) => {
+    pmodal(`<h3>Catalogue de fonctionnalités</h3><p class="mut">Fonctionnalités prédéfinies, à cocher dans chaque offre. Une par ligne, au format « Groupe | Libellé » (groupe facultatif : produit, type d’offre…).</p>` +
+      `<form data-f="of-kit" novalidate>${fld('k-list', 'Fonctionnalités', txa('k-list', kit.features.map((f) => (f.group ? f.group + ' | ' : '') + f.label).join('\n'), 14, 'spellcheck="false"'))}` +
+      `<p class="fe" id="k-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">Enregistrer le catalogue</button></p></form>`, true);
+  });
+  async function submitKit(fm) {
+    const err = fm.querySelector('#k-err'), seen = new Set(), features = [];
+    fm.elements['k-list'].value.split('\n').map((x) => x.trim()).filter(Boolean).forEach((l) => {
+      const i = l.indexOf('|'), group = i > 0 ? l.slice(0, i).trim() : '', label = (i > 0 ? l.slice(i + 1) : l).trim();
+      if (label && !seen.has(label.toLowerCase())) { seen.add(label.toLowerCase()); features.push({ label: label.slice(0, 120), group: group.slice(0, 40) }); }
+    });
+    if (features.length > 300) { err.textContent = '300 fonctionnalités maximum.'; return; }
+    try { const r = await (await D()).saveOfferKit({ features, templates: KIT.v.templates }); KIT.v = { features, templates: KIT.v.templates }; A.x(); toast(r.local ? 'Enregistré sur cet appareil seulement : publiez les règles Firestore pour le partager.' : 'Catalogue enregistré.'); }
+    catch (e) { err.textContent = errMsg(e); }
+  }
+
+  /* Modèles de fiches produit : liste + suppression (la création se fait depuis le formulaire d'un produit) */
+  A['of-tpl'] = () => withKit((kit) => {
+    pmodal(`<h3>Modèles de fiches produit</h3><p class="mut">Un modèle préremplit la fiche d’un nouveau produit (type, pôle, accroche, informations, points forts…). Pour en créer un : ouvrez le formulaire d’un produit, remplissez-le puis « Enregistrer comme modèle ».</p>` +
+      `<ul class="ab-ul">${kit.templates.map((t) => `<li>${esc(t.name)} <button type="button" class="btn b4" data-a="of-tpl-del" data-id="${esc(t.id)}">Supprimer</button></li>`).join('') || '<li class="mut">Aucun modèle.</li>'}</ul>`, true);
+  });
+  A['of-tpl-del'] = async (btn) => {
+    const templates = KIT.v.templates.filter((t) => t.id !== btn.dataset.id);
+    try { await (await D()).saveOfferKit({ features: KIT.v.features, templates }); KIT.v.templates = templates; btn.closest('li').remove(); toast('Modèle supprimé.'); } catch (e) { toast(errMsg(e)); }
+  };
+  A['pf-tpl-save'] = async () => {
+    const fm = document.querySelector('form[data-f="cat-prod"]'), name = fm && fm.elements['pf-tplname'].value.trim(), g = (n) => fm.elements[n].value.trim();
+    if (!name) return toast('Donnez un nom au modèle.');
+    const t = { id: slugify(name) || 'modele', name: name.slice(0, 60), fields: { category: g('pf-cat'), pole: g('pf-pole'), stage: g('pf-stage'), tagline: g('pf-tag'), description: g('pf-desc'), availability: g('pf-avail'), info: fm.elements['pf-info'].value.trim(), platforms: g('pf-plat').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8), highlights: fm.elements['pf-hl'].value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 12), details: fm.elements['pf-details'].value.trim().slice(0, 5000) } };
+    withKit(async (kit) => {
+      const templates = kit.templates.filter((x) => x.id !== t.id).concat(t);
+      try { await (await D()).saveOfferKit({ features: kit.features, templates }); KIT.v.templates = templates; fillTplSelect(); toast('Modèle enregistré.'); } catch (e) { toast(errMsg(e)); }
+    });
+  };
+  function fillTplSelect() {
+    const s = document.getElementById('pf-tpl');
+    if (s && KIT.v) s.innerHTML = '<option value="">— Aucun modèle —</option>' + KIT.v.templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'pf-tpl' || !e.target.value || !KIT.v) return;
+    const t = KIT.v.templates.find((x) => x.id === e.target.value), fm = e.target.form, f = t && t.fields;
+    if (!f) return;
+    const set = (n, v) => { if (fm.elements[n] && v != null) fm.elements[n].value = v; };
+    set('pf-cat', f.category); set('pf-pole', f.pole); set('pf-stage', f.stage); set('pf-tag', f.tagline); set('pf-desc', f.description); set('pf-avail', f.availability);
+    set('pf-info', f.info); set('pf-plat', (f.platforms || []).join(', ')); set('pf-hl', (f.highlights || []).join('\n')); set('pf-details', f.details || '');
+  });
   A['of-add'] = () => offerForm('');
   A['of-edit'] = (btn) => offerForm(btn.dataset.id);
 
@@ -1360,6 +1466,7 @@
     else if (f === 'acc-del') submitDeleteAccount(e.target);
     else if (f === 'acc-com') submitCommercial(e.target);
     else if (f === 'of-multi') submitMulti(e.target);
+    else if (f === 'of-kit') submitKit(e.target);
     else if (f === 'adm-lic') submitLicense(e.target);
     else if (f === 'adm-newuser') submitNewUser(e.target);
     else if (f === 'cat-prod') submitProduct(e.target);
