@@ -634,7 +634,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 
   /* ================================================================== UTILISATEUR : ACTIVER UNE CLÉ */
   const PENDING = 'sp.pendingKey';
-  const OPEN_URL = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archivision: 'https://groupestudioprism.github.io/ArchiVision/', nexus: 'https://groupestudioprism.github.io/Nexus/' };
+  const OPEN_URL = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archivision: 'https://groupestudioprism.github.io/ArchiVision/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };
   function activatePage() {
     const a = st.auth, pre = (() => { try { return sessionStorage.getItem(PENDING) || ''; } catch (e) { return ''; } })();
     const shell = (inner) => `<section class="pg"><div class="w" style="max-width:640px"><p class="crumb"><a href="#/">Studio Prism</a> / Activer une clé</p><h1>Activer une clé de licence</h1>${inner}</div></section>`;

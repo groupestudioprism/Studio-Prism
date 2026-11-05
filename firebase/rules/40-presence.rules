@@ -3,7 +3,7 @@
     // appSessions/{id}         : une session (début, dernière activité, secondes actives). Aucun contenu, aucun nom : seulement l'uid.
     // Écriture : uniquement la personne connectée, sur ses propres documents. Lecture : la personne elle-même et l'administration.
     function appOk(a) {
-      return a in ['archiplan', 'archivision', 'architrafic', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion', 'nexus'];
+      return a in ['archiplan', 'archivision', 'architrafic', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion', 'nexus', 'prismarcade'];
     }
 
     match /appPresence/{pid} {

@@ -87,15 +87,15 @@
     id: 'prism-arcade', name: 'PRISM ARCADE', category: 'game', pole: 'game', stage: 'beta', status: 'published',
     tagline: 'Plateforme de jeux en ligne : 10 mini-jeux, une seule progression',
     description: 'La plateforme de jeux de Prism Game : dix mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, pièces, succès et défis du jour).',
-    availability: 'Gratuit — jouable en ligne, sans compte',
-    info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : enregistrée sur l’appareil',
+    availability: 'Gratuit — jouable en ligne, avec ou sans compte Studio Prism',
+    info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : sur le compte Studio Prism (ou sur l’appareil sans compte)\nClassements : par jeu',
     platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/prism-arcade.svg', image: 'assets/img/prism-arcade.webp', url: '',
-    website: 'https://groupestudioprism.github.io/prismarcade/', featured: true, displayOrder: 90,
+    website: 'https://prismarcade.studio-prism.com/', featured: true, displayOrder: 90,
     details: 'Prism Arcade réunit les jeux de Prism Game sur une seule plateforme web.\n\n' +
       'Dix mini-jeux à score : Fusion, Prism Run, Stack, Brick Break, Snake Neon, Gem Match, Block Drop, Flap, Astro Blast et Memory Pulse.\n\n' +
       'Chaque partie rapporte de l’XP et des pièces. Les pièces débloquent des thèmes dans la boutique ; 38 succès et 3 défis renouvelés chaque jour entretiennent la progression.\n\n' +
       'Les grands jeux du studio rejoindront ensuite la plateforme, en solo d’abord puis en multijoueur.',
-    highlights: ['10 mini-jeux d’arcade', 'Progression commune : niveaux, pièces, succès', 'Défis du jour', 'Ordinateur et mobile', 'Gratuit, sans installation']
+    highlights: ['10 mini-jeux d’arcade', 'Progression commune : niveaux, pièces, succès', 'Défis du jour', 'Classements par jeu', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
   }];
 
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */

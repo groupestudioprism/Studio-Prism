@@ -3006,12 +3006,84 @@ service cloud.firestore {
       allow delete: if cid == 'axion' && isAdmin();
     }
 
+
+// =====================================================================================================================
+// PRISM ARCADE — Firestore rules BLOCK. Do NOT paste this file alone in the console ("Unexpected 'match'" error).
+// For the console, copy the COMPLETE file firebase/firestore.rules (built by tools/build_rules.py).
+//
+// Collections (nothing else is added; no existing rule is changed):
+//   paPlayers/{uid}                  Prism Arcade progress of the account (XP, coins, records, achievements, daily challenges)
+//   paBoards/{game}/scores/{uid}     leaderboard entry { uid, name, score, updatedAt } — one per account and per game
+//
+// Principles: progress is readable and writable ONLY by its owner (active account); an administrator can only delete it.
+// Leaderboards are public (pseudo + score only, never e-mail or real name); an entry is written only by its owner,
+// for a known game, and a record can never go down. An administrator can delete an entry (cheating, offensive pseudo).
+// When a game is added to Prism Arcade, add its id to paGames().
+// Uses isSignedIn(), isActiveUser(), isAdmin(), isString() from the common rules.
+// =====================================================================================================================
+
+    function paOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function paGames() {
+      return ['fusion', 'prism-run', 'stack', 'brick-break', 'snake-neon', 'gem-match', 'block-drop', 'flap', 'astro-blast', 'memory-pulse'];
+    }
+
+    function paNum(v, max) {
+      return v is number && v >= 0 && v <= max;
+    }
+
+    function paValidPlayer() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['name', 'xp', 'coins', 'games', 'ach', 'totals', 'updatedAt'])
+        && d.keys().hasOnly(['name', 'xp', 'coins', 'coinsEarned', 'theme', 'themes', 'muted', 'games', 'ach', 'boards', 'daily',
+                             'dailyStreak', 'lastDailyDone', 'totals', 'created', 'updatedAt'])
+        && isString(d.name, 1, 18)
+        && paNum(d.xp, 1000000000) && paNum(d.coins, 1000000000) && paNum(d.get('coinsEarned', 0), 1000000000)
+        && isString(d.get('theme', 'prisme'), 1, 30)
+        && d.get('themes', []) is list && d.get('themes', []).size() <= 30
+        && d.get('muted', false) is bool
+        && d.games is map && d.games.size() <= 60
+        && d.ach is map && d.ach.size() <= 500
+        && d.get('boards', {}) is map && d.get('boards', {}).size() <= 60
+        && (d.get('daily', null) == null || d.daily is map)
+        && paNum(d.get('dailyStreak', 0), 100000)
+        && isString(d.get('lastDailyDone', ''), 0, 10)
+        && d.totals is map && d.totals.size() <= 10
+        && (d.get('created', null) == null || d.created is number)
+        && d.updatedAt == request.time;
+    }
+
+    function paValidScore(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'name', 'score', 'updatedAt'])
+        && d.keys().hasAll(['uid', 'name', 'score', 'updatedAt'])
+        && d.uid == uid
+        && isString(d.name, 1, 18)
+        && d.score is int && d.score > 0 && d.score <= 100000000
+        && d.updatedAt == request.time;
+    }
+
+    match /paPlayers/{uid} {
+      allow get: if paOwner(uid);
+      allow create, update: if paOwner(uid) && isActiveUser() && paValidPlayer();
+      allow delete: if paOwner(uid) || isAdmin();
+    }
+
+    match /paBoards/{game}/scores/{uid} {
+      allow get, list: if game in paGames();
+      allow create: if paOwner(uid) && isActiveUser() && game in paGames() && paValidScore(uid);
+      allow update: if paOwner(uid) && isActiveUser() && game in paGames() && paValidScore(uid)
+                    && request.resource.data.score >= resource.data.score;
+      allow delete: if paOwner(uid) || isAdmin();
+    }
     // ------------------------------------------------------------ présence / activité des apps (prism-presence.js)
     // appPresence/{uid}__{app} : un document par personne et par app (première visite, dernière activité, nombre de sessions).
     // appSessions/{id}         : une session (début, dernière activité, secondes actives). Aucun contenu, aucun nom : seulement l'uid.
     // Écriture : uniquement la personne connectée, sur ses propres documents. Lecture : la personne elle-même et l'administration.
     function appOk(a) {
-      return a in ['archiplan', 'archivision', 'architrafic', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion', 'nexus'];
+      return a in ['archiplan', 'archivision', 'architrafic', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion', 'nexus', 'prismarcade'];
     }
 
     match /appPresence/{pid} {

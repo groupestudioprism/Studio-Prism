@@ -1,4 +1,15 @@
 # Changelog
+## PRISM ARCADE : comptes, sauvegarde en ligne, classements — 2026-11-05
+
+PRISM ARCADE se connecte désormais avec le compte Studio Prism (même projet Firebase, aucun compte créé par le jeu) et passe sur **https://prismarcade.studio-prism.com/**.
+
+> **À faire** : republier les règles Firestore (fichier complet `firebase/firestore.rules`). Sans elles, la sauvegarde en ligne et les classements de PRISM ARCADE sont refusés ; le reste du site n'est pas touché.
+
+- **Règles** (`firebase/rules/31-prism-arcade.rules`, en anglais) : `paPlayers/{uid}` (progression, lisible et modifiable par son seul titulaire, compte actif ; l'administration peut seulement la supprimer) et `paBoards/{jeu}/scores/{uid}` (classements publics : pseudo + score ; écriture par le titulaire, jeu connu, score entier, jamais en baisse ; suppression par l'administration). `40-presence.rules` : `prismarcade` ajouté aux apps suivies. `tools/build_rules.py` vérifie les deux nouvelles collections. Testées dans l'émulateur (28 cas).
+- **Mon compte** : carte PRISM ARCADE (gratuit, bouton « Ouvrir ») comme NEXUS et ARCHITRAFIC (`js/platform.js`, `js/orgs.js`).
+- **Tableau de bord** : Prism Arcade dans la présence en direct (`js/dashboard.js`) ; `shared/manifest.json` recopie `prism-presence.js` dans le dépôt `prismarcade`.
+- **Fiche produit** : lien vers le sous-domaine, mentions de la sauvegarde sur le compte et des classements.
+
 ## Nouveau produit « PRISM ARCADE » (Prism Game) — 2026-11-05
 
 Ajout de **PRISM ARCADE**, la plateforme de jeux en ligne de Prism Game (dépôt `groupestudioprism/prismarcade`, 10 mini-jeux, progression commune). Aucune règle Firestore à republier.

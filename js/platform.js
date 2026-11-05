@@ -205,10 +205,11 @@
   }
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
-  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', nexus: 'https://groupestudioprism.github.io/Nexus/' };   // sous-domaines (CNAME de chaque dépôt)
+  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };   // sous-domaines (CNAME de chaque dépôt)
   /* ARCHITRAFIC : licence gratuite liée au compte (pour l'instant), affichée même sans document de licence */
   const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' },
-    { id: 'nexus', name: 'NEXUS', tagline: 'Automatisations entre vos applications Studio Prism, avec l’assistant AXION', lic: 'Offre gratuite (une licence augmente le quota AXION)' }];
+    { id: 'nexus', name: 'NEXUS', tagline: 'Automatisations entre vos applications Studio Prism, avec l’assistant AXION', lic: 'Offre gratuite (une licence augmente le quota AXION)' },
+    { id: 'prism-arcade', name: 'PRISM ARCADE', tagline: 'Les mini-jeux de Prism Game : progression sauvegardée sur votre compte et classements', lic: 'Gratuit' }];
   function freeAppCards(lics) {
     return FREE_APPS.filter((a) => !lics.some((l) => l.productId === a.id)).map((a) => `<article class="app-card"><div class="app-b"><h3>${esc(a.name)}</h3><p class="mt2">${esc(a.tagline)}</p>` +
       `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(a.lic || 'Gratuite')}</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>`).join('');
