@@ -1,0 +1,3 @@
+01-studio-design.webp : Un visuel pour les réseaux sociaux dans le studio Design
+02-accueil.webp : Accueil : les cinq studios et plus de 300 modèles
+03-connexion.webp : Écran de connexion de Spectra Motion

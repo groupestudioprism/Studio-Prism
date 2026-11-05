@@ -955,6 +955,9 @@
       fld('pf-plat', 'Plateformes <span class="mut">(facultatif)</span>', inp('pf-plat', 'text', x && x.platforms.join(', '), 'maxlength="200" autocomplete="off" placeholder="Web, iOS, Android, Roblox…"'), 'Séparées par des virgules (8 au maximum).') +
       fld('pf-logo', 'Logo <span class="mut">(médiathèque ou lien)</span>', inp('pf-logo', 'text', x && x.logo, 'maxlength="300" autocomplete="off" placeholder="media:… (médiathèque), assets/img/logo.png ou https://…"') + pickBtn('pf-logo'), 'Choisissez un fichier de la médiathèque (recommandé : le remplacer met à jour tous les affichages) ou collez un lien.') +
       fld('pf-img', 'Image <span class="mut">(médiathèque ou lien)</span>', inp('pf-img', 'text', x && x.image, 'maxlength="300" autocomplete="off"') + pickBtn('pf-img')) +
+      `<p class="acc-h">Galerie « En images » de la page du produit : les images du dossier ${x
+        ? `<a class="more" href="https://github.com/groupestudioprism/Studio-Prism/tree/main/Produits/${esc(x.id)}" target="_blank" rel="noopener noreferrer">Produits/${esc(x.id)}</a>`
+        : '<code>Produits/identifiant</code>'} sur GitHub. Le dossier est créé avec le produit et supprimé avec lui (images comprises), sous 10 minutes environ.</p>` +
       fld('pf-web', 'Lien vers le site <span class="mut">(facultatif)</span>', inp('pf-web', 'url', x && (x.websiteSet || ''), 'maxlength="300" autocomplete="off" placeholder="https://groupestudioprism.github.io/ArchiPlan/"'), 'Adresse https:// de l’application. Sur la page du produit, le bouton « Ouvrir ' + esc(x ? x.name : 'le produit') + ' » y mène.') +
       `<fieldset class="pf-offers pf-more"><legend>Page « Voir plus » <span class="mut">(créée automatiquement avec le produit)</span></legend>` +
       fld('pf-details', 'Présentation détaillée', txa('pf-details', x && x.details, 8, 'maxlength="5000"'), 'Le texte de la page « Voir plus ». Laissez une ligne vide entre deux paragraphes. 5000 caractères au maximum.') +
@@ -1099,6 +1102,7 @@
     pmodal(`<h3>Supprimer le produit</h3><p><b>Supprimer définitivement « ${esc(x.name)} » ?</b></p>` +
       (n ? `<p style="margin-top:6px">Il est encore utilisé : <b>${[u.licenses && pl(u.licenses, 'licence de compte', 'licences de comptes'), u.plans && pl(u.plans, 'formule', 'formules'), u.keys && pl(u.keys, 'clé de licence', 'clés de licence')].filter(Boolean).join(', ')}</b>.</p>` +
         `<p class="mut" style="margin-top:6px">« Supprimer partout » retire aussi tout cela (les comptes concernés perdent ce produit ; leurs autres licences ne changent pas). C’est définitif.</p>` : '<p class="mut" style="margin-top:6px">Aucune licence, formule ni clé ne l’utilise.</p>') +
+      `<p class="mut" style="margin-top:6px">Son dossier d’images <b>Produits/${esc(x.id)}</b> sera aussi supprimé de GitHub et du site, avec toutes ses images (elles restent récupérables dans l’historique GitHub).</p>` +
       `<p class="fe" id="cd-err" role="alert"></p><p style="margin-top:12px"><button class="btn btn-danger" data-a="cat-del-ok" data-id="${esc(x.id)}" data-all="${n ? 1 : ''}">${n ? 'Supprimer partout' : 'Supprimer le produit'}</button></p>`);
   };
 

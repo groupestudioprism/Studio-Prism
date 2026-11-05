@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PARTS = sorted((ROOT / 'firebase' / 'rules').glob('*.rules'))
 OUT = ROOT / 'firebase' / 'firestore.rules'
 REQUIRED = {
-    'site':            ['users', 'companies', 'products', 'subscriptions', 'prices', 'licenses', 'licenseKeys', 'licenseRequests', 'organizations', 'settings', 'pages', 'pageDrafts', 'projects', 'media', 'deletedAccounts'],
+    'site':            ['users', 'companies', 'products', 'productFolders', 'subscriptions', 'prices', 'licenses', 'licenseKeys', 'licenseRequests', 'organizations', 'settings', 'pages', 'pageDrafts', 'projects', 'media', 'deletedAccounts'],
     'ARCHIPLAN':       ['clientProfiles', 'apProjects', 'apUsage', 'apFolders', 'apShares', 'apGrants', 'apLibrary'],
     'ARCHITRAFIC':     ['atProjects', 'atUsage', 'atFolders', 'atShares', 'atGrants', 'atLibrary'],
     'code PIN':        ['userSecrets'],

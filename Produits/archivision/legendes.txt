@@ -1,0 +1,9 @@
+01-visite-3d.webp : Visite 3D d'une maquette exportée par ARCHIPLAN
+02-donnees-bim.webp : Données BIM d'un élément : composition, coefficient U, couches
+03-arborescence.webp : Arborescence de la maquette par niveaux
+04-mode-marche.webp : Mode Marche à hauteur d'homme, avec collisions
+05-coupe.webp : Coupe horizontale réglable
+06-rayons-x.webp : Style Rayons X
+07-immersion-360.webp : Immersion 360° dans la maison
+08-telephone.webp : ARCHIVISION sur téléphone
+09-accueil.webp : Accueil « Mes maquettes » : import GLB, glTF et IFC

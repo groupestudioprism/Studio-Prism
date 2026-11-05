@@ -1,0 +1,142 @@
+{
+ "suivis": [],
+ "products": {
+  "archiplan": [
+   {
+    "file": "01-vue-3d.webp",
+    "caption": "Vue 3D de la maison d'exemple, avec l'arborescence du projet"
+   },
+   {
+    "file": "02-plan.webp",
+    "caption": "Mode Plan : cotes, ouvertures et pièces détectées automatiquement avec leur surface"
+   },
+   {
+    "file": "03-rendu-realiste.webp",
+    "caption": "Rendu réaliste avec réglage du soleil"
+   },
+   {
+    "file": "04-compositeur-de-parois.webp",
+    "caption": "Compositeur de parois : U, R, déphasage, Rw, diagramme de Glaser et résistance au feu"
+   },
+   {
+    "file": "05-verifications.webp",
+    "caption": "Vérifications du bâtiment (RE2020, incendie, électricité…) avec correction en un clic"
+   },
+   {
+    "file": "06-lieu-du-projet.webp",
+    "caption": "Lieu du projet : zone climatique, bruit et relief du terrain (IGN)"
+   },
+   {
+    "file": "07-metre-dqe.webp",
+    "caption": "Métré · DQE rangé automatiquement par lots"
+   },
+   {
+    "file": "08-bibliotheque.webp",
+    "caption": "Bibliothèque de familles : portes, fenêtres, structure, mobilier, réseaux…"
+   },
+   {
+    "file": "09-compositions.webp",
+    "caption": "Compositions de parois avec leur épaisseur et leur coefficient U"
+   },
+   {
+    "file": "10-accueil.webp",
+    "caption": "Accueil : projets, dossiers partagés et espace cloud"
+   }
+  ],
+  "architraffic": [
+   {
+    "file": "01-connexion.webp",
+    "caption": "Écran de connexion d'ARCHITRAFIC, avec le compte Studio Prism"
+   }
+  ],
+  "archivision": [
+   {
+    "file": "01-visite-3d.webp",
+    "caption": "Visite 3D d'une maquette exportée par ARCHIPLAN"
+   },
+   {
+    "file": "02-donnees-bim.webp",
+    "caption": "Données BIM d'un élément : composition, coefficient U, couches"
+   },
+   {
+    "file": "03-arborescence.webp",
+    "caption": "Arborescence de la maquette par niveaux"
+   },
+   {
+    "file": "04-mode-marche.webp",
+    "caption": "Mode Marche à hauteur d'homme, avec collisions"
+   },
+   {
+    "file": "05-coupe.webp",
+    "caption": "Coupe horizontale réglable"
+   },
+   {
+    "file": "06-rayons-x.webp",
+    "caption": "Style Rayons X"
+   },
+   {
+    "file": "07-immersion-360.webp",
+    "caption": "Immersion 360° dans la maison"
+   },
+   {
+    "file": "08-telephone.webp",
+    "caption": "ARCHIVISION sur téléphone"
+   },
+   {
+    "file": "09-accueil.webp",
+    "caption": "Accueil « Mes maquettes » : import GLB, glTF et IFC"
+   }
+  ],
+  "nexus": [
+   {
+    "file": "01-connexion.webp",
+    "caption": "Écran de connexion de Nexus, avec le même compte que le site et les applications"
+   }
+  ],
+  "spectracalc": [
+   {
+    "file": "01-planning-gantt.webp",
+    "caption": "Le modèle de planning de projet et son diagramme de Gantt"
+   },
+   {
+    "file": "02-accueil.webp",
+    "caption": "Accueil et modèles de classeurs"
+   }
+  ],
+  "spectramotion": [
+   {
+    "file": "01-studio-design.webp",
+    "caption": "Un visuel pour les réseaux sociaux dans le studio Design"
+   },
+   {
+    "file": "02-accueil.webp",
+    "caption": "Accueil : les cinq studios et plus de 300 modèles"
+   },
+   {
+    "file": "03-connexion.webp",
+    "caption": "Écran de connexion de Spectra Motion"
+   }
+  ],
+  "spectraslide": [
+   {
+    "file": "01-editeur.webp",
+    "caption": "Une présentation tirée des modèles, avec le film des diapositives"
+   },
+   {
+    "file": "02-accueil.webp",
+    "caption": "Accueil et modèles de présentations"
+   }
+  ],
+  "spectrawriter": [
+   {
+    "file": "01-editeur.webp",
+    "caption": "Le modèle de compte rendu de réunion de chantier, avec la barre Prisme"
+   },
+   {
+    "file": "02-accueil.webp",
+    "caption": "Accueil : « Que voulez-vous écrire ? » et les modèles"
+   }
+  ]
+ },
+ "generated": "2026-11-05T14:29:13+00:00"
+}

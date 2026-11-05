@@ -511,6 +511,7 @@
       `${chips.length ? `<p class="prod-chips">${chips.slice(0, 4).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}</p>` : ''}` +
       `${p.status === 'unavailable' ? '<p class="acc-note">Ce produit est momentanément indisponible. Contactez Studio Prism pour en savoir plus.</p>' : ''}` +
       `<p class="prod-cta">${ctaRow(p, 'fiche')}</p></div></div>` +
+      `<div class="pgal-w" id="prod-gal" data-pid="${esc(p.id)}" hidden></div>` +
       `<h2 style="margin-top:56px">Informations</h2>${spec.length ? `<dl class="spec">${spec.map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${b}</dd></div>`).join('')}</dl>` : ''}` +
       `${bullets.length ? `<ul class="ab-ul prod-ul">${bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}` +
       (others.length ? `<h2 style="margin-top:56px">Autres produits ${esc(POLES[p.pole])}</h2><div class="g">${others.map(pcard).join('')}</div>` : '') +
@@ -526,10 +527,56 @@
       `<h1 style="font-size:clamp(32px,4vw,52px);margin:10px 0 14px">${esc(p.name)}</h1>${p.tagline ? `<p class="mt2" style="margin-bottom:8px">${esc(p.tagline)}</p>` : ''}` +
       `${p.description ? `<p class="lead2">${esc(p.description)}</p>` : ''}<p class="prod-cta">${ctaRow(p, 'more')}</p></div></div>` +
       (paras.length ? `<div class="prod-text">${paras.map((x) => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join('')}</div>` : '') +
+      `<div class="pgal-w" id="prod-gal" data-pid="${esc(p.id)}" hidden></div>` +
       (p.highlights.length ? `<h2 style="margin-top:48px">Points forts</h2><ul class="ab-ul prod-ul prod-hl">${p.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : '') +
       (rows.length || bullets.length ? `<h2 style="margin-top:48px">En pratique</h2>${rows.length ? `<dl class="spec">${rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>` : ''}${bullets.length ? `<ul class="ab-ul prod-ul">${bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}` : '') +
       (!paras.length && !p.highlights.length ? `<div class="panel" style="margin-top:32px"><p>La présentation détaillée de ${esc(p.name)} arrive bientôt.</p><p class="mut" style="margin-top:6px">Pour en savoir plus dès maintenant, contactez Studio Prism.</p></div>` : '') +
       `<p class="prod-cta" style="margin-top:48px">${ctaRow(p, 'more')}</p></div></section>`;
+  }
+
+
+  /* ------------------------------------------------------------------ galerie « En images »
+     Images du dossier Produits/{id}/ du dépôt GitHub, listées dans Produits/manifest.json par l'action « Dossiers produits ».
+     Un produit sans image n'affiche rien. Clic : grande image (flèches ← → et Échap au clavier). */
+  let GAL = null;
+  const galData = () => GAL || (GAL = fetch('Produits/manifest.json', { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : {})).then((m) => (m && m.products) || {}).catch(() => { GAL = null; return {}; }));
+  const galSrc = (id, f) => 'Produits/' + encodeURIComponent(id) + '/' + encodeURIComponent(f);
+  const galAlt = (it) => it.caption || it.file.replace(/\.[a-z0-9]+$/i, '').replace(/^\d+[-_ ]*/, '').replace(/[-_]+/g, ' ');
+  function galMount(id) {
+    galData().then((all) => {
+      const host = document.getElementById('prod-gal'), list = (all[id] || []).filter((it) => it && typeof it.file === 'string');
+      if (!host || host.dataset.pid !== id || !list.length) return;
+      host.innerHTML = `<h2 style="margin-top:56px">En images</h2><div class="pgal">${list.map((it, i) =>
+        `<figure><button type="button" class="pgal-b" data-i="${i}" aria-label="Agrandir : ${esc(galAlt(it))}"><img src="${esc(galSrc(id, it.file))}" alt="${esc(galAlt(it))}" loading="lazy" decoding="async"></button>` +
+        (it.caption ? `<figcaption>${esc(it.caption)}</figcaption>` : '') + `</figure>`).join('')}</div>`;
+      host.hidden = false;
+      host.querySelectorAll('.pgal-b').forEach((b) => b.addEventListener('click', () => galOpen(id, list, +b.dataset.i)));
+    });
+  }
+  function galOpen(id, list, start) {
+    let i = start;
+    const d = document.createElement('dialog');
+    d.className = 'pgal-dlg';
+    d.innerHTML = `<figure><img alt=""><figcaption></figcaption></figure>` +
+      `<button type="button" class="pgal-x" aria-label="Fermer">×</button>` +
+      (list.length > 1 ? `<button type="button" class="pgal-n pgal-p" aria-label="Image précédente">‹</button><button type="button" class="pgal-n pgal-s" aria-label="Image suivante">›</button><p class="pgal-c"></p>` : '');
+    const img = d.querySelector('img'), cap = d.querySelector('figcaption'), cnt = d.querySelector('.pgal-c');
+    const show = () => {
+      const it = list[i];
+      img.src = galSrc(id, it.file); img.alt = galAlt(it);
+      cap.textContent = it.caption || ''; cap.hidden = !it.caption;
+      if (cnt) cnt.textContent = (i + 1) + ' / ' + list.length;
+    };
+    const go = (k) => { i = (i + k + list.length) % list.length; show(); };
+    d.querySelector('.pgal-x').addEventListener('click', () => d.close());
+    if (list.length > 1) { d.querySelector('.pgal-p').addEventListener('click', () => go(-1)); d.querySelector('.pgal-s').addEventListener('click', () => go(1)); }
+    d.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+    d.addEventListener('close', () => d.remove());
+    document.body.appendChild(d);
+    show();
+    d.showModal();
   }
 
   function productPage() {
@@ -539,6 +586,7 @@
       const p = find(id);
       if (!p) return nf();
       V(CUR.split('/')[2] === 'presentation' ? presentationHtml(p) : productHtml(p));
+      galMount(p.id);
       if (K.st.auth.status === 'in') hooks.loadMine().then(() => { if (CUR === key) repaintAll(); }).catch(() => {});
     };
     if (find(id) || C.done) {

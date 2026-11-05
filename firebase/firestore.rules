@@ -1371,6 +1371,17 @@ service cloud.firestore {
                             && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
+    // ---- Dossiers d'images des produits (dossier Produits/ du dépôt GitHub) ----
+    // Un document par produit, créé et supprimé avec le produit par l'administration du site.
+    // Lisible par tous : l'action GitHub « Dossiers produits » le lit sans compte pour créer / supprimer Produits/{id}/.
+    // Il ne contient que l'identifiant du produit (nom du document) et une date : aucune donnée personnelle.
+    match /productFolders/{pid} {
+      allow get, list: if true;
+      allow create, update: if isAdmin() && isId(pid)
+                            && request.resource.data.keys().hasOnly(['updatedAt'])
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
     // ------------------------------------------------------------ SPECTRA WRITER: documents, folders, sharing, quotas, personal templates
     function swEmail() {
       return request.auth.token.email.lower();

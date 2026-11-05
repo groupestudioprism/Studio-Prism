@@ -1,0 +1,10 @@
+01-vue-3d.webp : Vue 3D de la maison d'exemple, avec l'arborescence du projet
+02-plan.webp : Mode Plan : cotes, ouvertures et pièces détectées automatiquement avec leur surface
+03-rendu-realiste.webp : Rendu réaliste avec réglage du soleil
+04-compositeur-de-parois.webp : Compositeur de parois : U, R, déphasage, Rw, diagramme de Glaser et résistance au feu
+05-verifications.webp : Vérifications du bâtiment (RE2020, incendie, électricité…) avec correction en un clic
+06-lieu-du-projet.webp : Lieu du projet : zone climatique, bruit et relief du terrain (IGN)
+07-metre-dqe.webp : Métré · DQE rangé automatiquement par lots
+08-bibliotheque.webp : Bibliothèque de familles : portes, fenêtres, structure, mobilier, réseaux…
+09-compositions.webp : Compositions de parois avec leur épaisseur et leur coefficient U
+10-accueil.webp : Accueil : projets, dossiers partagés et espace cloud

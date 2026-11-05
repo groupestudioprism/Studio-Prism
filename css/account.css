@@ -496,3 +496,25 @@ a.dash-k:hover{border-color:var(--pt,#0877B9)}
 .acc-sec .adm-t.lic-t{min-width:0}
 .acc-use{margin-top:6px}.acc-use #comBox{margin-top:10px}
 .adm-bar .adm-row1 .adm-q{grid-column:auto}
+/* galerie « En images » des pages produits (Produits/{id}/ du dépôt) */
+.pgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin-top:20px}
+.pgal figure{margin:0;min-width:0}
+.pgal-b{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);cursor:zoom-in;aspect-ratio:16/10}
+.pgal-b img{display:block;width:100%;height:100%;object-fit:contain;transition:transform .25s ease}
+.pgal-b:hover img{transform:scale(1.02)}
+.pgal-b:focus-visible{outline:2px solid var(--prism);outline-offset:3px}
+.pgal figcaption{font-size:13.5px;line-height:1.45;color:var(--mut);margin-top:8px}
+.pgal-dlg{border:0;padding:0;background:transparent;max-width:min(1400px,94vw);max-height:92vh;overflow:visible}
+.pgal-dlg::backdrop{background:rgba(7,27,85,.82)}
+.pgal-dlg figure{margin:0;display:flex;flex-direction:column;align-items:center}
+.pgal-dlg img{display:block;max-width:100%;max-height:82vh;border-radius:8px;background:#fff}
+.pgal-dlg figcaption{color:#fff;font-size:15px;margin-top:10px;text-align:center;max-width:900px}
+.pgal-x,.pgal-n{position:fixed;border:1px solid rgba(255,255,255,.35);background:rgba(7,27,85,.72);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);width:46px;height:46px;border-radius:50%;font-size:28px;line-height:1;cursor:pointer}
+.pgal-x{top:18px;right:18px}
+.pgal-n{top:50%;transform:translateY(-50%)}
+.pgal-p{left:18px}.pgal-s{right:18px}
+.pgal-x:hover,.pgal-n:hover{background:rgba(8,119,185,.9)}
+.pgal-x:focus-visible,.pgal-n:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.pgal-c{position:fixed;bottom:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.75);font-size:13px;margin:0}
+@media(max-width:600px){.pgal{grid-template-columns:1fr 1fr;gap:10px}.pgal figcaption{font-size:12.5px}.pgal-n{top:auto;bottom:12px;transform:none}}
+@media(prefers-reduced-motion:reduce){.pgal-b img{transition:none}}

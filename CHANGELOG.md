@@ -1,4 +1,15 @@
 # Changelog
+## Dossier « Produits » : images des pages produits depuis GitHub — 2026-11-05
+
+Chaque produit a son dossier **`Produits/<identifiant>/`** dans ce dépôt. Les images qu'on y dépose s'affichent dans une nouvelle galerie **« En images »** sur la page du produit et sur sa page « Voir plus » (miniatures, agrandissement au clic, flèches ← → et Échap, légendes).
+
+> **À faire** : republier les règles Firestore (fichier complet `firebase/firestore.rules`). Sans elles, les dossiers des produits publiés sont quand même créés, mais un produit en brouillon n'a pas de dossier et **la suppression automatique ne se fait pas**.
+
+- **Action GitHub « Dossiers produits »** (`.github/workflows/produits.yml`, `tools/sync_produits.py`) : à chaque dépôt d'images et toutes les 10 minutes, crée le dossier des nouveaux produits, supprime le dossier (et ses images) des produits supprimés, et régénère `Produits/manifest.json` (images dans l'ordre des noms, légendes de `legendes.txt`). Aucune suppression si Firestore ne répond pas ou renvoie une liste vide ; un dossier créé à la main n'est jamais supprimé.
+- **Règles** (`firebase/rules/15-dossiers-produits.rules`) : collection `productFolders/{id}` (aucune donnée, seulement l'identifiant et une date), lisible par tous pour que l'action la lise sans compte, écrite et supprimée par les seuls administrateurs. Testées dans l'émulateur (10 cas). `tools/build_rules.py` vérifie la collection.
+- **Administration** (`js/data.js`, `js/platform.js`) : créer un produit (formulaire, imports, offres de départ) crée `productFolders/{id}` ; le supprimer (simple ou « partout ») le retire ; à la première ouverture de la liste des produits, chaque produit existant reçoit le sien. Le formulaire du produit donne le lien vers son dossier GitHub ; la confirmation de suppression prévient que les images seront supprimées.
+- **Images de départ** : captures réelles d'ARCHIPLAN (10), ARCHIVISION (9), SPECTRA Writer, Calc, Slide (2 chacune), Spectra Motion (3), ARCHITRAFIC et NEXUS (écran de connexion), en WebP 1600 px.
+- **Site** : `js/catalog.js` (galerie), `css/account.css` (styles), versions des fichiers montées dans `index.html`.
 ## PRISM ARCADE : classements de la semaine et du mois, 4 nouveaux jeux — 2026-11-05
 
 > **À faire** : republier les règles Firestore (fichier complet `firebase/firestore.rules`).

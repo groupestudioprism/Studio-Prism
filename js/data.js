@@ -61,7 +61,29 @@ export async function listMyLicenses(uid) {
 /* ------------------------------------------------------------------ lecture administrateur */
 
 export async function adminListProducts() {
-  return rows(await getDocs(collection(db, "products"))).sort(byOrder);
+  const list = rows(await getDocs(collection(db, "products"))).sort(byOrder);
+  syncProductFolders(list.map((p) => p.id));
+  return list;
+}
+
+/* ------------------------------------------------------------------ dossiers d'images (Produits/{id}/ sur GitHub)
+   productFolders/{id} existe tant que le produit existe. L'action GitHub « Dossiers produits » le lit (sans compte) :
+   elle crée Produits/{id}/ pour un nouveau produit et supprime le dossier et ses images quand le produit est supprimé.
+   Tant que les règles Firestore qui l'autorisent ne sont pas publiées, ces écritures échouent sans gêner le reste. */
+const folderWarn = (e) => console.warn("[Studio Prism] Dossier d'images du produit non synchronisé", e && (e.code || e));
+const markFolder = (id) => setDoc(doc(db, "productFolders", id), { updatedAt: serverTimestamp() }).catch(folderWarn);
+const dropFolder = (id) => deleteDoc(doc(db, "productFolders", id)).catch(folderWarn);
+let foldersChecked = false;
+/* Rattrapage, une fois par session d'administration : chaque produit existant reçoit son dossier, les orphelins sont retirés. */
+async function syncProductFolders(ids) {
+  if (foldersChecked) return;
+  foldersChecked = true;
+  try {
+    const have = new Set((await getDocs(collection(db, "productFolders"))).docs.map((d) => d.id));
+    const want = new Set(ids);
+    for (const id of want) if (!have.has(id)) await markFolder(id);
+    for (const id of have) if (!want.has(id)) await dropFolder(id);
+  } catch (e) { foldersChecked = false; folderWarn(e); }
 }
 
 export async function adminListOffers() {
@@ -105,6 +127,7 @@ export async function saveProduct(input, isNew, previousName) {
   if (isNew) {
     if ((await getDoc(ref)).exists()) throw fail("app/product-exists");
     await setDoc(ref, { ...data, createdAt: serverTimestamp() });
+    await markFolder(input.id);
     return { cascadeFailed: 0 };
   }
   await updateDoc(ref, data);
@@ -142,6 +165,7 @@ export async function deleteProduct(id) {
   const used = async (col) => !(await getDocs(query(collection(db, col), where("productId", "==", id), limit(1)))).empty;
   if ((await used("licenses")) || (await used("subscriptions"))) throw fail("app/product-in-use");
   await deleteDoc(doc(db, "products", id));
+  await dropFolder(id);
 }
 
 /* Produit retiré de la suite : tout ce qui s'y rattache (administrateur seulement, règles inchangées) */
@@ -158,6 +182,7 @@ export async function deleteProductEverywhere(id) {
     ...prices.map((x) => doc(db, "prices", x.id)), ...plans.map((x) => doc(db, "subscriptions", x.id))];
   for (let i = 0; i < refs.length; i += 400) { const b = writeBatch(db); refs.slice(i, i + 400).forEach((r) => b.delete(r)); await b.commit(); }
   await deleteDoc(doc(db, "products", id));
+  await dropFolder(id);
   return { licenses: lic.length, plans: plans.length, prices: prices.length, keys: keys.length };
 }
 
@@ -278,7 +303,10 @@ export const SUITE_APPS = [
 ];
 export async function ensureSuiteProducts() {
   const have = new Set((await adminListProducts()).map((p) => p.id)), todo = SUITE_APPS.filter((a) => !have.has(a.id));
-  for (const [i, a] of todo.entries()) await setDoc(doc(db, "products", a.id), { ...productData({ ...a, category: "application", pole: "app", stage: "conception", status: "draft", displayOrder: 50 + i }), createdAt: serverTimestamp() });
+  for (const [i, a] of todo.entries()) {
+    await setDoc(doc(db, "products", a.id), { ...productData({ ...a, category: "application", pole: "app", stage: "conception", status: "draft", displayOrder: 50 + i }), createdAt: serverTimestamp() });
+    await markFolder(a.id);
+  }
   return todo.map((a) => a.id);
 }
 /* Copie des produits livrés avec le site (js/catalog.js, LATEST) dans Firestore, sans toucher au réglage « catalogue importé » et sans
@@ -286,7 +314,7 @@ export async function ensureSuiteProducts() {
 export async function importProducts(items) {
   const have = new Set((await adminListProducts()).map((p) => p.id));
   const todo = items.filter((it) => !have.has(it.id));
-  for (const it of todo) await setDoc(doc(db, "products", it.id), { ...productData(it), createdAt: serverTimestamp() });
+  for (const it of todo) { await setDoc(doc(db, "products", it.id), { ...productData(it), createdAt: serverTimestamp() }); await markFolder(it.id); }
   return todo.length;
 }
 export async function importBuiltins(items) {
@@ -297,6 +325,7 @@ export async function importBuiltins(items) {
     todo.slice(i, i + 10).forEach((it) => batch.set(doc(db, "products", it.id), { ...productData(it), createdAt: serverTimestamp() }));
     await batch.commit();
   }
+  for (const it of todo) await markFolder(it.id);
   await setDoc(doc(db, "settings", "catalogue"), { builtinImported: true, updatedAt: serverTimestamp() });
   return todo.length;
 }
@@ -316,6 +345,7 @@ export async function seedExamplePlans() {
       continue;
     }
     await setDoc(doc(db, "products", p.id), { ...productData({ ...p, category: "application", pole: "app", stage: "released", status: "published" }), createdAt: serverTimestamp() });
+    await markFolder(p.id);
     np += 1;
   }
   for (const it of SEED.plans) {

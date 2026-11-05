@@ -1,0 +1,30 @@
+name: Dossiers produits
+# Produits/{id}/ suit les produits de l'administration du site : créé avec le produit, supprimé (avec ses images) avec lui.
+# Produits/manifest.json liste les images de chaque dossier : la page du produit les affiche.
+on:
+  push:
+    branches: [main]
+    paths: ['Produits/**', '!Produits/manifest.json', 'tools/sync_produits.py']
+  schedule:
+    - cron: '*/10 * * * *'   # toutes les 10 minutes (GitHub peut retarder les exécutions programmées)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: produits
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Synchroniser les dossiers et le manifeste
+        run: python3 tools/sync_produits.py
+      - name: Publier
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A Produits
+          if git diff --cached --quiet; then echo "Rien à publier"; exit 0; fi
+          git commit -m "Dossiers produits (automatique)"
+          git pull --rebase -q && git push

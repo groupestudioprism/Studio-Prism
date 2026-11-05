@@ -12,6 +12,7 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
 | `10-archiplan.rules` | ARCHIPLAN : fiche client, cloud (`ap*`) |
 | `11-architrafic.rules` | ARCHITRAFIC : cloud (`at*`) |
 | `13-codes-pin.rules` | code PIN des comptes (`userSecrets`) |
+| `15-dossiers-produits.rules` | dossiers d'images des produits (`productFolders`), lus par l'action GitHub « Dossiers produits » |
 | `20-spectra-writer.rules` · `21-spectra-calc.rules` · `22-spectra-slide.rules` | SPECTRA (`sw*`, `sc*`, `ss*`) |
 | `30-nexus.rules` | NEXUS (`nx*`) |
 | `31-prism-arcade.rules` | PRISM ARCADE : progression (`paPlayers`) et classements (`paBoards`) |
