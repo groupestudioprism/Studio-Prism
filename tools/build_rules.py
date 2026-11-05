@@ -28,6 +28,7 @@ REQUIRED = {
     'SPECTRA Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
     'devis':           ['quotes', 'counters'],
+    'présence':        ['appPresence', 'appSessions'],
 }
 def build():
     return ''.join(p.read_text(encoding='utf-8') for p in PARTS)

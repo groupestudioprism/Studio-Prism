@@ -1,0 +1,38 @@
+    // ------------------------------------------------------------ présence / activité des apps (prism-presence.js)
+    // appPresence/{uid}__{app} : un document par personne et par app (première visite, dernière activité, nombre de sessions).
+    // appSessions/{id}         : une session (début, dernière activité, secondes actives). Aucun contenu, aucun nom : seulement l'uid.
+    // Écriture : uniquement la personne connectée, sur ses propres documents. Lecture : la personne elle-même et l'administration.
+    function appOk(a) {
+      return a in ['archiplan', 'archivision', 'architrafic', 'archiindus', 'spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion', 'nexus'];
+    }
+
+    match /appPresence/{pid} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveUser()
+        && request.resource.data.keys().hasOnly(['uid', 'app', 'firstSeen', 'lastSeen', 'sessions'])
+        && request.resource.data.uid == request.auth.uid && appOk(request.resource.data.app)
+        && pid == request.auth.uid + '__' + request.resource.data.app
+        && request.resource.data.firstSeen == request.time && request.resource.data.lastSeen == request.time
+        && request.resource.data.sessions == 1;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'sessions'])
+        && request.resource.data.lastSeen == request.time
+        && request.resource.data.sessions is int
+        && request.resource.data.sessions >= resource.data.sessions && request.resource.data.sessions <= resource.data.sessions + 1;
+      allow delete: if isAdmin();
+    }
+
+    match /appSessions/{sid} {
+      allow get, list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isActiveUser() && sid.matches('[A-Za-z0-9_-]{8,40}')
+        && request.resource.data.keys().hasOnly(['uid', 'app', 'start', 'lastSeen', 'seconds'])
+        && request.resource.data.uid == request.auth.uid && appOk(request.resource.data.app)
+        && request.resource.data.start == request.time && request.resource.data.lastSeen == request.time
+        && request.resource.data.seconds == 0;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'seconds'])
+        && request.resource.data.lastSeen == request.time
+        && request.resource.data.seconds is int && request.resource.data.seconds >= resource.data.seconds && request.resource.data.seconds <= 86400;
+      allow delete: if isAdmin();
+    }
+

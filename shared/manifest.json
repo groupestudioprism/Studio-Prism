@@ -4,6 +4,7 @@
      "targets": {"ArchiPlan": "src/js/auth.js", "ArchiTraffic": "src/js/auth.js", "ArchiVision": "src/js/auth.js",
                  "SpectraWriter": "src/js/auth.js", "SpectraCalc": "src/js/auth.js", "SpectraSlide": "src/js/auth.js"}},
     {"src": "prism-settings.js", "mode": "file",
-     "targets": {"ArchiPlan": "src/engine/05-prism-settings.js", "ArchiTraffic": "src/engine/05-prism-settings.js"}}
+     "targets": {"ArchiPlan": "src/engine/05-prism-settings.js", "ArchiTraffic": "src/engine/05-prism-settings.js"}},
+    {"src": "prism-presence.js", "mode": "file", "targets": {"Nexus": "src/core/prism-presence.js"}}
   ]
 }
