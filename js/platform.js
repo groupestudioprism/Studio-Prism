@@ -840,7 +840,9 @@
   function catalogueRows() {
     const have = new Set(CT.prods.map((x) => x.id));
     const site = CT.built ? [] : CATLG.BUILTIN.filter((b) => !have.has(b.id)).map((b) => Object.assign(CATLG.normProduct(b), { source: 'site' }));
-    return CT.prods.concat(site).sort(CATLG.byPole);
+    // nouveaux produits livrés avec le site (js/catalog.js, LATEST) : affichés jusqu'à leur ajout dans Firestore
+    const latest = (CATLG.LATEST || []).filter((b) => !have.has(b.id)).map((b) => Object.assign(CATLG.normProduct(b), { source: 'site', latest: true }));
+    return CT.prods.concat(site, latest).sort(CATLG.byPole);
   }
 
   function renderCatalogue() {
@@ -873,7 +875,9 @@
       rows.map((x) => {
         const plans = CT.plans.plans.filter((pl) => pl.productId === x.id), act = plans.filter((pl) => pl.status === 'active').length;
         const site = x.source === 'site', pub = x.status === 'published';
-        const actions = site
+        const actions = x.latest
+          ? `<button class="btn b1" data-a="cat-add-latest" data-id="${esc(x.id)}">Ajouter au catalogue</button>`
+          : site
           ? '<span class="mut">Intégré au site</span>'
           : `<button class="btn b4" data-a="cat-edit" data-id="${esc(x.id)}">Modifier</button> <button class="btn b4" data-a="cat-toggle" data-id="${esc(x.id)}">${pub ? 'Dépublier' : x.status === 'unavailable' ? 'Rendre disponible' : x.status === 'archived' ? 'Republier' : 'Publier'}</button> <button class="btn b4" data-a="cat-del" data-id="${esc(x.id)}">Supprimer</button>`;
         return `<tr role="row">${cell('Produit', `<span class="cat-n">${logoImg(x, 'cat-logo')}<span><b>${esc(x.name)}</b><small>${esc(x.id)}${x.tagline ? ' · ' + esc(x.tagline) : ''}</small></span></span>`)}` +
@@ -902,6 +906,22 @@
       const el = document.getElementById('seed-err') || document.getElementById('imp-err');
       if (el) el.textContent = errMsg(e); else toast(errMsg(e));
       btn.disabled = false;
+    }
+  };
+
+  /* Nouveau produit livré avec le site (LATEST) : le copie dans Firestore (publié, avec son logo et sa fiche), sans rien écraser. */
+  A['cat-add-latest'] = async (btn) => {
+    const item = (CATLG.LATEST || []).find((b) => b.id === btn.dataset.id);
+    if (!item) return;
+    btn.disabled = true;
+    try {
+      const n = await (await D()).importProducts([item]);
+      resetCatalogue();
+      toast(n ? `${item.name} ajouté au catalogue : il est maintenant modifiable.` : `${item.name} existe déjà dans le catalogue.`);
+      await loadCatalogueAdmin();
+    } catch (e) {
+      btn.disabled = false;
+      toast(errMsg(e));
     }
   };
 

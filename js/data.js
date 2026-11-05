@@ -281,6 +281,14 @@ export async function ensureSuiteProducts() {
   for (const [i, a] of todo.entries()) await setDoc(doc(db, "products", a.id), { ...productData({ ...a, category: "application", pole: "app", stage: "conception", status: "draft", displayOrder: 50 + i }), createdAt: serverTimestamp() });
   return todo.map((a) => a.id);
 }
+/* Copie des produits livrés avec le site (js/catalog.js, LATEST) dans Firestore, sans toucher au réglage « catalogue importé » et sans
+   jamais remplacer un produit existant. Renvoie le nombre créé. */
+export async function importProducts(items) {
+  const have = new Set((await adminListProducts()).map((p) => p.id));
+  const todo = items.filter((it) => !have.has(it.id));
+  for (const it of todo) await setDoc(doc(db, "products", it.id), { ...productData(it), createdAt: serverTimestamp() });
+  return todo.length;
+}
 export async function importBuiltins(items) {
   const have = new Set((await adminListProducts()).map((p) => p.id));
   const todo = items.filter((it) => !have.has(it.id));

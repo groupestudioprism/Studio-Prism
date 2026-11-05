@@ -78,6 +78,26 @@
     }));
   })();
 
+  /* ------------------------------------------------------------------ nouveaux produits livrés avec le site
+     Affichés dès la mise en ligne, que le catalogue intégré ait été importé ou non, tant qu'aucun produit Firestore ne porte le même
+     identifiant. « Ajouter au catalogue » (administration, Catalogue) les copie dans Firestore : ils deviennent alors modifiables,
+     masquables et supprimables comme les autres. Limite : un brouillon Firestore n'étant pas lisible par le public, un produit
+     dépublié réapparaîtrait depuis ce tableau ; pour le retirer durablement du site, le supprimer aussi de LATEST. */
+  const LATEST = [{
+    id: 'prism-arcade', name: 'PRISM ARCADE', category: 'game', pole: 'game', stage: 'beta', status: 'published',
+    tagline: 'Plateforme de jeux en ligne : 10 mini-jeux, une seule progression',
+    description: 'La plateforme de jeux de Prism Game : dix mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, pièces, succès et défis du jour).',
+    availability: 'Gratuit — jouable en ligne, sans compte',
+    info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : enregistrée sur l’appareil',
+    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/prism-arcade.svg', image: 'assets/img/prism-arcade.webp', url: '',
+    website: 'https://groupestudioprism.github.io/prismarcade/', featured: true, displayOrder: 90,
+    details: 'Prism Arcade réunit les jeux de Prism Game sur une seule plateforme web.\n\n' +
+      'Dix mini-jeux à score : Fusion, Prism Run, Stack, Brick Break, Snake Neon, Gem Match, Block Drop, Flap, Astro Blast et Memory Pulse.\n\n' +
+      'Chaque partie rapporte de l’XP et des pièces. Les pièces débloquent des thèmes dans la boutique ; 38 succès et 3 défis renouvelés chaque jour entretiennent la progression.\n\n' +
+      'Les grands jeux du studio rejoindront ensuite la plateforme, en solo d’abord puis en multijoueur.',
+    highlights: ['10 mini-jeux d’arcade', 'Progression commune : niveaux, pièces, succès', 'Défis du jour', 'Ordinateur et mobile', 'Gratuit, sans installation']
+  }];
+
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */
 
   function normProduct(p) {
@@ -213,6 +233,7 @@
     const map = new Map();
     if (!C.builtinImported) BUILTIN.forEach((b) => map.set(b.id, Object.assign(normProduct(b), { source: 'site' })));
     (fsProducts || []).forEach((p) => map.set(p.id, Object.assign(normProduct(p), { source: 'firestore' })));
+    LATEST.forEach((b) => { if (!map.has(b.id)) map.set(b.id, Object.assign(normProduct(b), { source: 'site' })); });
     const live = buildPlans(subs || [], prices || []).plans.filter((pl) => pl.status === 'active');
     map.forEach((p) => { p.plans = live.filter((pl) => pl.productId === p.id).sort(byOrder); });
     C.products = Array.from(map.values()).filter((p) => p.status === 'published' || p.status === 'unavailable').sort(byPole);
@@ -533,7 +554,7 @@
 
   window.SP.catalog = {
     POLES, POLE_ORDER, POLE_PAGE, TYPES, STATUS, STAGES, MODES, PERIODS, PER, PERIOD_ORDER,
-    BUILTIN, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
+    BUILTIN, LATEST, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
     load, reset, find, featured, all: () => C.products, state: C, mount, pcard, commercial, repaintAll, productHref, hooks, refresh: refreshSlots, picUrl
   };
 })();

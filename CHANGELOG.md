@@ -1,4 +1,13 @@
 # Changelog
+## Nouveau produit « PRISM ARCADE » (Prism Game) — 2026-11-05
+
+Ajout de **PRISM ARCADE**, la plateforme de jeux en ligne de Prism Game (dépôt `groupestudioprism/prismarcade`, 10 mini-jeux, progression commune). Aucune règle Firestore à republier.
+
+- **Fiche produit** (`js/catalog.js`, nouveau tableau `LATEST`) : pôle Prism Game, type Jeu, avancement Bêta, gratuit, mis en avant, lien « Ouvrir PRISM ARCADE » vers `https://groupestudioprism.github.io/prismarcade/`. Affichée **dès la mise en ligne** dans Produits, sur la page Prism Game et dans Réalisations, sans action en administration.
+- **Administration → Catalogue** : la ligne PRISM ARCADE propose **Ajouter au catalogue**, qui la copie dans Firestore (`importProducts`, `js/data.js` ; jamais d'écrasement, réglage « catalogue importé » inchangé). Elle devient alors modifiable comme les autres produits.
+- **Logos et visuels** : `assets/img/apps/prism-arcade.svg` (icône du catalogue), `images/icones/prism-arcade-icone.svg|png`, `images/logos/prism-arcade-logo.svg|png`, couverture `assets/img/prism-arcade.webp|jpg` (capture réelle de la plateforme).
+- **Page Prism Game** : la note sous la grille précise que PRISM ARCADE est jouable ; les autres jeux restent des concepts.
+
 ## Évolution « Gestion des comptes sans Cloud Functions (forfait Spark gratuit) » — 2026-10-10
 
 Objectif : **zéro dépense**, aucune dépendance à un déploiement de Cloud Functions (qui exige le forfait Blaze), sécurité conservée. Aucun design, menu, rôle, compte ni autre fonction du site n'est modifié. Les Cloud Functions du dossier `functions/` sont **conservées telles quelles** (version `2.0.0`), simplement non utilisées tant que `ACCOUNT_SERVER` vaut `false`. **Rien n'est déployé, aucune règle n'est publiée, aucun forfait n'est changé** par cette évolution.
