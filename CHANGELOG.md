@@ -1,4 +1,14 @@
 # Changelog
+## Règles Firestore et Storage : vérification de tous les dépôts, Storage unifié — 2026-11-05
+
+> **À faire** : publier **les deux** fichiers complets, depuis ce dépôt : `firebase deploy --only firestore:rules,storage`
+> (ou console Firebase : `firebase/firestore.rules` dans Firestore → Règles, puis `firebase/storage.rules` dans Storage → Règles).
+
+- **Storage unifié** : `storage.rules` devient `firebase/storage.rules`, seul fichier Storage du projet. Il réunit la médiathèque du site, ARCHIVISION (`archivision/{uid}/…`) et SPECTRA Motion (`spectramotion/…`). Avant, le fichier du site n'avait pas Spectra Motion et celui de SpectraMotion n'avait pas ARCHIVISION : publier l'un cassait l'autre.
+- **Médiathèque** : un fichier existant ne peut plus être écrasé (`resource == null`), conformément à ce qu'annonçaient les règles.
+- **Contrôle** (`tools/build_rules.py`, action « Règles Firestore et Storage ») : vérifie aussi les collections d'ARCHIVISION (`avModels`, `avPhotos`, `arLive`) et la présence des trois dossiers Storage.
+- **Tests sur émulateurs** : `tests/emulateurs` (52 cas), en plus des suites de SpectraMotion (41) et de Nexus (23) ; voir `TESTS.md`.
+- **Copies retirées** des autres dépôts : `firebase/firestore (1).rules` (SpectraMotion), `docs/*.rules` (ArchiVision). `firebase/rules/README.md` décrit toute la source unique.
 ## Dossier « Produits » : images des pages produits depuis GitHub — 2026-11-05
 
 Chaque produit a son dossier **`Produits/<identifiant>/`** dans ce dépôt. Les images qu'on y dépose s'affichent dans une nouvelle galerie **« En images »** sur la page du produit et sur sa page « Voir plus » (miniatures, agrandissement au clic, flèches ← → et Échap, légendes).

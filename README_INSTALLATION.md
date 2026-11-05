@@ -20,7 +20,7 @@ Le ZIP reproduit l'arborescence du dépôt GitHub. Vous pouvez en copier **tout 
 | Fichier | Statut | Où se déploie-t-il ? |
 | --- | --- | --- |
 | `firebase/firestore.rules` | **modifié** (pages, brouillons, projets, médias, statut produit « archivé ») | **Firebase** (étape A) |
-| `storage.rules` | **nouveau** | **Firebase Storage** (étape B) |
+| `firebase/storage.rules` | **nouveau** | **Firebase Storage** (étape B) |
 | `firebase.json` | modifié (entrée `storage`) | outil Firebase |
 | `functions/handlers.js`, `functions/index.js` | **modifiés** (suppression de comptes réparée, fonction `accountsHealth`) | **Google Cloud Functions** (étape C) |
 | `functions/package.json` | inchangé | — |
@@ -59,7 +59,7 @@ La médiathèque (envoi d'images / vidéos) utilise Firebase Storage. **Cette é
 
 1. Console Firebase → **Build → Storage → Commencer**. Mode production, emplacement proche de vos visiteurs (par exemple `eur3`/`europe-west`). Le forfait **Blaze** est requis pour les nouveaux buckets.
 2. Après création, noter le nom du bucket affiché en haut de la page Storage. Il doit être **identique** à `storageBucket` dans `js/firebase.js` (`archivision-studioprism.firebasestorage.app`). S'il est différent (ancien format `….appspot.com`), corriger `js/firebase.js` avant l'étape D.
-3. Onglet **Règles** → remplacer tout le contenu par celui de `storage.rules` de l'archive → **Publier**. Ou :
+3. Onglet **Règles** → remplacer tout le contenu par celui de `firebase/storage.rules` de l'archive → **Publier**. Ou :
    ```bash
    firebase deploy --only storage --project archivision-studioprism
    ```
@@ -67,7 +67,7 @@ La médiathèque (envoi d'images / vidéos) utilise Firebase Storage. **Cette é
 
 Ce que les règles Storage imposent : **seul un administrateur actif** envoie ou supprime ; images JPEG / PNG / WebP / GIF ≤ 8 Mo, vidéos MP4 / WebM ≤ 50 Mo ; rien d'autre (ni SVG, ni PDF, ni HTML) ; un fichier envoyé n'est jamais écrasé ; tout le reste du bucket est refusé.
 
-> Le fichier `storage.rules` n'a **pas** pu être testé contre un vrai bucket (voir `TESTS.md`) : il a été vérifié avec un interpréteur de règles maison (45 cas, 25 mutations). Faire le test de l'étape E.
+> Le fichier `firebase/storage.rules` n'a **pas** pu être testé contre un vrai bucket (voir `TESTS.md`) : il a été vérifié avec un interpréteur de règles maison (45 cas, 25 mutations). Faire le test de l'étape E.
 
 ## C. (Facultatif, payant) Déployer les fonctions serveur — **à ne PAS faire sur le forfait gratuit**
 
@@ -88,7 +88,7 @@ puis, dans l'application : **Administration → Utilisateurs → Vérifier le se
 
 1. Décompresser l'archive.
 2. Dépôt `Kmauger18/Studio-Prism` → **Add file → Upload files**.
-3. Glisser **le contenu** du dossier décompressé (`css`, `js`, `firebase`, `functions`, `assets`, `index.html`, `storage.rules`, `firebase.json`, les `.md`…), **pas** le dossier parent. GitHub remplace les fichiers de même chemin.
+3. Glisser **le contenu** du dossier décompressé (`css`, `js`, `firebase`, `functions`, `assets`, `index.html`, `firebase.json`, les `.md`…), **pas** le dossier parent. GitHub remplace les fichiers de même chemin.
 4. Message de validation, par exemple « CMS complet, médiathèque, suppression de comptes réparée », puis **Commit changes**.
 
 **Ligne de commande (équivalent)**
@@ -106,7 +106,7 @@ git push
 
 Les fichiers cachés (`.nojekyll`, `.firebaserc`, `.gitignore`) ne changent pas : s'ils ne se glissent pas, ils sont déjà sur GitHub.
 
-> **GitHub n'exécute rien.** Envoyer `functions/` sur GitHub ne déploie pas les fonctions (étape C) ; envoyer `firebase/firestore.rules` ou `storage.rules` ne publie pas les règles (étapes A et B).
+> **GitHub n'exécute rien.** Envoyer `functions/` sur GitHub ne déploie pas les fonctions (étape C) ; envoyer `firebase/firestore.rules` ou `firebase/storage.rules` ne publie pas les règles (étapes A et B).
 
 ## E. Vérification après installation (≈ 15 minutes, avec le vrai projet)
 
@@ -140,7 +140,7 @@ Ordre conseillé si vous voulez tout migrer vers la médiathèque : envoyer les 
 
 - **Site** : sur GitHub, ouvrir le commit de cette mise à jour → **Revert** (ou `git revert`).
 - **Règles Firestore** : l'ancienne version se retrouve dans l'historique du dépôt (`firebase/firestore.rules` du commit précédent) ; la republier. Les contenus du CMS déjà créés (`pages`, `projects`, `media`…) sont alors simplement ignorés par l'ancien site et refusés par les anciennes règles ; **rien n'est perdu ni corrompu**.
-- **Storage** : les fichiers déjà envoyés restent dans le bucket ; supprimer `storage.rules` de la console les rendrait inaccessibles aux administrateurs (le public continue de voir les images par leur adresse de téléchargement).
+- **Storage** : les fichiers déjà envoyés restent dans le bucket ; supprimer `firebase/storage.rules` de la console les rendrait inaccessibles aux administrateurs (le public continue de voir les images par leur adresse de téléchargement).
 - **Fonctions** : rien à retirer si elles n'ont jamais été déployées (cas du forfait gratuit). Sinon : `firebase functions:delete adminCreateUser adminDeleteUser deleteMyAccount accountsHealth --region europe-west1`.
 - Les comptes, licences, produits, formules et prix n'ont pas été modifiés par cette mise à jour : il n'y a rien à restaurer côté base.
 

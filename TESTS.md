@@ -2,6 +2,22 @@
 
 Date : 2026-10-10. Ce document dit ce qui a été **réellement exécuté**, avec quel résultat, et ce qui **n'a pas pu l'être** (donc reste à vérifier sur votre installation réelle). Aucun test n'a été fait sur le vrai projet Firebase `archivision-studioprism`, et **aucun compte de production n'a été supprimé ou modifié**.
 
+## Règles Firestore et Storage, toutes apps — 2026-11-05
+
+Vérification de tous les dépôts (site, ARCHIPLAN, ARCHITRAFIC, ARCHIVISION, SPECTRA Writer / Calc / Slide / Motion, NEXUS, PRISM ARCADE) :
+chaque collection Firestore et chaque dossier Storage utilisés par le code ont une règle dans la source unique.
+Tests exécutés sur les **vrais émulateurs Firebase** (firebase-tools 13.29.1), avec les fichiers `firebase/firestore.rules` et `firebase/storage.rules` de ce dépôt :
+
+| Suite | Résultat |
+| --- | --- |
+| `tests/emulateurs` (ce dépôt) : ARCHIVISION Firestore + Storage, dossiers produits, médiathèque, PRISM ARCADE, règle finale | **52 / 52** |
+| SpectraMotion `npm run test:rules` (Firestore + Storage, partage par e-mail et par lien) | **41 / 41** |
+| Nexus `npm run test:rules` | **23 / 23** |
+
+Défaut trouvé et corrigé : la médiathèque laissait un administrateur **écraser** un fichier existant (le moteur réel traite cet envoi comme une création) ; la règle exige désormais `resource == null`.
+À noter : avec firebase-tools 15 sur une machine sans IPv6, l'émulateur Storage ne lit pas Firestore et les 3 tests « invité » de SpectraMotion échouent ; ils passent avec la version 13.29.1 (règles non en cause).
+Non testé ici : les règles sur le vrai projet Firebase (publication à faire depuis ce dépôt).
+
 ## Lot « Gestion des comptes sans Cloud Functions (forfait Spark) » — 2026-10-10
 
 **Ce qui a été réellement exécuté** (simulation locale : faux SDK Firebase + interpréteur de règles maison évaluant le **vrai** fichier `firebase/firestore.rules`) :
@@ -15,7 +31,7 @@ Date : 2026-10-10. Ce document dit ce qui a été **réellement exécuté**, ave
 | `rules_query` (requêtes de liste évaluées pour **tous** les documents possibles) | **187 / 187** |
 | `mut_comptes` + `mut_query` (mutations ciblées : affaiblir chaque règle ajoutée ou modifiée) | **16 / 16** + **16 / 16** détectées |
 | `mut2` (208 mutations de tout le fichier) | **202 détectées, 6 survivantes équivalentes** (identiques à la livraison précédente) |
-| `storage_test` | **45 / 45** (fichier `storage.rules` inchangé) |
+| `storage_test` | **45 / 45** (fichier `firebase/storage.rules` inchangé) |
 | Syntaxe de tous les fichiers JavaScript (`node --check`, modules ES compris) | OK |
 | Total vérifications navigateur du dépôt | 839 existantes + 65 nouvelles = **904** |
 
@@ -65,7 +81,7 @@ Utiliser **uniquement des comptes d'essai** (créés via la page d'inscription a
 | Mêmes 21 suites exécutées sur le contenu **extrait du ZIP livré** | **839 / 839** (les 21 suites ont été rejouées sur une copie extraite d'une archive ZIP provisoire, identique au ZIP livré hors documents) |
 | Règles Firestore (interpréteur maison évaluant le vrai fichier `firebase/firestore.rules`) | **546 / 546 cas réussis** à la livraison CMS ; **591 / 591** depuis le lot « comptes sans Cloud Functions » (voir plus haut) |
 | Mutation des règles Firestore (208 variantes volontairement dégradées) | **202 détectées, 6 survivantes — toutes équivalentes** (voir plus bas) |
-| Règles Storage (même interpréteur, vrai fichier `storage.rules`) | **45 / 45 cas réussis** |
+| Règles Storage (même interpréteur, vrai fichier `firebase/storage.rules`) | **45 / 45 cas réussis** |
 | Mutation des règles Storage (25 variantes) | **24 détectées, 1 survivante — équivalente** |
 | Cloud Functions (`functions/handlers.js`, Admin SDK simulé) | **35 / 35** |
 | Syntaxe JavaScript de tous les fichiers du site et des fonctions | OK (`node --check`) |
@@ -74,7 +90,7 @@ Après la dernière modification du code, **toutes** les suites ont été relanc
 
 ## Comment les tests ont été faits — et leurs limites
 
-- Le site est servi en local et ouvert dans **Chromium** (bureau et mobile émulé). Le SDK Firebase est **remplacé par un faux SDK** (Authentication, Firestore, Functions, Storage) qui envoie chaque appel à un simulateur Python ; **les règles de sécurité réelles** (`firestore.rules`, `storage.rules`) sont évaluées par un interpréteur maison pour chaque lecture / écriture / envoi de fichier.
+- Le site est servi en local et ouvert dans **Chromium** (bureau et mobile émulé). Le SDK Firebase est **remplacé par un faux SDK** (Authentication, Firestore, Functions, Storage) qui envoie chaque appel à un simulateur Python ; **les règles de sécurité réelles** (`firestore.rules`, `firebase/storage.rules`) sont évaluées par un interpréteur maison pour chaque lecture / écriture / envoi de fichier.
 - **Ce n'est pas un vrai projet Firebase.** Ni l'émulateur Firebase ni un projet réel n'étaient accessibles. L'interpréteur de règles est un outil maison : il peut différer d'un détail du vrai moteur (en particulier `firestore.get()` depuis les règles Storage, limites de requêtes, comportement des erreurs).
 - Les **Cloud Functions** sont exécutées contre un **faux Admin SDK** (Authentication et Firestore en mémoire). L'accès à `cloudfunctions.net` est impossible depuis l'environnement de travail : **la fonction réelle n'a jamais été appelée**.
 - Appareils : Chromium aux largeurs 1440, 1280, 1024, 768, 390, 375 et 320 px. **Aucun test sur un vrai téléphone ni sur Safari, Firefox, Edge.**
@@ -136,7 +152,7 @@ Après la dernière modification du code, **toutes** les suites ont été relanc
 
 ## Règles Storage
 
-- `storage_test` : **45 cas** contre le vrai fichier `storage.rules` : administrateur actif / suspendu / simple utilisateur / visiteur, types et tailles (8 Mo images, 50 Mo vidéos, 0 octet), SVG / PDF / HTML / exécutables refusés, noms de fichier, dossier hors `media/`, écrasement refusé, suppression, lecture.
+- `storage_test` : **45 cas** contre le vrai fichier `firebase/storage.rules` : administrateur actif / suspendu / simple utilisateur / visiteur, types et tailles (8 Mo images, 50 Mo vidéos, 0 octet), SVG / PDF / HTML / exécutables refusés, noms de fichier, dossier hors `media/`, écrasement refusé, suppression, lecture.
 - `mut_storage` : 25 variantes, 24 détectées ; la survivante (`isAdmin` sans connexion) est équivalente (sans connexion, la lecture du profil échoue).
 - **Non fait** : exécution par le vrai moteur Storage, et vérification de l'autorisation inter-services réelle (`firestore.get()` depuis Storage).
 
@@ -148,7 +164,7 @@ Après la dernière modification du code, **toutes** les suites ont été relanc
 
 1. **Cause réelle de l'échec de suppression sur votre projet** : hypothèse la plus probable = fonctions non déployées ; **non vérifiée** (pas d'accès au projet). Le bouton « Vérifier le service de comptes » le dira.
 2. **Cloud Functions déployées** : déploiement, droits du compte de service (`roles/firebaseauth.admin`, `roles/datastore.user`), politique d'organisation sur l'appel public, suppression **réelle** d'un compte d'essai (`FONCTIONS_SERVEUR.md`, §9).
-3. **Publication des règles Firestore** et comportement du vrai moteur ; **Firebase Storage** réel : activation, publication de `storage.rules`, autorisation inter-services, envois réels (images de téléphone, vidéo de 50 Mo sur connexion lente), URL de téléchargement, suppression de fichiers.
+3. **Publication des règles Firestore** et comportement du vrai moteur ; **Firebase Storage** réel : activation, publication de `firebase/storage.rules`, autorisation inter-services, envois réels (images de téléphone, vidéo de 50 Mo sur connexion lente), URL de téléchargement, suppression de fichiers.
 4. **Connexion, inscription, e-mails** (mot de passe oublié, e-mail de choix du mot de passe) contre le vrai Firebase Authentication.
 5. **Édition simultanée** par deux administrateurs sur le vrai Firestore (la détection de conflit est testée en simulation).
 6. **Latence et cache réels** : le contenu public est mis en cache 2 minutes (testé avec un cache expiré simulé).

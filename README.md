@@ -56,8 +56,8 @@ Site statique : HTML, CSS et JavaScript, sans outil de build, publié avec **Git
 ├── firebase/
 │   ├── firestore.rules      règles de sécurité Firestore (ASSEMBLÉ : ne pas modifier à la main)
 │   ├── rules/               SOURCE UNIQUE des règles de TOUTES les apps, un fichier par app (voir firebase/rules/README.md)
+│   ├── storage.rules        règles de sécurité Firebase Storage (médiathèque, ARCHIVISION, SPECTRA Motion) — source unique
 │   └── firestore.indexes.json
-├── storage.rules            règles de sécurité Firebase Storage (médiathèque)
 ├── firebase.json            configuration de la CLI Firebase (règles Firestore et Storage, index, functions)
 ├── .firebaserc              projet Firebase par défaut
 ├── assets/img/              logos et visuels
@@ -149,7 +149,7 @@ Projet Firebase par défaut : `archivision-studioprism` (voir `js/firebase.js` e
 3. **E-mail de réinitialisation** : *Authentication → Templates → Réinitialisation du mot de passe* → langue Français. Cet e-mail sert aussi à un utilisateur créé par un administrateur pour choisir son mot de passe.
 4. **Firestore** : *Build → Firestore Database → Créer une base de données* (mode production).
 5. **Règles Firestore** : voir ci-dessous (indispensable).
-6. **Storage** (médiathèque) : *Build → Storage → Commencer*, puis publier `storage.rules` (voir ci-dessous). Sans Storage, le site fonctionne, mais l'envoi de fichiers dans la médiathèque est impossible (les médias « par lien » restent utilisables).
+6. **Storage** (médiathèque) : *Build → Storage → Commencer*, puis publier `firebase/storage.rules` (voir ci-dessous). Sans Storage, le site fonctionne, mais l'envoi de fichiers dans la médiathèque est impossible (les médias « par lien » restent utilisables).
 7. **Cloud Functions** (**facultatif, payant**) : exigent le forfait **Blaze** ; **inutile** pour utiliser le site (`ACCOUNT_SERVER = false` dans `js/data.js`). Voir [Fonctions serveur](#fonctions-serveur-cloud-functions) et [`FONCTIONS_SERVEUR.md`](FONCTIONS_SERVEUR.md), §0.
 8. *(Recommandé)* Restreindre la clé API Web (Google Cloud → *Credentials* → *Websites* : `https://UTILISATEUR.github.io/*`, `http://localhost:*/*`).
 
@@ -182,7 +182,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 
 ou copier-coller **tout** le fichier dans *Console Firebase → Firestore Database → Règles*, puis **Publier**. Vérifier ensuite que la date de publication affichée est récente et que le texte publié contient `match /products/{pid}`.
 
-**Storage** — fichier `storage.rules`, dossier unique `media/{identifiant}/{fichier}` : **écriture et suppression réservées à l'administrateur actif** (reconnu par une lecture de `users/{uid}` dans Firestore), images JPEG / PNG / WebP / GIF ≤ 8 Mo, vidéos MP4 / WebM ≤ 50 Mo, nom de fichier restreint, **aucun écrasement** ; lecture par le SDK réservée aux administrateurs (les visiteurs voient les images grâce à l'adresse de téléchargement, secrète et non devinable, enregistrée dans les métadonnées d'un média public) ; tout le reste du bucket est refusé. Déploiement : `firebase deploy --only storage`, ou console → *Storage → Règles*. Au premier déploiement, accepter l'autorisation inter-services proposée (`README_INSTALLATION.md`, étape B).
+**Storage** — fichier `firebase/storage.rules`, source unique pour tout le bucket (médiathèque `media/`, ARCHIVISION `archivision/`, SPECTRA Motion `spectramotion/` ; détail dans `firebase/rules/README.md`). Médiathèque, dossier `media/{identifiant}/{fichier}` : **écriture et suppression réservées à l'administrateur actif** (reconnu par une lecture de `users/{uid}` dans Firestore), images JPEG / PNG / WebP / GIF ≤ 8 Mo, vidéos MP4 / WebM ≤ 50 Mo, nom de fichier restreint, **aucun écrasement** ; lecture par le SDK réservée aux administrateurs (les visiteurs voient les images grâce à l'adresse de téléchargement, secrète et non devinable, enregistrée dans les métadonnées d'un média public) ; tout le reste du bucket est refusé. Déploiement : `firebase deploy --only storage`, ou console → *Storage → Règles*. Au premier déploiement, accepter l'autorisation inter-services proposée (`README_INSTALLATION.md`, étape B).
 
 > **Symptôme « Accès refusé par les règles de sécurité… »** sur la page Abonnements, dans Mon compte ou dans Administration (alors que la connexion fonctionne) : les règles publiées dans Firebase ne contiennent pas toutes les collections (`products`, `subscriptions`, `licenses`, `pages`, `pageDrafts`, `projects`, `media`) : ancienne version, ou publication échouée. Publier le fichier ci-dessus.
 

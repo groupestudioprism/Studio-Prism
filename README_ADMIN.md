@@ -196,7 +196,7 @@ Onglet **Page et référencement** :
 | Symptôme | Cause probable | Que faire |
 | --- | --- | --- |
 | « Accès refusé par les règles de sécurité » dans Pages / Projets / Médiathèque | règles Firestore non republiées | republier `firebase/firestore.rules` (`README_INSTALLATION.md`, étape A) |
-| Envoi d'un fichier : « droits insuffisants » ou « Storage non activé » | Storage non activé ou `storage.rules` non publiées | `README_INSTALLATION.md`, étape B |
+| Envoi d'un fichier : « droits insuffisants » ou « Storage non activé » | Storage non activé ou `firebase/storage.rules` non publiées | `README_INSTALLATION.md`, étape B |
 | Publication : « la page a été modifiée entre-temps » | un autre administrateur a publié | **Recharger**, reprendre vos modifications |
 | L'aperçu reste vide | Firebase lent ou extension qui bloque les cadres | **Recharger** ; la modification reste possible sans aperçu |
 | Image publiée mais invisible pour un visiteur | média non coché « Visible du public » | fiche du média → cocher, enregistrer |

@@ -1,4 +1,4 @@
-name: Règles Firestore
+name: Règles Firestore et Storage
 on:
   push: { paths: ['firebase/**', 'tools/build_rules.py'] }
   pull_request: { paths: ['firebase/**', 'tools/build_rules.py'] }
