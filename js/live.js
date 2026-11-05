@@ -1,9 +1,9 @@
 /* Studio Prism — administration en temps réel : écoute Firestore (onSnapshot) des collections utiles à l'administrateur.
  * Aucune actualisation manuelle : chaque changement (nouveau compte, demande, devis, clé, licence…) met à jour l'écran.
  * Les règles Firestore font foi : si l'utilisateur n'est pas administrateur actif, les écoutes sont refusées. */
-import { db, collection, query, orderBy, limit, onSnapshot } from "./firebase.js";
+import { db, collection, query, orderBy, limit, onSnapshot, where, Timestamp } from "./firebase.js";
 
-export const store = { users: [], licenses: [], requests: [], quotes: [], keys: [], plans: [], products: [], ready: {}, errors: {} };
+export const store = { users: [], licenses: [], requests: [], quotes: [], keys: [], plans: [], products: [], presence: [], sessions: [], ready: {}, errors: {} };
 const cbs = new Set(); let unsubs = [], on = false;
 const SRC = [
   ["users", () => query(collection(db, "users"), orderBy("createdAt", "desc"), limit(3000)), "uid"],
@@ -12,7 +12,10 @@ const SRC = [
   ["quotes", () => collection(db, "quotes")],
   ["keys", () => query(collection(db, "licenseKeys"), limit(5000))],
   ["plans", () => collection(db, "subscriptions")],
-  ["products", () => collection(db, "products")]
+  ["products", () => collection(db, "products")],
+  /* présence des apps (prism-presence.js) : une fiche par personne et par app ; sessions des 30 derniers jours */
+  ["presence", () => query(collection(db, "appPresence"), limit(5000))],
+  ["sessions", () => query(collection(db, "appSessions"), where("start", ">=", Timestamp.fromMillis(Date.now() - 31 * 864e5)), orderBy("start", "desc"), limit(8000))]
 ];
 export function onChange(fn) { cbs.add(fn); return () => cbs.delete(fn); }
 export function start() {
