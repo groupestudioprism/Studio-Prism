@@ -55,7 +55,7 @@
 
   /* ------------------------------------------------------------------ rendu */
   /* Logiciels suivis par la présence (shared/prism-presence.js) : identifiant d'app → nom + couleur */
-  const APPS = [['archiplan', 'ArchiPlan', '#0877B9'], ['archivision', 'ArchiVision', '#169999'], ['architrafic', 'ArchiTrafic', '#E0A800'], ['archiindus', 'ArchiIndus', '#8B5CF6'],
+  const APPS = [['archiplan', 'ArchiPlan', '#0877B9'], ['archivision', 'ArchiVision', '#169999'], ['architrafic', 'ArchiTrafic', '#E0A800'],
     ['spectrawriter', 'Spectra Writer', '#E4572E'], ['spectracalc', 'Spectra Calc', '#2E9E5B'], ['spectraslide', 'Spectra Slide', '#D6458A'], ['spectramotion', 'Spectra Motion', '#6B7280'], ['nexus', 'Nexus', '#071B55']];
   const APP = Object.fromEntries(APPS.map(([id, name, color]) => [id, { id, name, color }]));
   const appOf = (id) => APP[id] || { id, name: id, color: '#9CA3AF' };
