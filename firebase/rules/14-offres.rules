@@ -1,0 +1,10 @@
+    // ---- Catalogue de fonctionnalités prédéfinies et modèles de fiches produit (administrateurs seulement) ----
+    match /settings/offerKit {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin()
+                            && request.resource.data.keys().hasOnly(['features', 'templates', 'updatedAt'])
+                            && request.resource.data.features is list && request.resource.data.features.size() <= 300
+                            && request.resource.data.templates is list && request.resource.data.templates.size() <= 30
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }

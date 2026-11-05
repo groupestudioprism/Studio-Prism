@@ -55,6 +55,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
+    // ARCHIVISION : fichiers d'un compte (synchro des maquettes), archivision/{uid}/models/{id}/model.glb | source.bin, archivision/{uid}/photos/{id}
+    match /archivision/{uid}/{allPaths=**} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+                            && request.resource.size > 0 && request.resource.size <= 524288000;   // 500 Mo par fichier
+    }
+
     // Tout le reste : refusé.
     match /{allPaths=**} {
       allow read, write: if false;
