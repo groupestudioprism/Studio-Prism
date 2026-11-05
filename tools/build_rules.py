@@ -27,7 +27,7 @@ REQUIRED = {
     'SPECTRA Slide':   ['ssDocs', 'ssUsage', 'ssFolders', 'ssShares', 'ssGrants', 'ssLibrary', 'ssPublic'],
     'SPECTRA Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
-    'PRISM ARCADE':    ['paPlayers', 'paBoards'],
+    'PRISM ARCADE':    ['paPlayers', 'paBoards', 'paPeriods'],
     'devis':           ['quotes', 'counters'],
     'présence':        ['appPresence', 'appSessions'],
 }

@@ -1,4 +1,11 @@
 # Changelog
+## PRISM ARCADE : classements de la semaine et du mois, 4 nouveaux jeux — 2026-11-05
+
+> **À faire** : republier les règles Firestore (fichier complet `firebase/firestore.rules`).
+
+- **Règles** (`firebase/rules/31-prism-arcade.rules`) : nouvelle collection `paPeriods/{jeu__w<semaine> | jeu__m<mois>}/scores/{uid}`. Un score n'y est accepté que pour la semaine ou le mois **en cours**, calculés avec l'heure du serveur : un podium terminé ne peut plus changer. `paPlayers` accepte les nouveaux champs de la boutique (inventaire, équipement, boosts, trophées, cadeau du jour). Entrées de classement : avatar et cadre facultatifs. `paGames()` : 14 jeux (ajout de sky-jump, shard-hit, color-sort, tap-tiles). Testées dans l'émulateur (44 cas).
+- **Fiche produit** : 14 mini-jeux, boutique, classements à cadeaux.
+
 ## PRISM ARCADE : comptes, sauvegarde en ligne, classements — 2026-11-05
 
 PRISM ARCADE se connecte désormais avec le compte Studio Prism (même projet Firebase, aucun compte créé par le jeu) et passe sur **https://prismarcade.studio-prism.com/**.

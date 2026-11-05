@@ -85,17 +85,18 @@
      dépublié réapparaîtrait depuis ce tableau ; pour le retirer durablement du site, le supprimer aussi de LATEST. */
   const LATEST = [{
     id: 'prism-arcade', name: 'PRISM ARCADE', category: 'game', pole: 'game', stage: 'beta', status: 'published',
-    tagline: 'Plateforme de jeux en ligne : 10 mini-jeux, une seule progression',
-    description: 'La plateforme de jeux de Prism Game : dix mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, pièces, succès et défis du jour).',
+    tagline: 'Plateforme de jeux en ligne : 14 mini-jeux, une seule progression',
+    description: 'La plateforme de jeux de Prism Game : quatorze mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, boutique, succès, défis du jour) et des classements à cadeaux chaque semaine et chaque mois.',
     availability: 'Gratuit — jouable en ligne, avec ou sans compte Studio Prism',
     info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : sur le compte Studio Prism (ou sur l’appareil sans compte)\nClassements : par jeu',
     platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/prism-arcade.svg', image: 'assets/img/prism-arcade.webp', url: '',
     website: 'https://prismarcade.studio-prism.com/', featured: true, displayOrder: 90,
     details: 'Prism Arcade réunit les jeux de Prism Game sur une seule plateforme web.\n\n' +
-      'Dix mini-jeux à score : Fusion, Prism Run, Stack, Brick Break, Snake Neon, Gem Match, Block Drop, Flap, Astro Blast et Memory Pulse.\n\n' +
-      'Chaque partie rapporte de l’XP et des pièces. Les pièces débloquent des thèmes dans la boutique ; 38 succès et 3 défis renouvelés chaque jour entretiennent la progression.\n\n' +
+      'Quatorze mini-jeux à score : Fusion, Prism Run, Stack, Brick Break, Snake Neon, Gem Match, Block Drop, Flap, Astro Blast, Memory Pulse, Sky Jump, Shard Hit, Color Sort et Tap Tiles.\n\n' +
+      'Chaque partie rapporte de l’XP et des pièces. La boutique propose des apparences pour les jeux, des avatars, des cadres, des thèmes, des boosts et des coffres. Un cadeau chaque jour, des succès et des défis quotidiens entretiennent la progression.\n\n' +
+      'Chaque jeu a ses classements de la semaine et du mois : le podium gagne des pièces, de l’XP, des coffres et des objets exclusifs.\n\n' +
       'Les grands jeux du studio rejoindront ensuite la plateforme, en solo d’abord puis en multijoueur.',
-    highlights: ['10 mini-jeux d’arcade', 'Progression commune : niveaux, pièces, succès', 'Défis du jour', 'Classements par jeu', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
+    highlights: ['14 mini-jeux d’arcade', 'Progression commune : niveaux, boutique, succès', 'Cadeau et défis du jour', 'Classements de la semaine et du mois à cadeaux', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
   }];
 
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */

@@ -3013,7 +3013,12 @@ service cloud.firestore {
 //
 // Collections (nothing else is added; no existing rule is changed):
 //   paPlayers/{uid}                  Prism Arcade progress of the account (XP, coins, records, achievements, daily challenges)
-//   paBoards/{game}/scores/{uid}     leaderboard entry { uid, name, score, updatedAt } — one per account and per game
+//   paBoards/{game}/scores/{uid}     all-time leaderboard entry { uid, name, score, updatedAt, avatar?, frame? }
+//   paPeriods/{key}/scores/{uid}     weekly / monthly leaderboards, key = "<game>__w<week>" or "<game>__m<month>" (UTC)
+//                                    week  = floor((epoch ms + 3 days) / 7 days)  (weeks start on Monday 00:00 UTC)
+//                                    month = year * 12 + month - 1                (UTC)
+//                                    Writes are accepted ONLY for the CURRENT week / month, computed from the server time:
+//                                    a finished period can no longer change, so its podium (rewards) is final.
 //
 // Principles: progress is readable and writable ONLY by its owner (active account); an administrator can only delete it.
 // Leaderboards are public (pseudo + score only, never e-mail or real name); an entry is written only by its owner,
@@ -3027,7 +3032,8 @@ service cloud.firestore {
     }
 
     function paGames() {
-      return ['fusion', 'prism-run', 'stack', 'brick-break', 'snake-neon', 'gem-match', 'block-drop', 'flap', 'astro-blast', 'memory-pulse'];
+      return ['fusion', 'prism-run', 'stack', 'brick-break', 'snake-neon', 'gem-match', 'block-drop', 'flap', 'astro-blast', 'memory-pulse',
+              'sky-jump', 'shard-hit', 'color-sort', 'tap-tiles'];
     }
 
     function paNum(v, max) {
@@ -3038,7 +3044,8 @@ service cloud.firestore {
       let d = request.resource.data;
       return d.keys().hasAll(['name', 'xp', 'coins', 'games', 'ach', 'totals', 'updatedAt'])
         && d.keys().hasOnly(['name', 'xp', 'coins', 'coinsEarned', 'theme', 'themes', 'muted', 'games', 'ach', 'boards', 'daily',
-                             'dailyStreak', 'lastDailyDone', 'totals', 'created', 'updatedAt'])
+                             'dailyStreak', 'lastDailyDone', 'totals', 'created', 'updatedAt',
+                             'inv', 'equip', 'boost', 'periods', 'claims', 'trophies', 'giftDay', 'giftStreak'])
         && isString(d.name, 1, 18)
         && paNum(d.xp, 1000000000) && paNum(d.coins, 1000000000) && paNum(d.get('coinsEarned', 0), 1000000000)
         && isString(d.get('theme', 'prisme'), 1, 30)
@@ -3052,17 +3059,47 @@ service cloud.firestore {
         && isString(d.get('lastDailyDone', ''), 0, 10)
         && d.totals is map && d.totals.size() <= 10
         && (d.get('created', null) == null || d.created is number)
+        && d.get('inv', {}) is map && d.get('inv', {}).size() <= 400
+        && d.get('equip', {}) is map && d.get('equip', {}).size() <= 40
+        && d.get('boost', {}) is map && d.get('boost', {}).size() <= 10
+        && d.get('periods', {}) is map && d.get('periods', {}).size() <= 200
+        && d.get('claims', {}) is map && d.get('claims', {}).size() <= 3000
+        && d.get('trophies', {}) is map && d.get('trophies', {}).size() <= 3000
+        && isString(d.get('giftDay', ''), 0, 10)
+        && paNum(d.get('giftStreak', 0), 100000)
         && d.updatedAt == request.time;
     }
 
     function paValidScore(uid) {
       let d = request.resource.data;
-      return d.keys().hasOnly(['uid', 'name', 'score', 'updatedAt'])
+      return d.keys().hasOnly(['uid', 'name', 'score', 'updatedAt', 'avatar', 'frame'])
+        && isString(d.get('avatar', ''), 0, 8)
+        && isString(d.get('frame', ''), 0, 40)
         && d.keys().hasAll(['uid', 'name', 'score', 'updatedAt'])
         && d.uid == uid
         && isString(d.name, 1, 18)
         && d.score is int && d.score > 0 && d.score <= 100000000
         && d.updatedAt == request.time;
+    }
+
+    function paWeekNow() {
+      return int((request.time.toMillis() + 259200000) / 604800000);
+    }
+
+    function paMonthNow() {
+      return request.time.year() * 12 + request.time.month() - 1;
+    }
+
+    // key = "<game>__w<week>" or "<game>__m<month>" for a known game
+    function paPeriodGame(key) {
+      let parts = key.split('__');
+      return parts.size() == 2 && parts[0] in paGames() && parts[1].matches('[wm][0-9]{1,6}');
+    }
+
+    // only the current week or month can receive scores
+    function paPeriodOpen(key) {
+      let p = key.split('__')[1];
+      return p == 'w' + string(paWeekNow()) || p == 'm' + string(paMonthNow());
     }
 
     match /paPlayers/{uid} {
@@ -3075,6 +3112,14 @@ service cloud.firestore {
       allow get, list: if game in paGames();
       allow create: if paOwner(uid) && isActiveUser() && game in paGames() && paValidScore(uid);
       allow update: if paOwner(uid) && isActiveUser() && game in paGames() && paValidScore(uid)
+                    && request.resource.data.score >= resource.data.score;
+      allow delete: if paOwner(uid) || isAdmin();
+    }
+
+    match /paPeriods/{key}/scores/{uid} {
+      allow get, list: if paPeriodGame(key);
+      allow create: if paOwner(uid) && isActiveUser() && paPeriodGame(key) && paPeriodOpen(key) && paValidScore(uid);
+      allow update: if paOwner(uid) && isActiveUser() && paPeriodGame(key) && paPeriodOpen(key) && paValidScore(uid)
                     && request.resource.data.score >= resource.data.score;
       allow delete: if paOwner(uid) || isAdmin();
     }
