@@ -45,7 +45,9 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
    ```
    Les suites des apps restent dans leurs dépôts : `npm run test:rules` dans SpectraMotion (Firestore + Storage) et dans Nexus.
 4. Publier depuis ce dépôt : `firebase deploy --only firestore:rules,storage`, ou dans la console Firebase, coller **le fichier complet**
-   `firebase/firestore.rules` (Firestore Database → Règles → Publier) puis **le fichier complet** `firebase/storage.rules`
+   `firebase/firestore.publier.rules` (Firestore Database → Règles → Publier) puis **le fichier complet** `firebase/storage.rules`
    (Storage → Règles → Publier).
+   `firestore.publier.rules` est généré avec `firestore.rules` : mêmes règles, sans commentaires ni indentation (136 Ko au lieu de 195 Ko).
+   La console refusait le fichier commenté avec « Erreur inconnue ». Les tests sur émulateurs utilisent ce fichier-là.
 
 Le 22/10/2026, les morceaux Firestore ont été découpés à l'identique (octet pour octet) dans les règles alors en ligne.

@@ -6,7 +6,7 @@ import firebase from 'firebase/compat/app'; import 'firebase/compat/firestore';
 import {readFileSync} from 'fs';
 const R = new URL('../../firebase/', import.meta.url).pathname;
 const env = await initializeTestEnvironment({projectId: 'demo-studioprism',
-  firestore: {rules: readFileSync(R + '/firestore.rules', 'utf8')},
+  firestore: {rules: readFileSync(R + '/firestore.publier.rules', 'utf8')},  // le fichier réellement publié
   storage: {rules: readFileSync(R + '/storage.rules', 'utf8')}});
 const TS = () => firebase.firestore.FieldValue.serverTimestamp();
 let ok = 0; const fails = [];

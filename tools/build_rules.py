@@ -18,6 +18,7 @@ import pathlib, re, sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PARTS = sorted((ROOT / 'firebase' / 'rules').glob('*.rules'))
 OUT = ROOT / 'firebase' / 'firestore.rules'
+PUB = ROOT / 'firebase' / 'firestore.publier.rules'   # même contenu sans commentaires ni lignes vides : c'est CE fichier qu'on publie
 STORAGE = ROOT / 'firebase' / 'storage.rules'
 STORAGE_REQUIRED = {'médiathèque du site': 'media', 'ARCHIVISION': 'archivision', 'SPECTRA Motion': 'spectramotion'}
 REQUIRED = {
@@ -37,6 +38,26 @@ REQUIRED = {
 }
 def build():
     return ''.join(p.read_text(encoding='utf-8') for p in PARTS)
+def compact(src):
+    """Retire les commentaires // et les lignes vides, sans toucher aux chaînes ('…' ou "…") ni aux chemins /a/b."""
+    out, i, n, q = [], 0, len(src), None
+    while i < n:
+        c = src[i]
+        if q:
+            out.append(c)
+            if c == '\\' and i + 1 < n: out.append(src[i + 1]); i += 2; continue
+            if c == q: q = None
+            i += 1; continue
+        if c in ('"', "'"): q = c; out.append(c); i += 1; continue
+        if c == '/' and src.startswith('//', i):
+            while i < n and src[i] != '\n': i += 1
+            continue
+        out.append(c); i += 1
+    lits = re.findall(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", src)
+    if any('  ' in l or '\t' in l for l in lits): sys.exit('Une chaîne contient des espaces multiples : la version compacte la modifierait')
+    lines = [l.rstrip() for l in ''.join(out).split('\n')]
+    head = '// Studio Prism · règles Firestore À PUBLIER (générées par tools/build_rules.py depuis firebase/rules/ ; source commentée : firebase/firestore.rules)\n'
+    return head + '\n'.join(' '.join(l.split()) for l in lines if l.strip()) + '\n'
 def structure(src, final):
     errs = []
     if "rules_version = '2';" not in src: errs.append("rules_version = '2' absent")
@@ -69,7 +90,10 @@ if __name__ == '__main__':
     src = build()
     if '--check' in sys.argv:
         if not OUT.exists() or OUT.read_text(encoding='utf-8') != src: sys.exit('firebase/firestore.rules n\'est pas à jour : lancer python3 tools/build_rules.py')
+        if not PUB.exists() or PUB.read_text(encoding='utf-8') != compact(src): sys.exit('firebase/firestore.publier.rules n\'est pas à jour : lancer python3 tools/build_rules.py')
     errs = check(src) + check_storage()
     if errs: sys.exit('Règles REFUSÉES :\n  - ' + '\n  - '.join(errs))
-    if '--check' not in sys.argv: OUT.write_text(src, encoding='utf-8')
+    pub = compact(src)
+    if '--check' not in sys.argv: OUT.write_text(src, encoding='utf-8'); PUB.write_text(pub, encoding='utf-8')
     print(f'OK : {len(PARTS)} morceaux, {src.count(chr(10))} lignes, toutes les apps présentes -> {OUT.relative_to(ROOT)} ; Storage OK ({', '.join(STORAGE_REQUIRED.values())})')
+    print(f'À PUBLIER : {PUB.relative_to(ROOT)} ({len(pub.encode()) // 1024} Ko sans commentaires, limite Firebase 256 Ko)')
