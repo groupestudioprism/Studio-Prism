@@ -444,7 +444,7 @@ service cloud.firestore {
     function keyLicenseOk(lid) {
       let d = request.resource.data;
       let k = getAfter(/databases/$(database)/documents/licenseKeys/$(d.keyId)).data;
-      let end = k.get('durationDays', null) == null ? null : request.time + duration.value(k.durationDays, 'd');
+      let hasDuration = k.get('durationDays', null) != null;   // jamais de variable « null ou date » : la console Firebase le refuse
       return validLicenseFields()
         && d.userId == request.auth.uid && lid == d.userId + '_' + d.productId
         && k.redeemedBy == request.auth.uid && k.status == 'redeemed' && k.redeemedAt == request.time
@@ -452,8 +452,10 @@ service cloud.firestore {
         && d.status == 'active' && d.activatedAt == request.time && d.get('orgId', '') == k.get('orgId', '')
         && (k.licenseType != 'pro_entreprise' || k.get('orgId', '') != '')
         && (k.get('expiresAt', null) != null ? d.expiresAt == k.expiresAt
-            : end == null ? d.expiresAt == null
-            : (d.expiresAt is timestamp && d.expiresAt > end - duration.value(10, 'm') && d.expiresAt < end + duration.value(10, 'm')));
+            : !hasDuration ? d.expiresAt == null
+            : (d.expiresAt is timestamp
+               && d.expiresAt > request.time + duration.value(k.durationDays, 'd') - duration.value(10, 'm')
+               && d.expiresAt < request.time + duration.value(k.durationDays, 'd') + duration.value(10, 'm')));
     }
 
     // ---------------------------------------------------------------- licenses

@@ -92,6 +92,31 @@ await t('bob n\'écrit pas le score d\'alice', fb.doc('paBoards/stack/scores/ali
 await t('jeu inconnu refusé', fa.doc('paBoards/inconnu/scores/alice').set({uid: 'alice', name: 'Kéli', score: 1, updatedAt: TS()}), false);
 await t('l\'administrateur supprime une entrée', fadm.doc('paBoards/stack/scores/alice').delete());
 
+console.log('Clés de licence (date de fin calculée par les règles)');
+const kidOf = (c) => c.repeat(64);
+async function seedKey(kid, extra) {
+  await env.withSecurityRulesDisabled(async (a) => a.firestore().doc('licenseKeys/' + kid).set({
+    key: 'SP-TEST-' + kid.slice(0, 8), productId: 'archiplan', productName: 'ARCHIPLAN', licenseType: 'standard', status: 'available',
+    createdAt: firebase.firestore.Timestamp.now(), updatedAt: firebase.firestore.Timestamp.now(), ...extra}));
+}
+function redeem(db, uid, kid, expiresAt) {
+  const b = db.batch();
+  b.update(db.doc('licenseKeys/' + kid), {status: 'redeemed', redeemedBy: uid, redeemedEmail: uid + '@x.fr', redeemedAt: TS(), updatedAt: TS()});
+  b.set(db.doc(`licenses/${uid}_archiplan`), {userId: uid, productId: 'archiplan', productName: 'ARCHIPLAN', licenseType: 'standard', status: 'active',
+    activatedAt: TS(), expiresAt, keyId: kid, orgId: '', createdAt: TS(), updatedAt: TS()});
+  return b.commit();
+}
+const inDays = (n) => firebase.firestore.Timestamp.fromMillis(Date.now() + n * 864e5);
+await seedKey(kidOf('a'), {durationDays: 30});
+await t('clé de 30 jours : fin à J+60 refusée', redeem(fb, 'bob', kidOf('a'), inDays(60)), false);
+await t('clé de 30 jours : fin à J+30 acceptée', redeem(fb, 'bob', kidOf('a'), inDays(30)));
+await seedKey(kidOf('b'), {});
+await t('clé sans durée : une date de fin est refusée', redeem(fa, 'alice', kidOf('b'), inDays(30)), false);
+await t('clé sans durée : licence sans fin acceptée', redeem(fa, 'alice', kidOf('b'), null));
+await seedKey(kidOf('c'), {expiresAt: inDays(90)});
+await env.withSecurityRulesDisabled(async (a) => a.firestore().doc('licenses/bob_archiplan').delete());
+await t('clé à date fixe : autre date refusée', redeem(fb, 'bob', kidOf('c'), inDays(30)), false);
+
 console.log('Règle finale');
 await t('collection inconnue : lecture refusée', fa.doc('pirate/x').get(), false);
 await t('collection inconnue : écriture refusée', fadm.doc('pirate/x').set({a: 1}), false);

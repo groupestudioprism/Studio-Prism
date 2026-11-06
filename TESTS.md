@@ -10,7 +10,7 @@ Tests exécutés sur les **vrais émulateurs Firebase** (firebase-tools 13.29.1)
 
 | Suite | Résultat |
 | --- | --- |
-| `tests/emulateurs` (ce dépôt) : ARCHIVISION Firestore + Storage, dossiers produits, médiathèque, PRISM ARCADE, règle finale | **52 / 52** |
+| `tests/emulateurs` (ce dépôt) : ARCHIVISION Firestore + Storage, dossiers produits, médiathèque, PRISM ARCADE, clés de licence, règle finale | **57 / 57** |
 | SpectraMotion `npm run test:rules` (Firestore + Storage, partage par e-mail et par lien) | **41 / 41** |
 | Nexus `npm run test:rules` | **23 / 23** |
 
