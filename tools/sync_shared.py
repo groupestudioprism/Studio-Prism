@@ -2,7 +2,7 @@
 """Code commun Studio Prism : une seule source (shared/), recopiée dans les apps.
 
   shared/device-lock.js     verrouillage de l'appareil : code PIN chiffré, Face ID / Touch ID / empreinte (clé d'accès commune)
-  shared/prism-settings.js  panneau Réglages commun (ARCHIPLAN, ARCHITRAFIC)
+  shared/prism-settings.js  panneau Réglages commun (ARCHIPLAN, ARCHITRAFIC) : fenêtre large avec navigation
   shared/manifest.json      où chaque fichier va dans chaque app (fichier entier, ou bloc entre deux repères)
 
 Usage :
