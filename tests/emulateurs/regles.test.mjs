@@ -115,6 +115,18 @@ await t('mois terminé : score refusé', fa.doc(`paPeriods/stack__m${month - 1}/
 await t('classement de la semaine lisible par tous', fv.collection(`paPeriods/stack__w${week}/scores`).get());
 await t('période d\'un jeu inconnu refusée', fa.doc(`paPeriods/inconnu__w${week}/scores/alice`).set(sc), false);
 
+console.log('LUMEN');
+const save = {v: 1, name: 'Lyra', region: 'aube', level: 3, playTime: 1800, completion: 12.5, data: JSON.stringify({hp: 6, inv: {potion: 2}, quests: {q1: 'done'}}), updatedAt: TS()};
+await t('alice sauvegarde (emplacement auto)', fa.doc('lumenSaves/alice/slots/auto').set(save));
+await t('alice sauvegarde un gros monde (800 000 caractères)', fa.doc('lumenSaves/alice/slots/s1').set({...save, data: 'x'.repeat(800000)}));
+await t('alice relit et liste ses sauvegardes', fa.collection('lumenSaves/alice/slots').get());
+await t('bob ne lit pas les sauvegardes d\'alice', fb.collection('lumenSaves/alice/slots').get(), false);
+await t('bob n\'écrit pas chez alice', fb.doc('lumenSaves/alice/slots/s2').set(save), false);
+await t('emplacement inconnu refusé', fa.doc('lumenSaves/alice/slots/s9').set(save), false);
+await t('champ inconnu refusé', fa.doc('lumenSaves/alice/slots/s2').set({...save, triche: 1}), false);
+await t('compte désactivé : refusé', fz.doc('lumenSaves/zed/slots/auto').set(save), false);
+await t('alice supprime une sauvegarde', fa.doc('lumenSaves/alice/slots/s1').delete());
+
 console.log('Clés de licence (date de fin calculée par les règles)');
 const kidOf = (c) => c.repeat(64);
 async function seedKey(kid, extra) {

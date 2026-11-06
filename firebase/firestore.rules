@@ -3136,6 +3136,43 @@ service cloud.firestore {
                     && request.resource.data.score >= resource.data.score;
       allow delete: if paOwner(uid) || isAdmin();
     }
+// =====================================================================================================================
+// LUMEN (grand jeu de Prism Arcade) — bloc de règles Firestore. Ne PAS coller ce fichier seul dans la console.
+//
+//   lumenSaves/{uid}/slots/{slot}    sauvegardes de l'aventure, slot = « auto », « s1 », « s2 » ou « s3 »
+//       { v, name, region, level, playTime, completion, data, updatedAt, device? }
+//       data = état complet du monde et du personnage (JSON texte, 900 000 caractères au plus) :
+//       un seul champ texte, pour ne pas créer des milliers d'entrées d'index et rester sous la limite de 1 Mo.
+//
+// Lecture et écriture : le titulaire du compte seul (compte actif). L'administration peut seulement supprimer.
+// XP, pièces et trophées de Prism Arcade restent dans paPlayers (voir 31-prism-arcade.rules).
+// Multijoueur (plus tard) : il aura ses propres collections ; les sauvegardes solo restent privées.
+// =====================================================================================================================
+
+    function lmSlot(slot) {
+      return slot in ['auto', 's1', 's2', 's3'];
+    }
+
+    function lmValidSave() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['v', 'name', 'region', 'level', 'playTime', 'completion', 'data', 'updatedAt'])
+        && d.keys().hasOnly(['v', 'name', 'region', 'level', 'playTime', 'completion', 'data', 'updatedAt', 'device'])
+        && d.v is int && d.v >= 1 && d.v <= 1000
+        && isString(d.name, 0, 30)
+        && isString(d.region, 0, 40)
+        && d.level is int && d.level >= 0 && d.level <= 999
+        && d.playTime is int && d.playTime >= 0 && d.playTime <= 100000000
+        && d.completion is number && d.completion >= 0 && d.completion <= 100
+        && isString(d.data, 2, 900000)
+        && isString(d.get('device', ''), 0, 40)
+        && d.updatedAt == request.time;
+    }
+
+    match /lumenSaves/{uid}/slots/{slot} {
+      allow get, list: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser() && lmSlot(slot) && lmValidSave();
+      allow delete: if (isSignedIn() && request.auth.uid == uid) || isAdmin();
+    }
     // ------------------------------------------------------------ présence / activité des apps (prism-presence.js)
     // appPresence/{uid}__{app} : un document par personne et par app (première visite, dernière activité, nombre de sessions).
     // appSessions/{id}         : une session (début, dernière activité, secondes actives). Aucun contenu, aucun nom : seulement l'uid.

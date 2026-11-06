@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Règles Firestore de Studio Prism — SOURCE UNIQUE pour tout le projet Firebase « archivision-studioprism »
-(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS, PRISM ARCADE).
+(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS, PRISM ARCADE, LUMEN).
 
 Un projet Firebase n'a qu'UN fichier de règles en ligne : chaque publication remplace tout. Les règles sont donc
 rangées ici en morceaux (firebase/rules/NN-nom.rules, assemblés dans l'ordre des noms) et ce script :
@@ -33,6 +33,7 @@ REQUIRED = {
     'SPECTRA Motion':  ['smDocs', 'smUsage', 'smFolders', 'smShares', 'smGrants', 'smLibrary'],
     'NEXUS':           ['nxUsers', 'nxConfig'],
     'PRISM ARCADE':    ['paPlayers', 'paBoards', 'paPeriods'],
+    'LUMEN':           ['lumenSaves'],
     'devis':           ['quotes', 'counters'],
     'présence':        ['appPresence', 'appSessions'],
 }
@@ -56,7 +57,7 @@ def compact(src):
     lits = re.findall(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", src)
     if any('  ' in l or '\t' in l for l in lits): sys.exit('Une chaîne contient des espaces multiples : la version compacte la modifierait')
     lines = [l.rstrip() for l in ''.join(out).split('\n')]
-    head = '// Studio Prism · règles Firestore À PUBLIER (générées par tools/build_rules.py depuis firebase/rules/ ; source commentée : firebase/firestore.rules)\n'
+    head = '// Studio Prism - Firestore rules to publish (built by tools/build_rules.py from firebase/rules/)\n'
     return head + '\n'.join(' '.join(l.split()) for l in lines if l.strip()) + '\n'
 def structure(src, final):
     errs = []
