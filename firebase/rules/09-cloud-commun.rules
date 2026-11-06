@@ -1,0 +1,101 @@
+    // ------------------------------------------------------------ CLOUD COMMUN (ARCHIPLAN, ARCHITRAFIC, SPECTRA)
+    // Fonctions partagées par les clouds des apps : projets/documents, dossiers, partages, liens, quotas.
+    // Avant le 06/11/2026, chaque app en avait sa propre copie (apShareRole, atShareRole, swShareRole…) :
+    // les règles compilées dépassaient la limite Firebase de 256 000 octets (« Erreur inconnue » dans la console).
+    // Paramètres : x = préfixe de l'app ('ap', 'at', 'sw', 'sc', 'ss', 'sm') ; les collections sont x + 'Folders',
+    // x + 'Shares', x + 'Grants', x + 'Usage', x + 'Public'. gP reçoit la collection des projets
+    // ('apProjects', 'atProjects', 'swDocs', 'scDocs', 'ssDocs', 'smDocs').
+    //
+    function gCanEdit(x, pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || gGuestRole(x, pid, p) == 'edit');
+    }
+    function gCanRead(x, pid, p) {
+      return isSignedIn() && isActiveUser() && (p.ownerUid == request.auth.uid || gGuestRole(x, pid, p) in ['view', 'edit']);
+    }
+    function gEmail() {
+      return request.auth.token.email.lower();
+    }
+    function gF(x, fid) {
+      return /databases/$(database)/documents/$(x + 'Folders')/$(fid);
+    }
+    // Rôle d'un invité sur un dossier : 'edit', 'view' ou ''
+    function gFolderRole(x, fid) {
+      let f = get(gF(x, fid)).data;
+      let r = gShareRole(x, 'F_' + fid);
+      return !gVerified() ? '' : r != '' ? r : gGrantOk(x, 'F_' + fid, f) ? f.linkMode : '';
+    }
+    function gGrantOk(x, key, t) {
+      let gp = /databases/$(database)/documents/$(x + 'Grants')/$(key + '__' + request.auth.uid);
+      return t.get('linkMode', 'off') in ['view', 'edit'] && t.get('linkKey', '') != '' && exists(gp) && get(gp).data.key == t.linkKey;
+    }
+    // Rôle d'un invité sur un projet : directement, ou via le dossier (même propriétaire) qui le contient
+    function gGuestRole(x, pid, p) {
+      let r = gShareRole(x, pid);
+      let viaLink = gGrantOk(x, pid, p) ? p.linkMode : '';
+      let viaFolder = p.get('folderId', '') != '' && exists(gF(x, p.folderId)) && get(gF(x, p.folderId)).data.ownerUid == p.ownerUid
+      ? gFolderRole(x, p.folderId) : '';
+      return !gVerified() ? ''
+      : (r == 'edit' || viaLink == 'edit' || viaFolder == 'edit') ? 'edit'
+      : (r == 'view' || viaLink == 'view' || viaFolder == 'view') ? 'view' : '';
+    }
+    function gP(pc, pid) {
+      return /databases/$(database)/documents/$(pc)/$(pid);
+    }
+    function gPub(x, id) {
+      return /databases/$(database)/documents/$(x + 'Public')/$(id);
+    }
+    function gPubReadable(d) {
+      return isSignedIn() && (d.status == 'published' || d.ownerUid == request.auth.uid || isAdmin());
+    }
+    function gShareRole(x, key) {
+      let sp = /databases/$(database)/documents/$(x + 'Shares')/$(key + '__' + gEmail());
+      return exists(sp) ? get(sp).data.role : '';
+    }
+    function gU(x, uid) {
+      return /databases/$(database)/documents/$(x + 'Usage')/$(uid);
+    }
+    // Le compteur d'usage du propriétaire a été mis à jour dans le même lot, de la variation de taille du projet pid
+    function gUsageOk(x, owner, pid, delta) {
+      let before = exists(gU(x, owner)) ? get(gU(x, owner)).data.bytes : 0;
+      return delta == 0
+      || (existsAfter(gU(x, owner)) && getAfter(gU(x, owner)).data.lastPid == pid
+      && getAfter(gU(x, owner)).data.bytes == before + delta);
+    }
+    function gValidFolder(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'parentId', 'createdAt', 'updatedAt'])
+      && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'parentId', 'shared', 'pids', 'linkMode', 'linkKey', 'linkToken',
+      'linkPw', 'createdAt', 'updatedAt'])
+      && isString(d.name, 1, 80)
+      && isString(d.parentId, 0, 40)
+      && isString(d.get('ownerEmail', ''), 0, 160)
+      && isString(d.get('ownerName', ''), 0, 160)
+      && d.get('shared', false) is bool
+      && d.get('pids', []) is list && d.get('pids', []).size() <= 500
+      && d.get('linkMode', 'off') in ['off', 'view', 'edit']
+      && isString(d.get('linkKey', ''), 0, 128)
+      && isString(d.get('linkToken', ''), 0, 64)
+      && d.get('linkPw', false) is bool
+      && d.updatedAt == request.time;
+    }
+    function gValidPublic(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'cat', 'status', 'createdAt', 'updatedAt'])
+      && d.keys().hasOnly(['ownerUid', 'ownerName', 'name', 'desc', 'cat', 'status', 'reason', 'preview', 'theme', 'pageSize', 'size',
+      'uses', 'reports', 'reporters', 'createdAt', 'updatedAt', 'reviewedAt', 'reviewedBy'])
+      && isString(d.name, 2, 80)
+      && isString(d.get('desc', ''), 0, 200)
+      && isString(d.cat, 1, 40)
+      && isString(d.get('ownerName', ''), 0, 160)
+      && d.status in ['pending', 'published', 'rejected']
+      && isString(d.get('reason', ''), 0, 300)
+      && isString(d.get('preview', ''), 0, 6000)
+      && isString(d.get('theme', ''), 0, 40)
+      && isString(d.get('pageSize', ''), 0, 12)
+      && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 400000
+      && d.get('uses', 0) is int && d.get('uses', 0) >= 0
+      && d.get('reports', 0) is int && d.get('reports', 0) >= 0
+      && d.get('reporters', []) is list && d.get('reporters', []).size() <= 200;
+    }
+    function gVerified() {
+      return request.auth.token.email_verified == true;
+    }
+

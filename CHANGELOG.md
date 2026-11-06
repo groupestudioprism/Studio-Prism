@@ -1,4 +1,12 @@
 # Changelog
+## Règles Firestore : sous la limite de taille compilée de Firebase — 2026-11-06
+
+> **Déjà publié** le 06/11/2026 (console Firebase). Pour republier : `firebase deploy --only firestore:rules`, ou coller le fichier complet `firebase/firestore.publier.rules`.
+
+- **Cause de « Erreur inconnue » à la publication** : la réponse du serveur était « Total size of compiled executables must be smaller than 256000 bytes (actual: 259771 bytes) ». Cette limite porte sur les règles compilées ; elle est la même en offre gratuite (Spark) et payante, et les émulateurs ne la vérifient pas.
+- **Correction** : les 13 à 16 fonctions recopiées dans chaque cloud (ARCHIPLAN `ap*`, ARCHITRAFIC `at*`, SPECTRA Writer `sw*`, Calc `sc*`, Slide `ss*`, Motion `sm*`) sont réunies dans `firebase/rules/09-cloud-commun.rules` (`gCanRead`, `gCanEdit`, `gGuestRole`, `gFolderRole`, `gShareRole`, `gGrantOk`, `gUsageOk`, `gValidFolder`, `gValidPublic`…), avec le préfixe de l'app en paramètre. Les fonctions propres à chaque app (quotas, validation des projets, partages, liens) restent dans leur fichier. Fichier à publier : 123 Ko au lieu de 137 Ko.
+- **Même comportement** : 79 tests de `tests/emulateurs` réussis, et 540 opérations comparées entre anciennes et nouvelles règles (propriétaire, invité par partage, par dossier, par lien, compte non vérifié, inconnu, non connecté ; lecture, contenu, dossiers, partages, quotas, modèles publics) : résultats identiques.
+- **Documentation** : `firebase/rules/README.md` explique la limite compilée et la règle « ne pas recopier une fonction d'une app à l'autre ».
 ## Règles Firestore et Storage : vérification de tous les dépôts, Storage unifié — 2026-11-05
 
 > **À faire** : publier **les deux** fichiers complets, depuis ce dépôt : `firebase deploy --only firestore:rules,storage`

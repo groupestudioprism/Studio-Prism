@@ -12,6 +12,7 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
 |---|---|
 | `00-communes.rules` | en-tête, utilitaires, comptes, entreprises, catalogue, licences, CMS |
 | `05-devis.rules` | devis (`quotes`) et numérotation (`counters`) ; les informations légales (`settings/company`) sont dans `00-communes.rules` |
+| `09-cloud-commun.rules` | fonctions partagées par les clouds d'ARCHIPLAN, ARCHITRAFIC et SPECTRA (`gCanRead`, `gGuestRole`, `gUsageOk`…, paramétrées par le préfixe de l'app) |
 | `10-archiplan.rules` | ARCHIPLAN : fiche client, cloud (`ap*`) |
 | `11-architrafic.rules` | ARCHITRAFIC : cloud (`at*`) |
 | `12-archivision.rules` | ARCHIVISION : synchronisation (`avModels`, `avPhotos`) et « Voir en AR sur le PC » (`arLive`, `arLive/{code}/moves`) |
@@ -47,7 +48,16 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
 4. Publier depuis ce dépôt : `firebase deploy --only firestore:rules,storage`, ou dans la console Firebase, coller **le fichier complet**
    `firebase/firestore.publier.rules` (Firestore Database → Règles → Publier) puis **le fichier complet** `firebase/storage.rules`
    (Storage → Règles → Publier).
-   `firestore.publier.rules` est généré avec `firestore.rules` : mêmes règles, sans commentaires ni indentation (136 Ko au lieu de 195 Ko).
-   La console refusait le fichier commenté avec « Erreur inconnue ». Les tests sur émulateurs utilisent ce fichier-là.
+   `firestore.publier.rules` est généré avec `firestore.rules` : mêmes règles, sans commentaires ni indentation (123 Ko au lieu de 176 Ko).
+   Les tests sur émulateurs utilisent ce fichier-là.
+
+## Limite de taille : 256 000 octets **compilés**
+
+En plus de la limite du texte (256 Ko), Firebase limite la taille des règles **une fois compilées** à 256 000 octets.
+Les émulateurs ne vérifient pas cette limite : seule la publication la contrôle, et la console affiche alors seulement
+« Erreur inconnue » (le vrai message, visible dans la réponse réseau `…/releases`, est
+« Total size of compiled executables must be smaller than 256000 bytes »). Le 06/11/2026, les règles atteignaient
+259 771 octets ; les fonctions recopiées dans chaque app ont été réunies dans `09-cloud-commun.rules`.
+**Ne pas recopier une fonction d'une app à l'autre** : la mettre dans `09-cloud-commun.rules` avec le préfixe de l'app en paramètre.
 
 Le 22/10/2026, les morceaux Firestore ont été découpés à l'identique (octet pour octet) dans les règles alors en ligne.
