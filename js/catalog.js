@@ -85,7 +85,7 @@
      dépublié réapparaîtrait depuis ce tableau ; pour le retirer durablement du site, le supprimer aussi de LATEST. */
   const LATEST = [{
     id: 'prism-arcade', name: 'PRISM ARCADE', category: 'game', pole: 'game', stage: 'beta', status: 'published',
-    tagline: 'Plateforme de jeux en ligne : 14 mini-jeux, une seule progression',
+    tagline: 'Plateforme de jeux en ligne : 14 mini-jeux et un grand jeu 3D, une seule progression',
     description: 'La plateforme de jeux de Prism Game : quatorze mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, boutique, succès, défis du jour) et des classements à cadeaux chaque semaine et chaque mois.',
     availability: 'Gratuit — jouable en ligne, avec ou sans compte Studio Prism',
     info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : sur le compte Studio Prism (ou sur l’appareil sans compte)\nClassements : par jeu',
@@ -96,7 +96,7 @@
       'Chaque partie rapporte de l’XP et des pièces. La boutique propose des apparences pour les jeux, des avatars, des cadres, des thèmes, des boosts et des coffres. Un cadeau chaque jour, des succès et des défis quotidiens entretiennent la progression.\n\n' +
       'Chaque jeu a ses classements de la semaine et du mois : le podium gagne des pièces, de l’XP, des coffres et des objets exclusifs.\n\n' +
       'Les grands jeux du studio rejoindront ensuite la plateforme, en solo d’abord puis en multijoueur.',
-    highlights: ['14 mini-jeux d’arcade', 'Progression commune : niveaux, boutique, succès', 'Cadeau et défis du jour', 'Classements de la semaine et du mois à cadeaux', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
+    highlights: ['14 mini-jeux d’arcade', 'Lumen, aventure-puzzle en 3D (Île 1 jouable)', 'Progression commune : niveaux, boutique, succès', 'Cadeau et défis du jour', 'Classements de la semaine et du mois à cadeaux', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
   }];
 
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */
