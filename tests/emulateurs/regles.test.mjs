@@ -91,6 +91,29 @@ await t('un record ne baisse jamais', fa.doc('paBoards/stack/scores/alice').set(
 await t('bob n\'écrit pas le score d\'alice', fb.doc('paBoards/stack/scores/alice').set({uid: 'alice', name: 'Kéli', score: 9999, updatedAt: TS()}), false);
 await t('jeu inconnu refusé', fa.doc('paBoards/inconnu/scores/alice').set({uid: 'alice', name: 'Kéli', score: 1, updatedAt: TS()}), false);
 await t('l\'administrateur supprime une entrée', fadm.doc('paBoards/stack/scores/alice').delete());
+// progression (avec une partie complète de Lumen : drapeaux, sauvegarde de l'île, meilleur temps)
+const lumenExtra = {}; for (let i = 1; i <= 12; i++) lumenExtra['g:aube:g' + i] = 1; for (let i = 1; i <= 10; i++) lumenExtra['s:aube:' + i] = 1; lumenExtra['done:aube'] = 1;
+const player = {name: 'Kéli', xp: 5400, coins: 820, coinsEarned: 1500, theme: 'prisme', themes: ['prisme'], muted: false,
+  games: {stack: {best: 120, plays: 4, total: 300, last: 80}, lumen: {best: 12, plays: 3, total: 0, last: 0, extra: lumenExtra,
+    data: {runs: {aube: {dev: Array.from({length: 73}, (_, i) => i % 4), gates: ['g1', 'g2'], shards: ['1'], time: 3120}}, 'best:aube': 3120}}},
+  ach: {first: 1}, boards: {stack: 120}, daily: null, dailyStreak: 0, lastDailyDone: '', totals: {plays: 7, time: 4000}, created: now,
+  inv: {}, equip: {}, boost: {}, periods: {}, claims: {}, trophies: {}, giftDay: '', giftStreak: 0, updatedAt: TS()};
+await t('alice enregistre sa progression (avec Lumen)', fa.doc('paPlayers/alice').set(player));
+await t('alice relit sa progression', fa.doc('paPlayers/alice').get());
+await t('bob ne lit pas la progression d\'alice', fb.doc('paPlayers/alice').get(), false);
+await t('bob n\'écrit pas la progression d\'alice', fb.doc('paPlayers/alice').set(player), false);
+await t('progression : champ inconnu refusé', fa.doc('paPlayers/alice').set({...player, pirate: 1}), false);
+await t('progression : XP négative refusée', fa.doc('paPlayers/alice').set({...player, xp: -5}), false);
+await t('compte désactivé : progression refusée', fz.doc('paPlayers/zed').set(player), false);
+// classements de la semaine et du mois (seule la période en cours accepte des scores)
+const d = new Date(), week = Math.floor((Date.now() + 3 * 864e5) / (7 * 864e5)), month = d.getUTCFullYear() * 12 + d.getUTCMonth();
+const sc = {uid: 'alice', name: 'Kéli', score: 120, updatedAt: TS()};
+await t('score de la semaine en cours accepté', fa.doc(`paPeriods/stack__w${week}/scores/alice`).set(sc));
+await t('score du mois en cours accepté', fa.doc(`paPeriods/stack__m${month}/scores/alice`).set(sc));
+await t('semaine terminée : score refusé', fa.doc(`paPeriods/stack__w${week - 1}/scores/alice`).set(sc), false);
+await t('mois terminé : score refusé', fa.doc(`paPeriods/stack__m${month - 1}/scores/alice`).set(sc), false);
+await t('classement de la semaine lisible par tous', fv.collection(`paPeriods/stack__w${week}/scores`).get());
+await t('période d\'un jeu inconnu refusée', fa.doc(`paPeriods/inconnu__w${week}/scores/alice`).set(sc), false);
 
 console.log('Clés de licence (date de fin calculée par les règles)');
 const kidOf = (c) => c.repeat(64);
