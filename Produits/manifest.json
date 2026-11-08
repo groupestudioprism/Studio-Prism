@@ -1,5 +1,36 @@
 {
- "suivis": [],
+ "suivis": [
+  "3d-cas",
+  "3d-clip",
+  "3d-croc",
+  "3d-key",
+  "3d-mark",
+  "3d-passe",
+  "3d-plan",
+  "3d-sach",
+  "3d-tel",
+  "3d-usb",
+  "archiplan",
+  "architraffic",
+  "architrafic",
+  "archivision",
+  "blackout-protocol",
+  "driftline",
+  "metro-district",
+  "mine-craft",
+  "nexus",
+  "parcel-rush",
+  "prism-the-shattered-world",
+  "relic-hunters",
+  "shift-factory",
+  "sky-islands",
+  "spectracalc",
+  "spectramotion",
+  "spectraslide",
+  "spectrawriter",
+  "studio-prism-etudiant",
+  "tiny-cafe"
+ ],
  "products": {
   "archiplan": [
    {
@@ -138,5 +169,5 @@
    }
   ]
  },
- "generated": "2026-11-05T14:29:13+00:00"
+ "generated": "2026-11-08T11:22:28+00:00"
 }
