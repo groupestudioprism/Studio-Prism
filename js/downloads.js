@@ -31,42 +31,42 @@
   /* Applications Android « web » (Trusted Web Activity, signées Studio Prism) : chacune ouvre l'app en ligne en plein écran,
      joue l'animation d'ouverture et se met à jour avec le site. Sources et clé de signature : hors dépôt (voir le LISEZMOI des sources). */
   {
-    id: 'admin-android', name: 'Studio Prism Admin · Android', asset: 'Studio-Prism-Admin.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'admin-android', name: 'Studio Prism Admin · Android', asset: 'Studio-Prism-Admin.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Application d’administration du site : tableau de bord, comptes, licences, offres, contenus et téléchargements, sur téléphone.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'archiplan-android', name: 'ARCHIPLAN · Android', asset: 'ARCHIPLAN.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'archiplan-android', name: 'ARCHIPLAN · Android', asset: 'ARCHIPLAN.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Le modeleur BIM sur téléphone et tablette : plan, 3D, parois, vérifications, métré et exports.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'archivision-web-android', name: 'ARCHIVISION Web · Android', asset: 'ARCHIVISION-Web.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'archivision-web-android', name: 'ARCHIVISION Web · Android', asset: 'ARCHIVISION-Web.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'La visionneuse de maquettes (GLB, IFC) en version web installée : visite 3D, données BIM et réalité augmentée WebXR. Peut cohabiter avec l’app Unity ci-dessus.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site. Réalité augmentée : appareil compatible ARCore.'
   },
   {
-    id: 'architrafic-android', name: 'ARCHITRAFIC · Android', asset: 'ARCHITRAFIC.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'architrafic-android', name: 'ARCHITRAFIC · Android', asset: 'ARCHITRAFIC.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Préparation de la circulation autour des chantiers : routes barrées, déviations, panneaux, mode terrain.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'spectrawriter-android', name: 'SPECTRA Writer · Android', asset: 'SPECTRA-Writer.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectrawriter-android', name: 'SPECTRA Writer · Android', asset: 'SPECTRA-Writer.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Le traitement de texte de la gamme SPECTRA.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'spectracalc-android', name: 'SPECTRA Calc · Android', asset: 'SPECTRA-Calc.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectracalc-android', name: 'SPECTRA Calc · Android', asset: 'SPECTRA-Calc.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Le tableur de la gamme SPECTRA.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'spectraslide-android', name: 'SPECTRA Slide · Android', asset: 'SPECTRA-Slide.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectraslide-android', name: 'SPECTRA Slide · Android', asset: 'SPECTRA-Slide.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Le logiciel de présentation de la gamme SPECTRA.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   },
   {
-    id: 'spectramotion-android', name: 'SPECTRA Motion · Android', asset: 'SPECTRA-Motion.apk', version: '1.0.0', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectramotion-android', name: 'SPECTRA Motion · Android', asset: 'SPECTRA-Motion.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
     desc: 'Le studio de création : design, photo, vidéo, animation et audio.',
     needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
   }
