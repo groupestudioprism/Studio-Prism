@@ -22,53 +22,61 @@
 
   const FILES = [{
     id: 'archivision-android',
-    name: 'ArchiVision · Android',
+    name: 'ARCHIVISION (réalité augmentée)', branch: 'prism-app', gamme: 'archi', logo: 'assets/img/telechargements/archivision.png',
     desc: 'Application Android (APK) : maquettes BIM en visite 3D et en réalité augmentée (ARCore), compte Studio Prism, licence et stockage intégrés.',
     asset: 'ArchiVision.apk', info: 'telechargements/archivision.json',
     version: '1.0.0', date: '15/10/2026', size: '≈ 39 Mo',       // valeurs de secours si l'API GitHub ne répond pas
     needs: 'Téléphone ou tablette Android 8.0 ou plus récent. Réalité augmentée : appareil compatible ARCore.'
  },
-  /* Applications Android « web » (Trusted Web Activity, signées Studio Prism) : chacune ouvre l'app en ligne en plein écran,
-     joue l'animation d'ouverture et se met à jour avec le site. Sources et clé de signature : hors dépôt (voir le LISEZMOI des sources). */
+  /* Applications Android natives (vue web intégrée, signées Studio Prism) : chacune s’ouvre dans sa propre fenêtre, sans Chrome.
+     Sources et clé de signature : hors dépôt (voir le LISEZMOI des sources). */
   {
-    id: 'admin-android', name: 'Studio Prism Admin · Android', asset: 'Studio-Prism-Admin.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
-    desc: 'Application d’administration du site : tableau de bord, comptes, licences, offres, contenus et téléchargements, sur téléphone.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    id: 'admin-android', name: 'Studio Prism Admin', asset: 'Studio-Prism-Admin.apk', branch: 'studio', gamme: 'admin', logo: 'assets/img/telechargements/studio-prism-admin.png',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
+    desc: 'N’ouvre que l’administration du site : tableau de bord, comptes, devis, entreprises, produits et prix, téléchargements. Les autres pages du site s’ouvrent dans le navigateur.',
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome). Connexion par e-mail et mot de passe d’un compte administrateur.'
   },
   {
-    id: 'archiplan-android', name: 'ARCHIPLAN · Android', asset: 'ARCHIPLAN.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'archiplan-android', name: 'ARCHIPLAN', asset: 'ARCHIPLAN.apk', branch: 'prism-app', gamme: 'archi', logo: 'assets/img/telechargements/archiplan.png',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le modeleur BIM sur téléphone et tablette : plan, 3D, parois, vérifications, métré et exports.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'archivision-web-android', name: 'ARCHIVISION Web · Android', asset: 'ARCHIVISION-Web.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
-    desc: 'La visionneuse de maquettes (GLB, IFC) en version web installée : visite 3D, données BIM et réalité augmentée WebXR. Peut cohabiter avec l’app Unity ci-dessus.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site. Réalité augmentée : appareil compatible ARCore.'
+    id: 'archivision-web-android', name: 'ARCHIVISION Web', asset: 'ARCHIVISION-Web.apk', branch: 'prism-app', gamme: 'archi', logo: 'assets/img/telechargements/archivision.png',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
+    desc: 'La visionneuse de maquettes (GLB, IFC) en application : visite 3D et données BIM. Pour la réalité augmentée, utiliser l’app ArchiVision (Unity). Les deux peuvent être installées ensemble.',
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'architrafic-android', name: 'ARCHITRAFIC · Android', asset: 'ARCHITRAFIC.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'architrafic-android', name: 'ARCHITRAFIC', asset: 'ARCHITRAFIC.apk', branch: 'prism-app', gamme: 'archi', logo: 'assets/img/telechargements/architrafic.png',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Préparation de la circulation autour des chantiers : routes barrées, déviations, panneaux, mode terrain.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'spectrawriter-android', name: 'SPECTRA Writer · Android', asset: 'SPECTRA-Writer.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectrawriter-android', name: 'SPECTRA Writer', asset: 'SPECTRA-Writer.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/writer.svg',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le traitement de texte de la gamme SPECTRA.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'spectracalc-android', name: 'SPECTRA Calc · Android', asset: 'SPECTRA-Calc.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectracalc-android', name: 'SPECTRA Calc', asset: 'SPECTRA-Calc.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/calc.svg',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le tableur de la gamme SPECTRA.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'spectraslide-android', name: 'SPECTRA Slide · Android', asset: 'SPECTRA-Slide.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectraslide-android', name: 'SPECTRA Slide', asset: 'SPECTRA-Slide.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/slide.svg',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le logiciel de présentation de la gamme SPECTRA.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
-    id: 'spectramotion-android', name: 'SPECTRA Motion · Android', asset: 'SPECTRA-Motion.apk', version: '1.0.1', date: '12/11/2026', size: '≈ 0,6 Mo',
+    id: 'spectramotion-android', name: 'SPECTRA Motion', asset: 'SPECTRA-Motion.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/motion.svg',
+    version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le studio de création : design, photo, vidéo, animation et audio.',
-    needs: 'Android 5.0 ou plus récent, avec Google Chrome. L’app s’ouvre en plein écran et suit automatiquement les mises à jour du site.'
+    needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   }
   ];
   FILES.forEach((f) => { f.url = 'telechargements/' + f.asset; });
@@ -116,12 +124,35 @@
     document.body.appendChild(a); a.click(); a.remove();
   };
 
-  const card = (f) => `<div class="panel dl-card">
-    <div class="dl-h"><h3>${esc(f.name)}</h3><span class="bd bd-admin">Administrateurs</span></div>
+  /* Carte d'une application : logo, nom, version, description, bouton. */
+  const card = (f) => `<article class="panel dl-card">
+    <div class="dl-h">${f.logo ? `<img class="dl-logo" src="${esc(f.logo)}" alt="" width="56" height="56" loading="lazy">` : '<span class="dl-logo dl-logo-x" aria-hidden="true">APK</span>'}
+      <div class="dl-nm"><h4>${esc(f.name)}</h4><p class="mut" data-dl-meta="${esc(f.id)}">${esc(meta2(f))}</p></div></div>
     <p>${esc(f.desc)}</p>
-    <p class="mut" data-dl-meta="${esc(f.id)}">${esc(meta2(f))}</p>
-    <p class="mut">${esc(f.needs)}</p>
-    <p class="dl-act">${btn(f)}</p>${how}</div>`;
+    <p class="mut dl-need">${esc(f.needs)}</p>
+    <p class="dl-act">${btn(f)}</p></article>`;
+
+  /* Rangement : branche → gamme → applications. Un .apk déposé sans fiche va dans « Autres fichiers ». */
+  const BRANCHES = [
+    { id: 'prism-app', name: 'Prism App', note: 'Les logiciels Studio Prism', gammes: [
+      { id: 'archi', name: 'Gamme Archi', note: 'Architecture, BIM et chantier' },
+      { id: 'spectra', name: 'Gamme SPECTRA', note: 'Bureautique et création' }] },
+    { id: 'studio', name: 'Studio Prism', note: 'Gestion du site', gammes: [
+      { id: 'admin', name: 'Administration', note: 'Réservé aux administrateurs' }] }
+  ];
+  function grouped(list) {
+    const used = new Set(), html = [];
+    BRANCHES.forEach((b) => {
+      const parts = b.gammes.map((g) => {
+        const fs = list.filter((f) => f.branch === b.id && f.gamme === g.id); fs.forEach((f) => used.add(f));
+        return fs.length ? `<div role="group" class="dl-gamme" aria-label="${esc(g.name)}"><h4 class="dl-gt">${esc(g.name)} <small>${esc(g.note)} · ${fs.length} app${fs.length > 1 ? 's' : ''}</small></h4><div class="dl-grid">${fs.map(card).join('')}</div></div>` : '';
+      }).join('');
+      if (parts) html.push(`<div class="dl-branche"><h3 class="dl-bt">${esc(b.name)} <small>${esc(b.note)}</small></h3>${parts}</div>`);
+    });
+    const rest = list.filter((f) => !used.has(f));
+    if (rest.length) html.push(`<div class="dl-branche"><h3 class="dl-bt">Autres fichiers <small>déposés dans telechargements/</small></h3><div class="dl-grid">${rest.map(card).join('')}</div></div>`);
+    return html.join('');
+  }
 
   /* Liste AUTOMATIQUE : tous les .apk du dossier telechargements/ du dépôt GitHub (API publique « contents »), à défaut le manifeste
      telechargements/manifest.json (généré par le workflow GitHub Actions « Manifeste des téléchargements »). Aucune liste à tenir à jour. */
@@ -142,8 +173,8 @@
   }
   const meta2 = (f) => (f.version ? meta(f) : `${f.date} · ${f.size}`);
   function tab(p, shell) {
-    const draw = () => { const el = document.getElementById('dl-list'); if (el) el.innerHTML = FILES.filter((f) => !f.gone).map(card).join(''); };
-    V(shell(`<h2 class="dl-t">Téléchargements</h2><p class="lead">Tous les fichiers .apk du dossier <code>telechargements/</code> du dépôt GitHub apparaissent ici automatiquement.</p><div class="dl-list" id="dl-list"></div>`));
+    const draw = () => { const el = document.getElementById('dl-list'); if (el) el.innerHTML = grouped(FILES.filter((f) => !f.gone)); };
+    V(shell(`<h2 class="dl-t">Téléchargements</h2><p class="lead">Applications Android de Studio Prism, rangées par branche et par gamme. Un fichier .apk ajouté au dossier <code>telechargements/</code> du dépôt apparaît ici automatiquement.</p>${how}<div class="dl-list" id="dl-list"></div>`));
     draw();
     FILES.forEach(refresh);
     discover().then(draw);
