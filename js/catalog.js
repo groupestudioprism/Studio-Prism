@@ -305,10 +305,19 @@
   const stale = () => !C.done || Date.now() - C.at > TTL;
   const slots = new Set();
 
+  /* Produit créé à la main dans l'administration avec le même identifiant qu'un produit livré avec le site (LATEST) :
+     ses champs restés vides sont complétés par la fiche livrée (ce qui a été saisi dans l'administration reste prioritaire). */
+  const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length);
+  function fillFromLatest(p) {
+    const b = p && LATEST.find((x) => x.id === p.id); if (!b) return p;
+    const out = Object.assign({}, p);
+    Object.keys(b).forEach((k) => { if (k !== 'status' && isEmpty(out[k]) && !isEmpty(b[k])) out[k] = b[k]; });
+    return out;
+  }
   function rebuild(fsProducts, subs, prices) {
     const map = new Map();
     if (!C.builtinImported) BUILTIN.forEach((b) => map.set(b.id, Object.assign(normProduct(b), { source: 'site' })));
-    (fsProducts || []).forEach((p) => map.set(p.id, Object.assign(normProduct(p), { source: 'firestore' })));
+    (fsProducts || []).forEach((p) => map.set(p.id, Object.assign(normProduct(fillFromLatest(p)), { source: 'firestore' })));
     LATEST.forEach((b) => { if (!map.has(b.id)) map.set(b.id, Object.assign(normProduct(b), { source: 'site' })); });
     const live = buildPlans(subs || [], prices || []).plans.filter((pl) => pl.status === 'active');
     map.forEach((p) => { p.plans = live.filter((pl) => pl.productId === p.id).sort(byOrder); });
@@ -699,7 +708,7 @@
 
   window.SP.catalog = {
     POLES, POLE_ORDER, POLE_PAGE, TYPES, STATUS, STAGES, MODES, PERIODS, PER, PERIOD_ORDER,
-    BUILTIN, LATEST, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
+    BUILTIN, LATEST, fillFromLatest, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
     RANGES_DEFAULT, normRange, byRangeOrder, ranges: () => C.ranges, rangeOf: (id) => C.rangeOf.get(id) || null, groupByRange, setRanges,
     load, reset, find, featured, all: () => C.products, state: C, mount, pcard, commercial, repaintAll, productHref, hooks, refresh: refreshSlots, picUrl
   };

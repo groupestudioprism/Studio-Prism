@@ -1068,8 +1068,9 @@
   const INITIAL_OFFERS = [['', 'Aucune offre pour le moment'], ['free', 'Essai gratuit'], ['subscription', 'Abonnement'], ['quote', 'Sur devis']];
 
   function productForm(id) {
-    const x = id ? CT.prods.find((p) => p.id === id) : null;
-    if (id && !x) { toast('Produit inexistant.'); return; }
+    const x0 = id ? CT.prods.find((p) => p.id === id) : null;
+    if (id && !x0) { toast('Produit inexistant.'); return; }
+    const x = x0 && CATLG.fillFromLatest ? CATLG.fillFromLatest(x0) : x0;   // champs vides préremplis par la fiche livrée avec le site : « Enregistrer » les garde
     const plans = x ? CT.plans.plans.filter((pl) => pl.productId === x.id) : [];
     pmodal(`<h3>${x ? 'Modifier le produit' : 'Ajouter un produit'}</h3>` +
       `<form data-f="cat-prod" data-mode="${x ? 'edit' : 'new'}" data-prev="${esc(x ? x.name : '')}" novalidate>` +
