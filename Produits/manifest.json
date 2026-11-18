@@ -124,6 +124,40 @@
     "caption": "Écran de connexion de Nexus, avec le même compte que le site et les applications"
    }
   ],
+  "pitwall": [
+   {
+    "file": "01-gt7-telephone.webp",
+    "caption": "Dashboard Gran Turismo 7 sur téléphone : shift lights, rapport, chronos, delta, pneus et essence"
+   },
+   {
+    "file": "02-f1-25-tablette.webp",
+    "caption": "Dashboard F1 25 sur tablette : compte-tours, ERS, usure des pneus, tracé du circuit et G-force"
+   },
+   {
+    "file": "03-gt7-tablette.webp",
+    "caption": "Dashboard Gran Turismo 7 sur tablette, avec analyse de pilotage en bas d'écran"
+   },
+   {
+    "file": "04-f1-25-telephone.webp",
+    "caption": "Dashboard F1 25 sur téléphone : position, DRS, limiteur, ERS et essence restante"
+   },
+   {
+    "file": "05-editeur.webp",
+    "caption": "Éditeur libre : chaque widget se déplace et se redimensionne au doigt, superposition et doublons permis"
+   },
+   {
+    "file": "06-mes-dashboards.webp",
+    "caption": "Mes dashboards : autant que voulu, utilisables avec tous les jeux, export et import en fichier"
+   },
+   {
+    "file": "07-connexion.webp",
+    "caption": "Connexion : choix du jeu, adresse IP de la console et aide au réglage pour chaque jeu"
+   },
+   {
+    "file": "08-diagnostic.webp",
+    "caption": "Diagnostic de connexion : l'appli indique exactement ce qui bloque"
+   }
+  ],
   "spectracalc": [
    {
     "file": "01-planning-gantt.webp",
@@ -169,5 +203,5 @@
    }
   ]
  },
- "generated": "2026-11-08T11:22:28+00:00"
+ "generated": "2026-11-18T13:01:20+00:00"
 }
