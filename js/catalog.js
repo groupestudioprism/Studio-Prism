@@ -41,7 +41,7 @@
      SUITE_APPS : le bouton reste même après « Ajouter au catalogue » (Firestore ne garde pas ce champ). */
   const DIRECT_DL = { pitwall: { url: 'telechargements/PitWall.apk', file: 'PitWall.apk', label: 'Télécharger l’APK' } };
   const dlOf = (p) => DIRECT_DL[p.id] || null;
-  const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/', archiphase: 'https://groupestudioprism.github.io/ArchiPhase/' };
+  const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/', archiphase: 'https://archiphase.studio-prism.com/' };
   const webOf = (p) => {
     const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
     if (w) return w;
@@ -94,7 +94,7 @@
     availability: 'Gratuit pendant la phase de test — application web, avec un compte Studio Prism',
     info: 'Usage : planification de projets (diagramme de Gantt)\nAppareils : ordinateur, tablette, téléphone (navigateur)\nImports : GanttProject (.gan), MS Project (.xml), tableur (.csv)\nExports : GanttProject, MS Project, CSV, image HD, PDF A3, agenda (.ics)\nCompte : Studio Prism (même compte que ARCHIPLAN et ARCHITRAFIC)\nCloud : enregistrement automatique, dossiers et partage',
     platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/archiphase.svg', image: 'assets/img/archiphase.webp', url: '',
-    website: 'https://groupestudioprism.github.io/ArchiPhase/', featured: true, displayOrder: 4,
+    website: 'https://archiphase.studio-prism.com/', featured: true, displayOrder: 4,
     details: 'ARCHIPHASE est l’outil de planification de la gamme Archi : il reprend l’esprit de GanttProject, avec une interface moderne qui fonctionne aussi au doigt.\n\n' +
       'On crée les tâches, les phases et les jalons, puis on les relie : fin → début, début → début, fin → fin ou début → fin, avec un décalage positif ou négatif. Une barre se déplace en la glissant, sa durée se règle par son bord, son avancement par un curseur ; les tâches liées suivent automatiquement.\n\n' +
       'Le calendrier connaît les jours fériés français (Pâques, Ascension, Pentecôte comprises) et accepte les congés, fermetures et samedis travaillés. Le chemin critique, les marges et le planning de référence montrent où se joue le délai et quels écarts sont apparus depuis l’ordre de service.\n\n' +

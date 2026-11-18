@@ -205,7 +205,7 @@
   }
 
   /* Applications web de Studio Prism, sur le même compte GitHub Pages que ce site (groupestudioprism) */
-  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archiphase: 'https://groupestudioprism.github.io/ArchiPhase/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };   // sous-domaines (CNAME de chaque dépôt)
+  const APP_URLS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archiphase: 'https://archiphase.studio-prism.com/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };   // sous-domaines (CNAME de chaque dépôt)
   /* ARCHITRAFIC : licence gratuite liée au compte (pour l'instant), affichée même sans document de licence */
   const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' },
     { id: 'nexus', name: 'NEXUS', tagline: 'Automatisations entre vos applications Studio Prism, avec l’assistant AXION', lic: 'Offre gratuite (une licence augmente le quota AXION)' },

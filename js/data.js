@@ -337,7 +337,7 @@ export async function deleteLicense(id) {
 export const SUITE_APPS = [
   { id: "archiplan", name: "ARCHIPLAN", tagline: "Conception de plans et modélisation 3D", website: "https://archiplan.studio-prism.com/" },
   { id: "architrafic", name: "ARCHITRAFIC", tagline: "Routes barrées, déviations et simulation du trafic", website: "https://architraffic.studio-prism.com/" },
-  { id: "archiphase", name: "ARCHIPHASE", tagline: "Planification et phasage de projets", website: "https://groupestudioprism.github.io/ArchiPhase/" },
+  { id: "archiphase", name: "ARCHIPHASE", tagline: "Planification et phasage de projets", website: "https://archiphase.studio-prism.com/" },
   { id: "archivision", name: "ArchiVision", tagline: "Maquettes BIM en visite 3D et réalité augmentée" },
   { id: "nexus", name: "NEXUS", tagline: "Automatisations entre les applications Studio Prism, avec AXION", website: "https://groupestudioprism.github.io/Nexus/" }
 ];
