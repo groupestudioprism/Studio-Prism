@@ -93,7 +93,7 @@
     description: 'Planifiez vos chantiers et vos projets sur ordinateur, tablette et téléphone : diagramme de Gantt, jalons, liens entre tâches, jours fériés français, ressources et charges, réseau PERT et chemin critique. Compatible GanttProject et MS Project.',
     availability: 'Gratuit pendant la phase de test — application web, avec un compte Studio Prism',
     info: 'Usage : planification de projets (diagramme de Gantt)\nAppareils : ordinateur, tablette, téléphone (navigateur)\nImports : GanttProject (.gan), MS Project (.xml), tableur (.csv)\nExports : GanttProject, MS Project, CSV, image HD, PDF A3, agenda (.ics)\nCompte : Studio Prism (même compte que ARCHIPLAN et ARCHITRAFIC)\nCloud : enregistrement automatique, dossiers et partage',
-    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/archiphase.svg', image: 'assets/img/archiphase.webp', url: '',
+    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/archiphase.svg', image: 'assets/img/produits/archiphase.webp', url: '',
     website: 'https://archiphase.studio-prism.com/', featured: true, displayOrder: 4,
     details: 'ARCHIPHASE est l’outil de planification de la gamme Archi : il reprend l’esprit de GanttProject, avec une interface moderne qui fonctionne aussi au doigt.\n\n' +
       'On crée les tâches, les phases et les jalons, puis on les relie : fin → début, début → début, fin → fin ou début → fin, avec un décalage positif ou négatif. Une barre se déplace en la glissant, sa durée se règle par son bord, son avancement par un curseur ; les tâches liées suivent automatiquement.\n\n' +
@@ -107,7 +107,7 @@
     description: 'La plateforme de jeux de Prism Game : quatorze mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, boutique, succès, défis du jour) et des classements à cadeaux chaque semaine et chaque mois.',
     availability: 'Gratuit — jouable en ligne, avec ou sans compte Studio Prism',
     info: 'Genre : arcade, réflexion, adresse\nMode : solo (multijoueur prévu)\nAccès : gratuit, dans le navigateur\nProgression : sur le compte Studio Prism (ou sur l’appareil sans compte)\nClassements : par jeu',
-    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/prism-arcade.svg', image: 'assets/img/prism-arcade.webp', url: '',
+    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/prism-arcade.svg', image: 'assets/img/produits/prism-arcade.webp', url: '',
     website: 'https://prismarcade.studio-prism.com/', featured: true, displayOrder: 90,
     details: 'Prism Arcade réunit les jeux de Prism Game sur une seule plateforme web.\n\n' +
       'Quatorze mini-jeux à score : Fusion, Prism Run, Stack, Brick Break, Snake Neon, Gem Match, Block Drop, Flap, Astro Blast, Memory Pulse, Sky Jump, Shard Hit, Color Sort et Tap Tiles.\n\n' +
