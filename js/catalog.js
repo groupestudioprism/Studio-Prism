@@ -41,7 +41,7 @@
      SUITE_APPS : le bouton reste même après « Ajouter au catalogue » (Firestore ne garde pas ce champ). */
   const DIRECT_DL = { pitwall: { url: 'telechargements/PitWall.apk', file: 'PitWall.apk', label: 'Télécharger l’APK' } };
   const dlOf = (p) => DIRECT_DL[p.id] || null;
-  const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/' };
+  const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/', archiphase: 'https://groupestudioprism.github.io/ArchiPhase/' };
   const webOf = (p) => {
     const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
     if (w) return w;

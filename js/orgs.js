@@ -140,7 +140,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       ${r ? `<fieldset class="acc-f"><legend>Clés de licence demandées</legend><label class="chk"><input type="checkbox" name="ap-keys" checked> Générer ${esc(itemsTxt(r.items))} (Pro Entreprise)</label>${fld('ap-dur', 'Validité des clés', sel('ap-dur', DUR, '365'))}</fieldset>` : ''}
       <p class="fe" id="ap-err" role="alert"></p><p><button class="btn b1" type="submit">Valider l’entreprise</button></p></form>`, true);
   }
-  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : pid === 'nexus' ? 'NEXU' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
+  const prefOf = (pid) => pid === 'archiplan' ? 'ARCH' : pid === 'archivision' ? 'AVIS' : pid === 'architrafic' ? 'ATRA' : pid === 'archiphase' ? 'APHS' : pid === 'nexus' ? 'NEXU' : String(pid).replace(/[^a-z]/gi, '').slice(0, 4);
   async function genKeys(od, org, item, n, durationDays, label) {
     const keys = Array.from({ length: n }, () => od.generateKey(prefOf(item.productId)));
     return od.adminCreateKeys(keys, { productId: item.productId, productName: item.productName || item.productId, licenseType: item.licenseType || 'pro_entreprise', durationDays, expiresAt: null, org, label: label || '', role: '', classe: '' });
@@ -358,7 +358,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     } catch (e) { fm.querySelector('#ok-err').textContent = errMsg(e) + (e.key ? ' (' + e.key + ')' : ''); btn.disabled = false; btn.textContent = manual ? 'Enregistrer la clé' : 'Générer'; }
   }
   /* libellé d'une clé de pack, lisible : « Pack : ARCHIPLAN, ARCHITRAFIC · libellé » / « Pack PACK-… (application du pack) » */
-  const pname = (id) => (O.prods.find((p) => p.id === id) || (window.SP?.catalog?.all?.() || []).find((p) => p.id === id) || {}).name || ({ archiplan: 'ARCHIPLAN', architrafic: 'ARCHITRAFIC', archivision: 'ArchiVision' })[id] || id;
+  const pname = (id) => (O.prods.find((p) => p.id === id) || (window.SP?.catalog?.all?.() || []).find((p) => p.id === id) || {}).name || ({ archiplan: 'ARCHIPLAN', architrafic: 'ARCHITRAFIC', archiphase: 'ARCHIPHASE', archivision: 'ArchiVision' })[id] || id;
   function packLabel(l) {
     const m = /^Pack ([a-z0-9_+-]+)(?: · (.*))?$/.exec(l || ''); if (m) return `${badge('bd-pro', 'Pack')} ${esc(m[1].split('+').map(pname).join(', '))}${m[2] ? ' · ' + esc(m[2]) : ''}`;
     const d = /^Pack (PACK-[A-Z0-9-]+)(?: · (.*))?$/.exec(l || ''); if (d) return `<span class="mut">Incluse dans le pack ${esc(d[1])}</span>${d[2] ? ' · ' + esc(d[2]) : ''}`;
@@ -634,7 +634,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
 
   /* ================================================================== UTILISATEUR : ACTIVER UNE CLÉ */
   const PENDING = 'sp.pendingKey';
-  const OPEN_URL = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archivision: 'https://groupestudioprism.github.io/ArchiVision/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };
+  const OPEN_URL = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', archiphase: 'https://groupestudioprism.github.io/ArchiPhase/', archivision: 'https://groupestudioprism.github.io/ArchiVision/', nexus: 'https://groupestudioprism.github.io/Nexus/', 'prism-arcade': 'https://prismarcade.studio-prism.com/' };
   function activatePage() {
     const a = st.auth, pre = (() => { try { return sessionStorage.getItem(PENDING) || ''; } catch (e) { return ''; } })();
     const shell = (inner) => `<section class="pg"><div class="w" style="max-width:640px"><p class="crumb"><a href="#/">Studio Prism</a> / Activer une clé</p><h1>Activer une clé de licence</h1>${inner}</div></section>`;

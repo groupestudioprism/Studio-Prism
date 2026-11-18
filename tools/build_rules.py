@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Règles Firestore de Studio Prism — SOURCE UNIQUE pour tout le projet Firebase « archivision-studioprism »
-(site, ARCHIPLAN, ARCHITRAFIC, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS, PRISM ARCADE, LUMEN).
+(site, ARCHIPLAN, ARCHITRAFIC, ARCHIPHASE, ArchiVision, SPECTRA Writer / Calc / Slide, NEXUS, PRISM ARCADE, LUMEN).
 
 Un projet Firebase n'a qu'UN fichier de règles en ligne : chaque publication remplace tout. Les règles sont donc
 rangées ici en morceaux (firebase/rules/NN-nom.rules, assemblés dans l'ordre des noms) et ce script :
@@ -26,6 +26,7 @@ REQUIRED = {
     'ARCHIPLAN':       ['clientProfiles', 'apProjects', 'apUsage', 'apFolders', 'apShares', 'apGrants', 'apLibrary'],
     'ARCHIVISION':     ['avModels', 'avPhotos', 'arLive'],
     'ARCHITRAFIC':     ['atProjects', 'atUsage', 'atFolders', 'atShares', 'atGrants', 'atLibrary'],
+    'ARCHIPHASE':      ['aphProjects', 'aphUsage', 'aphFolders', 'aphShares', 'aphGrants', 'aphLibrary'],
     'code PIN':        ['userSecrets'],
     'SPECTRA Writer':  ['swDocs', 'swUsage', 'swFolders', 'swShares', 'swGrants', 'swLibrary', 'swPublic'],
     'SPECTRA Calc':    ['scDocs', 'scUsage', 'scFolders', 'scShares', 'scGrants', 'scLibrary', 'scPublic', 'scScripts'],

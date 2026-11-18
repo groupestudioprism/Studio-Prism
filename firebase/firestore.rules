@@ -1330,6 +1330,173 @@ service cloud.firestore {
                             && request.resource.data.updatedAt == request.time;
       allow delete: if isAdmin();
     }
+    //
+    function aphQuota(uid) {
+      let u = get(/databases/$(database)/documents/users/$(uid)).data;
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
+    }
+
+    function aphValidProject(d) {
+      return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['ownerUid', 'ownerEmail', 'ownerName', 'name', 'folderId', 'size', 'thumb', 'linkMode', 'linkKey', 'linkToken',
+                             'linkPw', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'info'])
+        && isString(d.name, 1, 120)
+        && isString(d.get('info', ''), 0, 800)
+        && isString(d.folderId, 0, 40)
+        && isString(d.get('ownerEmail', ''), 0, 160)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && isString(d.get('updatedByName', ''), 0, 160)
+        && isString(d.get('updatedBy', ''), 0, 128)
+        && d.get('size', 0) is int && d.get('size', 0) >= 0 && d.get('size', 0) <= 1000000
+        && isString(d.get('thumb', ''), 0, 90000)
+        && (d.get('thumb', '') == '' || d.thumb.matches('data:image/(jpeg|png|webp);base64,.*'))
+        && d.linkMode in ['off', 'view', 'edit']
+        && isString(d.get('linkKey', ''), 0, 128)
+        && isString(d.get('linkToken', ''), 0, 64)
+        && d.get('linkPw', false) is bool
+        && d.updatedAt == request.time
+        && (d.folderId == '' || !existsAfter(gF('at', d.folderId)) || getAfter(gF('at', d.folderId)).data.ownerUid == d.ownerUid);
+    }
+
+    // ---------------------------------------------------------------- aphProjects
+    match /aphProjects/{pid} {
+      allow get: if gCanRead('at', pid, resource.data);
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser()
+                    && aphValidProject(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && (request.resource.data.ownerUid == request.auth.uid
+                        || (request.resource.data.folderId != '' && gFolderRole('at', request.resource.data.folderId) == 'edit'
+                            && getAfter(gF('at', request.resource.data.folderId)).data.pids.hasAny([pid])))
+                    && gUsageOk('at', request.resource.data.ownerUid, pid, request.resource.data.get('size', 0));
+      allow update: if isSignedIn() && aphValidProject(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && ((resource.data.ownerUid == request.auth.uid && isActiveUser())
+                        || (gCanEdit('at', pid, resource.data)
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['size', 'thumb', 'info', 'updatedAt', 'updatedBy', 'updatedByName'])))
+                    && gUsageOk('at', resource.data.ownerUid, pid, request.resource.data.get('size', 0) - resource.data.get('size', 0));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      match /content/{cid} {
+        allow get: if cid == 'main' && gCanRead('at', pid, get(gP('aphProjects', pid)).data);
+        allow create, update: if cid == 'main'
+                              && gCanEdit('at', pid, getAfter(gP('aphProjects', pid)).data)
+                              && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                              && request.resource.data.data is string
+                              && request.resource.data.data.size() <= 1000000
+                              && request.resource.data.data.size() <= getAfter(gP('aphProjects', pid)).data.get('size', 0) + 2048
+                              && request.resource.data.updatedAt == request.time;
+        allow delete: if isSignedIn() && (!exists(gP('aphProjects', pid)) || get(gP('aphProjects', pid)).data.ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ---------------------------------------------------------------- aphUsage
+    match /aphUsage/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['bytes', 'lastPid', 'updatedAt'])
+                            && request.resource.data.bytes is int && request.resource.data.bytes >= 0
+                            && isString(request.resource.data.lastPid, 0, 40)
+                            && request.resource.data.updatedAt == request.time
+                            && ((resource == null && request.resource.data.lastPid == '')
+                                || request.resource.data.bytes <= (resource == null ? 0 : resource.data.bytes)
+                                || request.resource.data.bytes <= aphQuota(uid))
+                            && (
+                              (resource == null && request.auth.uid == uid && request.resource.data.lastPid == '')
+                              || (request.resource.data.lastPid != ''
+                                  && (existsAfter(gP('aphProjects', request.resource.data.lastPid))
+                                      ? (getAfter(gP('aphProjects', request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == getAfter(gP('aphProjects', request.resource.data.lastPid)).data.get('size', 0)
+                                               - (exists(gP('aphProjects', request.resource.data.lastPid)) ? get(gP('aphProjects', request.resource.data.lastPid)).data.get('size', 0) : 0))
+                                      : (exists(gP('aphProjects', request.resource.data.lastPid))
+                                         && get(gP('aphProjects', request.resource.data.lastPid)).data.ownerUid == uid
+                                         && request.auth.uid == uid
+                                         && request.resource.data.bytes - (resource == null ? 0 : resource.data.bytes)
+                                            == -get(gP('aphProjects', request.resource.data.lastPid)).data.get('size', 0))))
+                            );
+      allow delete: if (isSignedIn() && request.auth.uid == uid
+                    && (resource.data.bytes == 0 || !existsAfter(/databases/$(database)/documents/users/$(uid))))
+                    || isAdmin();
+    }
+
+    // ---------------------------------------------------------------- aphFolders
+    match /aphFolders/{fid} {
+      allow get: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || (isActiveUser() && gFolderRole('at', fid) in ['view', 'edit']));
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && gValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && gValidFolder(request.resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && (resource.data.ownerUid == request.auth.uid
+                        || (gFolderRole('at', fid) == 'edit'
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pids', 'updatedAt'])
+                            && request.resource.data.get('pids', []).hasAll(resource.data.get('pids', []))));
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    function aphValidShare(sid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      return d.keys().hasAll(['email', 'role', 'ownerUid', 'createdAt'])
+        && d.keys().hasOnly(['kind', 'pid', 'fid', 'email', 'role', 'ownerUid', 'name', 'ownerName', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && isEmail(d.email) && d.email == d.email.lower()
+        && d.role in ['view', 'edit']
+        && d.ownerUid == request.auth.uid
+        && isString(d.get('name', ''), 0, 120)
+        && isString(d.get('ownerName', ''), 0, 160)
+        && (folder
+            ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && sid == 'F_' + d.fid + '__' + d.email
+               && get(gF('at', d.fid)).data.ownerUid == request.auth.uid)
+            : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && sid == d.pid + '__' + d.email
+               && get(gP('aphProjects', d.pid)).data.ownerUid == request.auth.uid));
+    }
+
+    // ---------------------------------------------------------------- aphShares
+    match /aphShares/{sid} {
+      allow get, list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == gEmail() || isAdmin());
+      allow create: if isSignedIn() && isActiveUser() && aphValidShare(sid) && request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && isActiveUser() && resource.data.ownerUid == request.auth.uid && aphValidShare(sid);
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.email == gEmail() || isAdmin());
+    }
+
+    function aphValidGrant(gid) {
+      let d = request.resource.data;
+      let folder = d.get('kind', 'project') == 'folder';
+      let t = folder ? get(gF('at', d.get('fid', '-'))).data : get(gP('aphProjects', d.get('pid', '-'))).data;
+      return d.keys().hasOnly(['kind', 'pid', 'fid', 'uid', 'key', 'createdAt'])
+        && d.get('kind', 'project') in ['project', 'folder']
+        && d.uid == request.auth.uid
+        && (folder ? (!('pid' in d) && isString(d.get('fid', ''), 1, 60) && gid == 'F_' + d.fid + '__' + request.auth.uid)
+                   : (!('fid' in d) && isString(d.get('pid', ''), 1, 60) && gid == d.pid + '__' + request.auth.uid))
+        && isString(d.key, 1, 128)
+        && d.createdAt == request.time
+        && t.get('linkMode', 'off') in ['view', 'edit']
+        && t.get('linkKey', '') == d.key;
+    }
+
+    // ---------------------------------------------------------------- aphGrants
+    match /aphGrants/{gid} {
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isActiveUser() && gVerified() && aphValidGrant(gid);
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------------------------------------------------------------- aphLibrary
+    match /aphLibrary/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && isActiveUser()
+                            && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+                            && request.resource.data.data is string
+                            && request.resource.data.data.size() <= 900000
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
     // ---- Gammes de produits (productRanges) ----
     // Une gamme regroupe des produits pour l'affichage (catalogue « Produits », pages des pôles, « Mon compte » › Mes applications).
     // Elle ne contient que des IDENTIFIANTS de produits : la supprimer ne touche à aucun produit (ils s'affichent alors dans « Autres »).
