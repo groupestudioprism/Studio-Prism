@@ -1,0 +1,5 @@
+01-diagramme-de-gantt.webp : Planning d'un chantier de réseaux EU / EP et de voirie dans ARCHIPHASE
+02-chemin-critique.webp : Chemin critique en rouge et fiche de la tâche : dates, liens, ressources
+03-charge-des-ressources.webp : Charge des équipes et des engins jour par jour, surcharges en rouge
+04-reseau-pert.webp : Réseau PERT avec dates au plus tôt et au plus tard
+05-sur-telephone.webp : ARCHIPHASE sur téléphone

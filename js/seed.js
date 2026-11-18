@@ -26,7 +26,7 @@ export const APPS = [
     tagline: "Routes barrées, déviations et simulation du trafic",
     description: "Concevez les plans de signalisation et de déviation de vos chantiers, simulez le trafic et gérez le chantier.",
     features: ["Plans de signalisation temporaire", "Déviations et routes barrées", "Simulation du trafic", "Gestion de chantier", "Compatible ARCHIPLAN"] },
-  { id: "archiphase", name: "ARCHIPHASE", monthly: 9.9, yearly: 99, logo: "assets/img/apps/archiphase.svg", web: "https://groupestudioprism.github.io/ArchiPhase/",
+  { id: "archiphase", name: "ARCHIPHASE", monthly: 9.9, yearly: 99, logo: "assets/img/apps/archiphase.svg", image: "assets/img/archiphase.webp", web: "https://groupestudioprism.github.io/ArchiPhase/",
     tagline: "Planification et phasage de projets",
     description: "Planifiez vos chantiers et vos projets : diagramme de Gantt, ressources, réseau PERT et chemin critique, compatible GanttProject et MS Project.",
     features: ["Diagramme de Gantt et jalons", "Ressources, charges et coûts", "Réseau PERT et chemin critique", "Planning de référence et suivi des écarts", "Import et export GanttProject et MS Project"] },

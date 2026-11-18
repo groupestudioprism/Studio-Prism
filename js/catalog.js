@@ -88,6 +88,20 @@
      masquables et supprimables comme les autres. Limite : un brouillon Firestore n'étant pas lisible par le public, un produit
      dépublié réapparaîtrait depuis ce tableau ; pour le retirer durablement du site, le supprimer aussi de LATEST. */
   const LATEST = [{
+    id: 'archiphase', name: 'ARCHIPHASE', category: 'application', pole: 'app', stage: 'beta', status: 'published',
+    tagline: 'Planification et phasage de projets : Gantt, ressources, PERT et chemin critique',
+    description: 'Planifiez vos chantiers et vos projets sur ordinateur, tablette et téléphone : diagramme de Gantt, jalons, liens entre tâches, jours fériés français, ressources et charges, réseau PERT et chemin critique. Compatible GanttProject et MS Project.',
+    availability: 'Gratuit pendant la phase de test — application web, avec un compte Studio Prism',
+    info: 'Usage : planification de projets (diagramme de Gantt)\nAppareils : ordinateur, tablette, téléphone (navigateur)\nImports : GanttProject (.gan), MS Project (.xml), tableur (.csv)\nExports : GanttProject, MS Project, CSV, image HD, PDF A3, agenda (.ics)\nCompte : Studio Prism (même compte que ARCHIPLAN et ARCHITRAFIC)\nCloud : enregistrement automatique, dossiers et partage',
+    platforms: ['Web', 'Mobile'], logo: 'assets/img/apps/archiphase.svg', image: 'assets/img/archiphase.webp', url: '',
+    website: 'https://groupestudioprism.github.io/ArchiPhase/', featured: true, displayOrder: 4,
+    details: 'ARCHIPHASE est l’outil de planification de la gamme Archi : il reprend l’esprit de GanttProject, avec une interface moderne qui fonctionne aussi au doigt.\n\n' +
+      'On crée les tâches, les phases et les jalons, puis on les relie : fin → début, début → début, fin → fin ou début → fin, avec un décalage positif ou négatif. Une barre se déplace en la glissant, sa durée se règle par son bord, son avancement par un curseur ; les tâches liées suivent automatiquement.\n\n' +
+      'Le calendrier connaît les jours fériés français (Pâques, Ascension, Pentecôte comprises) et accepte les congés, fermetures et samedis travaillés. Le chemin critique, les marges et le planning de référence montrent où se joue le délai et quels écarts sont apparus depuis l’ordre de service.\n\n' +
+      'Les ressources (équipes, personnes, engins, sous-traitants) s’affectent en pourcentage, avec un coût par jour : la vue Ressources signale les surcharges et le projet affiche son coût estimé. Le réseau PERT donne les dates au plus tôt et au plus tard de chaque tâche.\n\n' +
+      'Les plannings s’enregistrent tout seuls dans le cloud Studio Prism, se rangent en dossiers et se partagent. Ils s’ouvrent et s’exportent aux formats GanttProject et MS Project, en CSV, en image, en PDF et en agenda. Des modèles sont fournis : réseaux EU / EP et voirie, conduite AEP, maison individuelle, projet BIM, projet logiciel.',
+    highlights: ['Diagramme de Gantt au glisser-déposer', 'Liens FD, DD, FF, DF avec décalage', 'Jours fériés français automatiques', 'Chemin critique et planning de référence', 'Ressources, charges et coûts', 'Réseau PERT', 'Compatible GanttProject et MS Project', 'Modèles de chantier VRD, AEP, bâtiment, BIM']
+  }, {
     id: 'prism-arcade', name: 'PRISM ARCADE', category: 'game', pole: 'game', stage: 'beta', status: 'published',
     tagline: 'Plateforme de jeux en ligne : 14 mini-jeux et un grand jeu 3D, une seule progression',
     description: 'La plateforme de jeux de Prism Game : quatorze mini-jeux d’arcade jouables dans le navigateur, sur ordinateur comme sur mobile, avec une progression commune (niveaux, boutique, succès, défis du jour) et des classements à cadeaux chaque semaine et chaque mois.',
@@ -125,7 +139,7 @@
     const p3 = {};
     P.forEach((p) => { (p3[p[2]] = p3[p[2]] || []).push('3d-' + p[0]); });
     const out = [
-      { id: 'gamme-archi', name: 'Gamme Archi', description: 'Architecture, BIM et chantier', pole: 'app', displayOrder: 1, productIds: ['archiplan', 'archivision', 'architrafic', 'architraffic'] },
+      { id: 'gamme-archi', name: 'Gamme Archi', description: 'Architecture, BIM et chantier', pole: 'app', displayOrder: 1, productIds: ['archiplan', 'archivision', 'architrafic', 'architraffic', 'archiphase'] },
       { id: 'gamme-spectra', name: 'Gamme SPECTRA', description: 'Bureautique et création', pole: 'app', displayOrder: 2, productIds: ['spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion'] },
       { id: 'plateforme-studio-prism', name: 'Plateforme Studio Prism', description: 'Automatisations, assistant AXION et offres groupées', pole: 'app', displayOrder: 3, productIds: ['nexus', 'studio-prism-etudiant'] },
       { id: 'prism-arcade-jeux', name: 'Jeux en ligne', description: 'Jouables gratuitement dans le navigateur', pole: 'game', displayOrder: 10, productIds: ['prism-arcade'] },
