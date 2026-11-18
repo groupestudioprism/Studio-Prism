@@ -18,15 +18,15 @@ export const COMMON = {
 
 /* Fonctionnalités propres à chaque application. */
 export const APPS = [
-  { id: "archiplan", name: "ARCHIPLAN", monthly: 14.9, yearly: 149, logo: "assets/img/apps/archiplan.svg", image: "assets/img/ArchiPlan.png", web: "https://archiplan.studio-prism.com/",
+  { id: "archiplan", name: "ARCHIPLAN", monthly: 19.9, yearly: 199, logo: "assets/img/apps/archiplan.svg", image: "assets/img/ArchiPlan.png", web: "https://archiplan.studio-prism.com/",
     tagline: "Conception de plans et modélisation 3D",
     description: "Dessinez vos plans, modélisez en 3D, calculez vos quantités et exportez en un seul outil, compatible ArchiVision.",
     features: ["Plans 2D et modélisation 3D", "Métrés et quantités automatiques", "Bibliothèque d’objets et de matériaux", "Compatible ArchiVision (visite 3D et AR)", "Export PDF, images et formats d’échange"] },
-  { id: "architrafic", name: "ARCHITRAFIC", monthly: 12.9, yearly: 129, logo: "assets/img/apps/architrafic.svg", image: "assets/img/ArchiTraffic.jpg", web: "https://architraffic.studio-prism.com/",
+  { id: "architrafic", name: "ARCHITRAFIC", monthly: 14.9, yearly: 149, logo: "assets/img/apps/architrafic.svg", image: "assets/img/ArchiTraffic.jpg", web: "https://architraffic.studio-prism.com/",
     tagline: "Routes barrées, déviations et simulation du trafic",
     description: "Concevez les plans de signalisation et de déviation de vos chantiers, simulez le trafic et gérez le chantier.",
     features: ["Plans de signalisation temporaire", "Déviations et routes barrées", "Simulation du trafic", "Gestion de chantier", "Compatible ARCHIPLAN"] },
-  { id: "archiphase", name: "ARCHIPHASE", monthly: 9.9, yearly: 99, logo: "assets/img/apps/archiphase.svg", image: "assets/img/archiphase.webp", web: "https://archiphase.studio-prism.com/",
+  { id: "archiphase", name: "ARCHIPHASE", monthly: 7.9, yearly: 79, logo: "assets/img/apps/archiphase.svg", image: "assets/img/archiphase.webp", web: "https://archiphase.studio-prism.com/",
     tagline: "Planification et phasage de projets",
     description: "Planifiez vos chantiers et vos projets : diagramme de Gantt, ressources, réseau PERT et chemin critique, compatible GanttProject et MS Project.",
     features: ["Diagramme de Gantt et jalons", "Ressources, charges et coûts", "Réseau PERT et chemin critique", "Planning de référence et suivi des écarts", "Import et export GanttProject et MS Project"] },
@@ -38,16 +38,16 @@ export const APPS = [
     tagline: "Automatisations entre les applications Studio Prism",
     description: "Reliez vos applications et automatisez vos tâches répétitives, avec AXION.",
     features: ["Automatisations entre applications", "Assistant AXION", "Scénarios illimités"] },
-  { id: "spectrawriter", name: "SPECTRA Writer", monthly: 4.9, yearly: 49, logo: "assets/img/apps/writer.svg",
+  { id: "spectrawriter", name: "SPECTRA Writer", free: true, logo: "assets/img/apps/writer.svg",
     tagline: "Traitement de texte", description: "Rédigez rapports, courriers et documents professionnels dans un traitement de texte moderne.",
     features: ["Mise en page professionnelle", "Modèles de documents", "Export PDF et Word"] },
-  { id: "spectracalc", name: "SPECTRA Calc", monthly: 4.9, yearly: 49, logo: "assets/img/apps/calc.svg",
+  { id: "spectracalc", name: "SPECTRA Calc", free: true, logo: "assets/img/apps/calc.svg",
     tagline: "Tableur", description: "Calculs, tableaux et graphiques dans un tableur rapide et complet.",
     features: ["Formules et fonctions avancées", "Graphiques", "Import et export Excel"] },
-  { id: "spectraslide", name: "SPECTRA Slide", monthly: 4.9, yearly: 49, logo: "assets/img/apps/slide.svg",
+  { id: "spectraslide", name: "SPECTRA Slide", free: true, logo: "assets/img/apps/slide.svg",
     tagline: "Présentations", description: "Créez des présentations soignées, prêtes à projeter.",
     features: ["Modèles de présentations", "Transitions et animations", "Export PDF et PowerPoint"] },
-  { id: "spectramotion", name: "SPECTRA Motion", monthly: 7.9, yearly: 79, logo: "assets/img/apps/motion.svg",
+  { id: "spectramotion", name: "SPECTRA Motion", free: true, logo: "assets/img/apps/motion.svg",
     tagline: "Animation et montage", description: "Animez vos visuels et montez vos vidéos de présentation.",
     features: ["Animation de calques", "Montage vidéo", "Export vidéo haute qualité"] }
 ];
@@ -74,6 +74,8 @@ export const DEFAULT_TEMPLATES = [
 
 const plansOf = (a) => {
   const base = { productId: a.id, productName: a.name, status: "active", featured: false };
+  // application 100 % gratuite (gamme SPECTRA) : une seule formule, sans prix
+  if (a.free) return [{ plan: { ...base, id: a.id + "-gratuit", name: "Gratuit", description: "Entièrement gratuit avec un compte Studio Prism : tous les outils, le cloud, l’IA et les exports.", mode: "free", licenseType: "free", features: a.features, displayOrder: 1 }, prices: [] }];
   return [
     { plan: { ...base, id: a.id + "-essai", name: "Essai gratuit", description: "Testez toute l’application pendant 1 mois, sans carte bancaire.", mode: "free", licenseType: "free", features: COMMON.trial, displayOrder: 1 }, prices: [] },
     { plan: { ...base, id: a.id + "-pro", name: "Pro", description: "Toutes les fonctionnalités, mises à jour gratuites. Sans engagement en mensuel, 2 mois offerts en annuel.", mode: "subscription", licenseType: "pro", features: a.features.concat(COMMON.pro), featured: true, displayOrder: 2 },
@@ -88,7 +90,7 @@ export const SEED = {
     .concat([{ id: STUDENT.id, name: STUDENT.name, tagline: STUDENT.tagline, description: STUDENT.description, logo: STUDENT.logo, image: "", website: "", displayOrder: 20 }]),
   plans: APPS.flatMap(plansOf).concat([{
     plan: { productId: STUDENT.id, productName: STUDENT.name, status: "active", featured: true, id: STUDENT.id + "-etudiant", name: "Étudiant", description: "Toutes les applications Studio Prism dans un seul pack, sur justificatif étudiant.",
-      mode: "subscription", licenseType: "etudiant", features: COMMON.student.concat(APPS.map((a) => a.name)), displayOrder: 1 },
+      mode: "subscription", licenseType: "etudiant", features: COMMON.student.concat(APPS.filter((a) => !a.free).map((a) => a.name)), displayOrder: 1 },
     prices: [{ period: "monthly", amount: STUDENT.monthly, currency: "EUR" }, { period: "yearly", amount: STUDENT.yearly, currency: "EUR" }]
   }])
 };

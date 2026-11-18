@@ -2,11 +2,8 @@
     // Storage quota of account uid (the storage owner, not necessarily the writer)
     function swQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectrawriter');
-      return isActiveAdminProfile(u) ? 1000000000
-        : (exists(lp) && get(lp).data.status == 'active'
-           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-        : 10000000;
+      // gamme SPECTRA 100 % gratuite : 50 Mo pour tout compte, 1 Go pour un administrateur
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
     function swValidProject(d) {

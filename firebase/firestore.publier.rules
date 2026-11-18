@@ -1315,11 +1315,7 @@ allow delete: if isAdmin();
 }
 function swQuota(uid) {
 let u = get(/databases/$(database)/documents/users/$(uid)).data;
-let lp = /databases/$(database)/documents/licenses/$(uid + '_spectrawriter');
-return isActiveAdminProfile(u) ? 1000000000
-: (exists(lp) && get(lp).data.status == 'active'
-&& (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-: 10000000;
+return isActiveAdminProfile(u) ? 1000000000 : 50000000;
 }
 function swValidProject(d) {
 return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
@@ -1516,11 +1512,7 @@ allow delete: if isSignedIn() && (!exists(gPub('sw', id)) || get(gPub('sw', id))
 }
 function scQuota(uid) {
 let u = get(/databases/$(database)/documents/users/$(uid)).data;
-let lp = /databases/$(database)/documents/licenses/$(uid + '_spectracalc');
-return isActiveAdminProfile(u) ? 1000000000
-: (exists(lp) && get(lp).data.status == 'active'
-&& (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-: 10000000;
+return isActiveAdminProfile(u) ? 1000000000 : 50000000;
 }
 function scValidProject(d) {
 return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
@@ -1784,11 +1776,7 @@ allow delete: if isSignedIn() && (!exists(scScr(id)) || get(scScr(id)).data.owne
 }
 function ssQuota(uid) {
 let u = get(/databases/$(database)/documents/users/$(uid)).data;
-let lp = /databases/$(database)/documents/licenses/$(uid + '_spectraslide');
-return isActiveAdminProfile(u) ? 1000000000
-: (exists(lp) && get(lp).data.status == 'active'
-&& (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-: 10000000;
+return isActiveAdminProfile(u) ? 1000000000 : 50000000;
 }
 function ssValidProject(d) {
 return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])
@@ -1997,11 +1985,7 @@ allow delete: if isSignedIn() && (!exists(gPub('ss', id)) || get(gPub('ss', id))
 }
 function smQuota(uid) {
 let u = get(/databases/$(database)/documents/users/$(uid)).data;
-let lp = /databases/$(database)/documents/licenses/$(uid + '_spectramotion');
-return isActiveAdminProfile(u) ? 1000000000
-: (exists(lp) && get(lp).data.status == 'active'
-&& (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-: 10000000;
+return isActiveAdminProfile(u) ? 1000000000 : 50000000;
 }
 function smValidProject(d) {
 return d.keys().hasAll(['ownerUid', 'name', 'folderId', 'linkMode', 'createdAt', 'updatedAt'])

@@ -1519,11 +1519,8 @@ service cloud.firestore {
     // Storage quota of account uid (the storage owner, not necessarily the writer)
     function swQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectrawriter');
-      return isActiveAdminProfile(u) ? 1000000000
-        : (exists(lp) && get(lp).data.status == 'active'
-           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-        : 10000000;
+      // gamme SPECTRA 100 % gratuite : 50 Mo pour tout compte, 1 Go pour un administrateur
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
     function swValidProject(d) {
@@ -1762,17 +1759,14 @@ service cloud.firestore {
 //   scShares / scGrants             email and link sharing                  scUsage/{uid}    bytes used (quota)
 //   scLibrary/{uid}                 personal templates                      scPublic/{id}    community templates (moderated)
 //   scScripts/{id}                  community scripts: macros and custom functions (moderated, code in content/main)
-// Licence: licenses/{uid}_spectracalc. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
+// Free app (no paid plan): 50 MB for every account, 1 GB for administrators.
 // =====================================================================================================================
 
     // Storage quota of account uid (the storage owner, not necessarily the writer)
     function scQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectracalc');
-      return isActiveAdminProfile(u) ? 1000000000
-        : (exists(lp) && get(lp).data.status == 'active'
-           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-        : 10000000;
+      // gamme SPECTRA 100 % gratuite : 50 Mo pour tout compte, 1 Go pour un administrateur
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
     function scValidProject(d) {
@@ -2086,17 +2080,14 @@ service cloud.firestore {
 //   ssDocs/{id} (+ content/main)   presentation record + JSON content      ssFolders/{id}   folders
 //   ssShares / ssGrants             email and link sharing                  ssUsage/{uid}    bytes used (quota)
 //   ssLibrary/{uid}                 personal templates                      ssPublic/{id}    community templates (moderated)
-// Licence: licenses/{uid}_spectraslide. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
+// Free app (no paid plan): 50 MB for every account, 1 GB for administrators.
 // =====================================================================================================================
 
     // Storage quota of account uid (the storage owner, not necessarily the writer)
     function ssQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectraslide');
-      return isActiveAdminProfile(u) ? 1000000000
-        : (exists(lp) && get(lp).data.status == 'active'
-           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-        : 10000000;
+      // gamme SPECTRA 100 % gratuite : 50 Mo pour tout compte, 1 Go pour un administrateur
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
     function ssValidProject(d) {
@@ -2347,18 +2338,15 @@ service cloud.firestore {
 //   smLibrary/{uid}                 personal templates
 // Media FILES (images, videos, sounds) are never stored in Firestore: they live in Firebase Storage
 // (spectramotion/{ownerUid}/{projectId}/{file}, see storage.rules at the root of this repository), or only on the user's device.
-// Licence: licenses/{uid}_spectramotion. Quota: 10 MB without licence, 50 MB with licence, 1 GB for administrators.
+// Free app (no paid plan): 50 MB for every account, 1 GB for administrators.
 // Uses isSignedIn(), isActiveUser(), isAdmin(), isActiveAdminProfile(), isString(), isEmail() from the common rules.
 // =====================================================================================================================
 
     // Storage quota of account uid (the storage owner, not necessarily the writer)
     function smQuota(uid) {
       let u = get(/databases/$(database)/documents/users/$(uid)).data;
-      let lp = /databases/$(database)/documents/licenses/$(uid + '_spectramotion');
-      return isActiveAdminProfile(u) ? 1000000000
-        : (exists(lp) && get(lp).data.status == 'active'
-           && (get(lp).data.get('expiresAt', null) == null || get(lp).data.expiresAt > request.time)) ? 50000000
-        : 10000000;
+      // gamme SPECTRA 100 % gratuite : 50 Mo pour tout compte, 1 Go pour un administrateur
+      return isActiveAdminProfile(u) ? 1000000000 : 50000000;
     }
 
     function smValidProject(d) {
