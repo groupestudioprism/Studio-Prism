@@ -1,4 +1,15 @@
 # Changelog
+## Nouveau produit « PITWALL » (Prism Game) — 2026-11-18
+
+Ajout de **PITWALL**, dashboard de télémétrie gratuit pour jeux de course sur téléphone et tablette Android (Gran Turismo 7 et Sport, F1 25 / 24 / 23, Forza Motorsport, Forza Horizon 4 et 5, DiRT Rally 2.0 et DiRT 4). Aucune règle Firestore à republier.
+
+- **Fiche produit** (`js/catalog.js`, tableau `LATEST`) : pôle Prism Game, type Application, avancement Bêta, gratuit, mis en avant, présentation complète et 8 points forts. Affichée dès la mise en ligne dans Produits, sur la page Prism Game et dans Réalisations.
+- **Téléchargement public** : nouveau bouton « Télécharger l’APK » sur la fiche, la page « Voir plus » et la carte du produit (`DIRECT_DL` dans `js/catalog.js`, rangé par identifiant : il reste après « Ajouter au catalogue », sans nouveau champ Firestore). Fichier `telechargements/PitWall.apk` (version 1.2.1, ≈ 50 Mo), informations dans `telechargements/pitwall.json`.
+- **Administration → Téléchargements** (`js/downloads.js`) : nouvelle branche « Prism Game », gamme « Outils pour joueurs », avec la fiche PITWALL.
+- **Visuels** : logo `assets/img/apps/pitwall.svg` (+ `images/icones/pitwall-icone.svg|png`), couverture `assets/img/pitwall.webp|jpg`, galerie `Produits/pitwall/` (8 captures réelles de l’application, avec légendes).
+- **Page Prism Game** : la note sous la grille mentionne PITWALL. Versions de `app.js`, `catalog.js` et `downloads.js` montées dans `index.html`.
+- **Vérifié** dans Chrome (ordinateur et mobile) : fiche, bouton de téléchargement (APK servi en 200), carte sur la page Prism Game, aucune erreur JavaScript. La galerie apparaîtra après la mise à jour automatique de `Produits/manifest.json`.
+
 ## Règles Firestore : sous la limite de taille compilée de Firebase — 2026-11-06
 
 > **Déjà publié** le 06/11/2026 (console Firebase). Pour republier : `firebase deploy --only firestore:rules`, ou coller le fichier complet `firebase/firestore.publier.rules`.

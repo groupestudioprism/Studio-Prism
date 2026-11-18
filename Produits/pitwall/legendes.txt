@@ -1,0 +1,8 @@
+01-gt7-telephone.webp : Dashboard Gran Turismo 7 sur téléphone : shift lights, rapport, chronos, delta, pneus et essence
+02-f1-25-tablette.webp : Dashboard F1 25 sur tablette : compte-tours, ERS, usure des pneus, tracé du circuit et G-force
+03-gt7-tablette.webp : Dashboard Gran Turismo 7 sur tablette, avec analyse de pilotage en bas d'écran
+04-f1-25-telephone.webp : Dashboard F1 25 sur téléphone : position, DRS, limiteur, ERS et essence restante
+05-editeur.webp : Éditeur libre : chaque widget se déplace et se redimensionne au doigt, superposition et doublons permis
+06-mes-dashboards.webp : Mes dashboards : autant que voulu, utilisables avec tous les jeux, export et import en fichier
+07-connexion.webp : Connexion : choix du jeu, adresse IP de la console et aide au réglage pour chaque jeu
+08-diagnostic.webp : Diagnostic de connexion : l'appli indique exactement ce qui bloque

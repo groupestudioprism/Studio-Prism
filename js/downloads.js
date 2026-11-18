@@ -73,6 +73,12 @@
     needs: 'Android 7.0 ou plus récent. Vraie application : elle s’ouvre dans sa propre fenêtre (sans Chrome), joue l’animation d’ouverture et suit automatiquement les mises à jour de l’app en ligne.'
   },
   {
+    id: 'pitwall-android', name: 'PITWALL', asset: 'PitWall.apk', branch: 'prism-game', gamme: 'outils', logo: 'assets/img/apps/pitwall.svg',
+    info: 'telechargements/pitwall.json', version: '1.2.1', date: '18/11/2026', size: '≈ 50 Mo',
+    desc: 'Dashboard de télémétrie pour jeux de course (GT7, F1 25, Forza, DiRT) : éditeur libre, dashboards illimités, export en fichier. Aussi téléchargeable par tous depuis sa fiche produit.',
+    needs: 'Android 7.0 ou plus récent. Téléphone et console (ou PC) sur le même réseau Wi-Fi.'
+  },
+  {
     id: 'spectramotion-android', name: 'SPECTRA Motion', asset: 'SPECTRA-Motion.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/motion.svg',
     version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le studio de création : design, photo, vidéo, animation et audio.',
@@ -137,6 +143,8 @@
     { id: 'prism-app', name: 'Prism App', note: 'Les logiciels Studio Prism', gammes: [
       { id: 'archi', name: 'Gamme Archi', note: 'Architecture, BIM et chantier' },
       { id: 'spectra', name: 'Gamme SPECTRA', note: 'Bureautique et création' }] },
+    { id: 'prism-game', name: 'Prism Game', note: 'Jeux et outils pour joueurs', gammes: [
+      { id: 'outils', name: 'Outils pour joueurs', note: 'Télémétrie et dashboards' }] },
     { id: 'studio', name: 'Studio Prism', note: 'Gestion du site', gammes: [
       { id: 'admin', name: 'Administration', note: 'Réservé aux administrateurs' }] }
   ];

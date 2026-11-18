@@ -37,6 +37,10 @@
 
   /* Lien affichable : https://, #/ (page du site) ou assets/ (fichier du site). Tout le reste (javascript:, data:…) est ignoré. */
   const safeUrl = (u) => (typeof u === 'string' && (/^https:\/\/[^\s<>"]+$/.test(u) || /^#\/[^\s<>"]*$/.test(u) || /^assets\/[^\s<>"]+$/.test(u)) && u.length <= 300 ? u : '');
+  /* Applications à télécharger directement depuis le site (APK publics du dossier telechargements/). Rangé par identifiant, comme
+     SUITE_APPS : le bouton reste même après « Ajouter au catalogue » (Firestore ne garde pas ce champ). */
+  const DIRECT_DL = { pitwall: { url: 'telechargements/PitWall.apk', file: 'PitWall.apk', label: 'Télécharger l’APK' } };
+  const dlOf = (p) => DIRECT_DL[p.id] || null;
   const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/' };
   const webOf = (p) => {
     const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
@@ -97,6 +101,20 @@
       'Chaque jeu a ses classements de la semaine et du mois : le podium gagne des pièces, de l’XP, des coffres et des objets exclusifs.\n\n' +
       'Les grands jeux du studio rejoindront ensuite la plateforme, en solo d’abord puis en multijoueur.',
     highlights: ['14 mini-jeux d’arcade', 'Lumen, aventure-puzzle en 3D (Île 1 jouable)', 'Progression commune : niveaux, boutique, succès', 'Cadeau et défis du jour', 'Classements de la semaine et du mois à cadeaux', 'Sauvegarde sur le compte Studio Prism', 'Ordinateur et mobile', 'Gratuit, sans installation']
+   }, {
+    id: 'pitwall', name: 'PITWALL', category: 'application', pole: 'game', stage: 'beta', status: 'published',
+    tagline: 'Dashboard de télémétrie pour jeux de course, sur téléphone et tablette',
+    description: 'Transforme un téléphone ou une tablette Android en tableau de bord de course en direct : rapport, shift lights, chronos, delta, pneus, essence… Compatible Gran Turismo 7, F1 25, Forza et DiRT, avec un éditeur entièrement libre.',
+    availability: 'Gratuit — application Android (APK) à télécharger',
+    info: 'Genre : outil pour joueurs (sim racing)\nJeux : Gran Turismo 7 et Sport, F1 25 / 24 / 23, Forza Motorsport, Forza Horizon 4 et 5, DiRT Rally 2.0 et DiRT 4\nConsoles : PS5, PS4, Xbox, PC\nAppareils : téléphone et tablette Android 7.0 ou plus récent\nAccès : gratuit, sans compte, sans publicité\nRéseau : local uniquement (rien n’est envoyé sur Internet)',
+    platforms: ['Android'], logo: 'assets/img/apps/pitwall.svg', image: 'assets/img/pitwall.webp', url: '', website: '',
+    featured: true, displayOrder: 91,
+    details: 'PITWALL affiche en direct les données de ta voiture pendant que tu joues : il suffit que le téléphone et la console soient sur le même réseau.\n\n' +
+      'Gran Turismo 7 et Gran Turismo Sport se connectent avec l’adresse IP de la console, sans rien régler dans le jeu. F1 25, F1 24, F1 23, Forza Motorsport, Forza Horizon 4 et 5, DiRT Rally 2.0 et DiRT 4 envoient leur télémétrie vers l’adresse du téléphone, indiquée dans l’application avec l’aide au réglage de chaque jeu.\n\n' +
+      'L’éditeur est entièrement libre : chaque widget se place et se redimensionne au doigt, peut en recouvrir un autre et se dupliquer autant de fois que voulu. Quatorze types de widgets (valeur, rapport, shift lights, barre, cadran, pneus, pédales, tracé du circuit, G-force, graphique, voyant, texte, forme, connexion) et une centaine de données : vitesse, régime, chronos, delta en direct, températures et usure des pneus, freins, essence et autonomie, ERS, DRS, TCS…\n\n' +
+      'On crée autant de dashboards que l’on veut, chacun utilisable avec tous les jeux, sur plusieurs pages. Ils s’exportent et s’importent en fichier pour être partagés. Quatre modèles sont fournis : GT7 et F1 25, sur téléphone et sur tablette.\n\n' +
+      'Si rien ne s’affiche, le diagnostic intégré indique exactement ce qui bloque : réseau, console, réglages du jeu.',
+    highlights: ['Gran Turismo 7 (PS5 et PS4), F1 25, Forza, DiRT', 'Éditeur libre : widgets superposables, sans limite', '14 types de widgets, une centaine de données', 'Delta en direct sur le meilleur tour', 'Dashboards illimités, valables pour tous les jeux', 'Export et import en fichier', 'Modèles téléphone et tablette fournis', 'Gratuit, sans compte ni publicité']
   }];
 
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */
@@ -291,10 +309,10 @@
 
   function pcard(p) {
     const href = productHref(p), chips = planChips(p.plans || []), vis = visual(p);
-    const offers = p.plans && p.plans.length && href !== '#/produits/' + p.id, web = p.website;
+    const offers = p.plans && p.plans.length && href !== '#/produits/' + p.id, web = p.website, dl = dlOf(p);
     return `<article class="card pcard" data-pid="${esc(p.id)}"><a class="pc-a" href="${esc(href)}"><div class="im pim ${POLE_CLS[p.pole]}${vis.charAt(1) === 'i' ? ' pim-i' : ''}" aria-hidden="true">${vis}</div>` +
       `<div class="t">${tags(p)}<h3>${esc(p.name)}</h3>${p.tagline ? `<p class="mt2 pc-t">${esc(p.tagline)}</p>` : ''}${p.description ? `<p class="pc-d">${esc(p.description)}</p>` : ''}</div></a>` +
-      (chips.length || offers || web ? `<div class="pc-f">${chips.slice(0, 3).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}${chips.length > 3 ? `<span class="pc-chip">+ ${chips.length - 3}</span>` : ''}${offers ? `<a class="more" href="#/produits/${esc(p.id)}">Voir les offres →</a>` : ''}${web ? `<a class="more" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Site web ↗</a>` : ''}</div>` : '') +
+      (chips.length || offers || web || dl ? `<div class="pc-f">${chips.slice(0, 3).map((c) => `<span class="pc-chip">${esc(c)}</span>`).join('')}${chips.length > 3 ? `<span class="pc-chip">+ ${chips.length - 3}</span>` : ''}${offers ? `<a class="more" href="#/produits/${esc(p.id)}">Voir les offres →</a>` : ''}${web ? `<a class="more" href="${esc(web)}" target="_blank" rel="noopener noreferrer">Site web ↗</a>` : ''}${dl ? `<a class="more" href="${esc(dl.url)}" download="${esc(dl.file)}">${esc(dl.label)} ↓</a>` : ''}</div>` : '') +
       `</article>`;
   }
 
@@ -489,8 +507,10 @@
   const moreHref = (p) => { const pg = pageOf(p), auto = '#/produits/' + p.id + '/presentation'; return (p.details || (p.highlights || []).length) ? auto : pg && pg !== '#/produits/' + p.id ? pg : auto; };
   function ctaRow(p, here) {
     const plans = p.plans || [];
-    return (p.website ? `<a class="btn b1 ar" href="${esc(p.website)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '') +
-      (here !== 'more' ? `<a class="btn ${p.website ? 'b4' : 'b1'} ar" href="${esc(moreHref(p))}">Voir plus</a>` : `<a class="btn b4 ar" href="#/produits/${esc(p.id)}">Fiche produit</a>`) +
+    const dl = dlOf(p);
+    return (dl ? `<a class="btn b1 ar" href="${esc(dl.url)}" download="${esc(dl.file)}">${esc(dl.label)}</a>` : '') +
+      (p.website ? `<a class="btn ${dl ? 'b4' : 'b1'} ar" href="${esc(p.website)}" target="_blank" rel="noopener noreferrer">Ouvrir ${esc(p.name)}</a>` : '') +
+      (here !== 'more' ? `<a class="btn ${p.website || dl ? 'b4' : 'b1'} ar" href="${esc(moreHref(p))}">Voir plus</a>` : `<a class="btn b4 ar" href="#/produits/${esc(p.id)}">Fiche produit</a>`) +
       (plans.length ? `<a class="btn b4 ar" href="#/abonnements/${esc(p.id)}">Voir les offres</a>` : '') +
       `<a class="btn b4 ar" href="#/contact">Nous contacter</a>`;
   }
