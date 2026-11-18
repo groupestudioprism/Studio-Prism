@@ -1,6 +1,6 @@
-# Images du produit « architrafic »
+# Images du produit « pitwall »
 
-Déposez ici les images à afficher sur la page du produit (https://studio-prism.com/#/produits/architrafic).
+Déposez ici les images à afficher sur la page du produit (https://studio-prism.com/#/produits/pitwall).
 Formats : JPG, PNG, WebP, GIF, AVIF ou SVG. Elles apparaissent sur le site quelques minutes après l'enregistrement (commit).
 
 - **Ordre** : celui des noms de fichier. Commencez-les par un numéro : `01-vue-3d.webp`, `02-plan.webp`…

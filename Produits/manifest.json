@@ -10,9 +10,9 @@
   "3d-sach",
   "3d-tel",
   "3d-usb",
+  "archiphase",
   "archiplan",
   "architraffic",
-  "architrafic",
   "archivision",
   "blackout-protocol",
   "driftline",
@@ -20,6 +20,7 @@
   "mine-craft",
   "nexus",
   "parcel-rush",
+  "pitwall",
   "prism-the-shattered-world",
   "relic-hunters",
   "shift-factory",
@@ -32,6 +33,28 @@
   "tiny-cafe"
  ],
  "products": {
+  "archiphase": [
+   {
+    "file": "01-diagramme-de-gantt.webp",
+    "caption": "Planning d'un chantier de réseaux EU / EP et de voirie dans ARCHIPHASE"
+   },
+   {
+    "file": "02-chemin-critique.webp",
+    "caption": "Chemin critique en rouge et fiche de la tâche : dates, liens, ressources"
+   },
+   {
+    "file": "03-charge-des-ressources.webp",
+    "caption": "Charge des équipes et des engins jour par jour, surcharges en rouge"
+   },
+   {
+    "file": "04-reseau-pert.webp",
+    "caption": "Réseau PERT avec dates au plus tôt et au plus tard"
+   },
+   {
+    "file": "05-sur-telephone.webp",
+    "caption": "ARCHIPHASE sur téléphone"
+   }
+  ],
   "archiplan": [
    {
     "file": "01-vue-3d.webp",
@@ -203,5 +226,5 @@
    }
   ]
  },
- "generated": "2026-11-18T13:01:20+00:00"
+ "generated": "2026-11-18T13:47:54+00:00"
 }
