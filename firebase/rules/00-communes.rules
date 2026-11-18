@@ -405,8 +405,9 @@ service cloud.firestore {
       allow get: if sid == 'catalogue';
       allow create, update: if isAdmin() && sid == 'catalogue'
                             && request.resource.data.keys().hasAll(['builtinImported', 'updatedAt'])
-                            && request.resource.data.keys().hasOnly(['builtinImported', 'updatedAt'])
+                            && request.resource.data.keys().hasOnly(['builtinImported', 'rangesSeeded', 'updatedAt'])
                             && request.resource.data.builtinImported is bool
+                            && request.resource.data.get('rangesSeeded', false) is bool
                             && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }

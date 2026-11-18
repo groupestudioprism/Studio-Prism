@@ -1,4 +1,17 @@
 # Changelog
+## Gammes de produits — 2026-11-18
+
+Les produits se rangent maintenant par **gammes** (Gamme Archi, Gamme SPECTRA, Outils pour joueurs…) au lieu d'être mélangés.
+
+> **À faire** : republier les règles Firestore (fichier complet `firebase/firestore.publier.rules`). Tant qu'elles ne sont pas publiées, le site affiche les gammes de départ et l'administration ne peut pas les modifier (message affiché dans « Produits et prix »).
+
+- **Où** : page « Produits » (sous-titres par gamme dans chaque pôle), pages Prism App / Prism Game / Prism 3D, et « Mon compte » › Mes applications (une grille par gamme). Un produit sans gamme s'affiche dans « Autres produits ».
+- **Administration → Produits et prix** : nouveau bloc « Gammes » par pôle (créer, modifier, supprimer), colonne « Gamme » dans la liste des produits. Une gamme a un nom, une description, un pôle, un ordre d'affichage et ses produits (cases à cocher). Un produit n'appartient qu'à une gamme : le cocher dans une autre l'y déplace. **Supprimer une gamme ne supprime aucun produit.**
+- **Gammes de départ** (`RANGES_DEFAULT`, `js/catalog.js`) : Gamme Archi, Gamme SPECTRA, Plateforme Studio Prism (Prism App) ; Jeux en ligne, Outils pour joueurs, Concepts Roblox (Prism Game) ; Gamme Bureau, Maison, Marque (Prism 3D). Enregistrées dans Firestore à la première ouverture de « Produits et prix » après publication des règles ; ensuite seules celles de Firestore comptent (une gamme supprimée ne revient pas).
+- **Données** : collection `productRanges/{id}` = `{ name, description, pole, displayOrder, productIds[], createdAt, updatedAt }` (seulement des identifiants, aucun champ ajouté aux produits) ; `settings/catalogue.rangesSeeded` note que les gammes de départ ont été enregistrées (l'import du catalogue écrit désormais ce document en fusion pour garder ce réglage).
+- **Règles** : `firebase/rules/16-gammes.rules` (lecture publique, écriture et suppression par les administrateurs, champs et tailles contrôlés) ; `settings/catalogue` accepte `rangesSeeded` (booléen). `tools/build_rules.py` vérifie la collection. 20 nouveaux cas dans `tests/emulateurs` : **99 réussis, 0 en échec**.
+- **Vérifié dans Chrome** : « Produits » et Prism App rangés par gamme, ordinateur et mobile, aucune erreur JavaScript. L'administration et « Mon compte » demandent une connexion : vérifiés par les tests des règles et la relecture du code, pas dans le navigateur.
+
 ## Nouveau produit « PITWALL » (Prism Game) — 2026-11-18
 
 Ajout de **PITWALL**, dashboard de télémétrie gratuit pour jeux de course sur téléphone et tablette Android (Gran Turismo 7 et Sport, F1 25 / 24 / 23, Forza Motorsport, Forza Horizon 4 et 5, DiRT Rally 2.0 et DiRT 4). Aucune règle Firestore à republier.

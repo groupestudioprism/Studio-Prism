@@ -50,7 +50,46 @@ export async function listActivePrices() {
 /* Réglage public : le catalogue intégré au site a-t-il été importé dans Firestore ? (document absent = non) */
 export async function getCatalogueSettings() {
   const snap = await getDoc(doc(db, "settings", "catalogue"));
-  return { builtinImported: !!(snap.exists() && snap.data().builtinImported === true) };
+  const d = snap.exists() ? snap.data() : {};
+  return { builtinImported: d.builtinImported === true, rangesSeeded: d.rangesSeeded === true };
+}
+
+/* ------------------------------------------------------------------ gammes de produits (productRanges)
+   Une gamme = { name, description, pole, displayOrder, productIds[] }. Elle ne fait que REGROUPER des produits pour l'affichage :
+   la supprimer ne touche à aucun produit. Un produit n'est rangé que dans une gamme (la première dans l'ordre d'affichage). */
+export async function listProductRanges() {
+  return rows(await getDocs(collection(db, "productRanges"))).sort(byOrder);
+}
+const rangeData = (r) => ({
+  name: String(r.name || "").trim().slice(0, 60), description: String(r.description || "").trim().slice(0, 300),
+  pole: ["app", "game", "p3d"].includes(r.pole) ? r.pole : "app",
+  displayOrder: Math.max(0, Math.min(9999, Math.round(Number(r.displayOrder) || 0))),
+  productIds: Array.from(new Set((r.productIds || []).filter((x) => typeof x === "string" && x))).slice(0, 80),
+  updatedAt: serverTimestamp()
+});
+/* Enregistre une gamme. `others` : les autres gammes (pour en retirer les produits déplacés ici : un produit, une gamme). */
+export async function saveProductRange(r, isNew, others) {
+  const batch = writeBatch(db), data = rangeData(r), mine = new Set(data.productIds);
+  batch.set(doc(db, "productRanges", r.id), isNew ? { ...data, createdAt: serverTimestamp() } : data, { merge: !isNew });
+  (others || []).forEach((o) => {
+    if (o.id === r.id || !(o.productIds || []).some((x) => mine.has(x))) return;
+    batch.update(doc(db, "productRanges", o.id), { productIds: o.productIds.filter((x) => !mine.has(x)), updatedAt: serverTimestamp() });
+  });
+  await batch.commit();
+}
+export async function deleteProductRange(id) {
+  await deleteDoc(doc(db, "productRanges", id));
+}
+/* Première ouverture : enregistre les gammes de départ (js/catalog.js, RANGES_DEFAULT) absentes, puis note que c'est fait :
+   ensuite seules les gammes de Firestore comptent (en supprimer une ne la fait pas réapparaître). */
+export async function seedProductRanges(list, builtinImported) {
+  const have = new Set((await listProductRanges()).map((r) => r.id));
+  const batch = writeBatch(db);
+  let n = 0;
+  list.filter((r) => !have.has(r.id)).forEach((r) => { batch.set(doc(db, "productRanges", r.id), { ...rangeData(r), createdAt: serverTimestamp() }); n++; });
+  batch.set(doc(db, "settings", "catalogue"), { builtinImported: !!builtinImported, rangesSeeded: true, updatedAt: serverTimestamp() }, { merge: true });
+  await batch.commit();
+  return n;
 }
 
 /* Licences de l'utilisateur connecté (les règles n'autorisent que where userId == son uid). */
@@ -326,7 +365,7 @@ export async function importBuiltins(items) {
     await batch.commit();
   }
   for (const it of todo) await markFolder(it.id);
-  await setDoc(doc(db, "settings", "catalogue"), { builtinImported: true, updatedAt: serverTimestamp() });
+  await setDoc(doc(db, "settings", "catalogue"), { builtinImported: true, updatedAt: serverTimestamp() }, { merge: true });   // merge : garde « rangesSeeded »
   return todo.length;
 }
 

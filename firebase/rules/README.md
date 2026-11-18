@@ -19,6 +19,7 @@ Les règles vivent donc **uniquement ici**, dans le dépôt Studio-Prism. Les d�
 | `13-codes-pin.rules` | code PIN des comptes (`userSecrets`) |
 | `14-offres.rules` | catalogue de fonctionnalités et modèles de fiches produit de l'administration (`settings/offerKit`) |
 | `15-dossiers-produits.rules` | dossiers d'images des produits (`productFolders`), lus par l'action GitHub « Dossiers produits » |
+| `16-gammes.rules` | gammes de produits (`productRanges`) : regroupement d'affichage du catalogue et de « Mon compte » ; ne contient que des identifiants de produits |
 | `20-spectra-writer.rules` · `21-spectra-calc.rules` · `22-spectra-slide.rules` · `23-spectra-motion.rules` | SPECTRA (`sw*`, `sc*`, `ss*`, `sm*`) |
 | `30-nexus.rules` | NEXUS (`nx*`) |
 | `31-prism-arcade.rules` | PRISM ARCADE : progression (`paPlayers`) et classements (`paBoards`, `paPeriods`) |

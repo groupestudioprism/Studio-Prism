@@ -210,9 +210,18 @@
   const FREE_APPS = [{ id: 'architrafic', name: 'ARCHITRAFIC', tagline: 'Routes barrées, déviations automatiques et simulation du trafic en 3D' },
     { id: 'nexus', name: 'NEXUS', tagline: 'Automatisations entre vos applications Studio Prism, avec l’assistant AXION', lic: 'Offre gratuite (une licence augmente le quota AXION)' },
     { id: 'prism-arcade', name: 'PRISM ARCADE', tagline: 'Les mini-jeux de Prism Game : progression sauvegardée sur votre compte et classements', lic: 'Gratuit' }];
-  function freeAppCards(lics) {
-    return FREE_APPS.filter((a) => !lics.some((l) => l.productId === a.id)).map((a) => `<article class="app-card"><div class="app-b"><h3>${esc(a.name)}</h3><p class="mt2">${esc(a.tagline)}</p>` +
-      `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(a.lic || 'Gratuite')}</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>`).join('');
+  function freeAppList(lics) {
+    return FREE_APPS.filter((a) => !lics.some((l) => l.productId === a.id)).map((a) => ({ id: a.id, html: `<article class="app-card"><div class="app-b"><h3>${esc(a.name)}</h3><p class="mt2">${esc(a.tagline)}</p>` +
+      `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(a.lic || 'Gratuite')}</dd></div><div><dt>Statut</dt><dd>${badge('bd-ok', 'Active')}</dd></div></dl><p class="app-btns"><a class="btn b1 ar" href="${esc(APP_URLS[a.id])}" target="_blank" rel="noopener">Ouvrir ${esc(a.name)}</a></p></div></article>` }));
+  }
+
+  /* « Mes applications » rangées par gamme (Gamme Archi, Gamme SPECTRA…) : une grille par gamme, « Autres » à la fin. */
+  function rangedApps(el, cards) {
+    const groups = CATLG.groupByRange(cards);
+    if (groups.length < 2 && !(groups[0] && groups[0].range)) { el.className = 'acc-apps'; el.innerHTML = cards.map((c) => c.html).join(''); return; }
+    el.className = 'acc-rgs';
+    el.innerHTML = groups.map((g, i) => `<div class="acc-rg" role="group" aria-labelledby="acc-rg-${i}"><h3 class="acc-rgh" id="acc-rg-${i}">${esc(g.range ? g.range.name : 'Autres applications')}` +
+      `${g.range && g.range.description ? ` <small class="mut">${esc(g.range.description)}</small>` : ''}</h3><div class="acc-apps">${g.items.map((c) => c.html).join('')}</div></div>`).join('');
   }
 
   function fillAccount(lics) {
@@ -222,12 +231,13 @@
     const apps = document.getElementById('acc-apps'), tbl = document.getElementById('acc-lics'), sum = document.getElementById('acc-sum');
     if (!apps || !tbl) return;
     if (!sorted.length) {
-      apps.innerHTML = freeAppCards([]) + '<div class="panel"><p>Aucune application n’est encore associée à votre compte.</p><p class="mut" style="margin-top:6px">Découvrez les offres Studio Prism : pour en activer une, contactez-nous.</p><p style="margin-top:12px"><a class="btn b1 ar" href="#/abonnements">Voir les abonnements</a></p></div>';
+      rangedApps(apps, freeAppList([]));
+      apps.insertAdjacentHTML('beforeend', '<div class="panel acc-noapp"><p>Aucune application n’est encore associée à votre compte.</p><p class="mut" style="margin-top:6px">Découvrez les offres Studio Prism : pour en activer une, contactez-nous.</p><p style="margin-top:12px"><a class="btn b1 ar" href="#/abonnements">Voir les abonnements</a></p></div>');
       tbl.innerHTML = '<p class="mut">Aucune licence.</p>';
       if (sum) sum.innerHTML = '';
       return;
     }
-    apps.innerHTML = sorted.map((l) => {
+    rangedApps(apps, sorted.map((l) => {
       const p = prods.get(l.productId), s = licState(l), name = (p && p.name) || l.productName;
       // Adresse de l'application : celle de la fiche produit (https) si elle existe, sinon l'application web connue (ARCHIPLAN…)
       const url = (p && p.website) || APP_URLS[l.productId] || '';
@@ -235,10 +245,10 @@
       const open = s === 'active' && url
         ? `<p class="app-btns"><a class="btn b1 ar" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir ${esc(name)}</a> ${more}</p>`
         : `<p class="app-btns"><button class="btn b1" disabled aria-disabled="true">Ouvrir ${esc(name)}</button> ${more}</p><p class="fe" style="display:block">${s !== 'active' ? `Licence ${esc((LIC_STATUS[s] || s).toLowerCase())} : contactez Studio Prism.` : 'Cette application ne s’ouvre pas depuis le navigateur (application à installer).'}</p>`;
-      return `<article class="app-card">${logoImg(p || { name }, 'app-logo')}<div class="app-b"><h3>${esc(name)}</h3><p class="mt2">${esc((p && (p.tagline || TYPES[p.category])) || 'Application')}</p>` +
+      return { id: l.productId, html: `<article class="app-card">${logoImg(p || { name }, 'app-logo')}<div class="app-b"><h3>${esc(name)}</h3><p class="mt2">${esc((p && (p.tagline || TYPES[p.category])) || 'Application')}</p>` +
         `<dl class="app-d"><div><dt>Licence</dt><dd>${esc(typeLabel(l.licenseType))}</dd></div><div><dt>Statut</dt><dd>${licBadge(l)}</dd></div>` +
-        `<div><dt>Activée le</dt><dd>${esc(fdate(l.activatedAt))}</dd></div><div><dt>Expire le</dt><dd>${l.expiresAt ? esc(fdate(l.expiresAt)) : 'Sans date d’expiration'}</dd></div></dl>${open}</div></article>`;
-    }).join('') + freeAppCards(sorted);
+        `<div><dt>Activée le</dt><dd>${esc(fdate(l.activatedAt))}</dd></div><div><dt>Expire le</dt><dd>${l.expiresAt ? esc(fdate(l.expiresAt)) : 'Sans date d’expiration'}</dd></div></dl>${open}</div></article>` };
+    }).concat(freeAppList(sorted)));
     tbl.innerHTML = `<div class="adm-tw"><table class="adm-t lic-t" role="table"><caption class="sr">Mes licences</caption><thead><tr role="row"><th scope="col" role="columnheader">Produit</th><th scope="col" role="columnheader">Licence</th><th scope="col" role="columnheader">Statut</th><th scope="col" role="columnheader">Activation</th><th scope="col" role="columnheader">Expiration</th></tr></thead><tbody>` +
       sorted.map((l) => `<tr role="row"><td role="cell" data-label="Produit"><div class="adm-v"><b>${esc((prods.get(l.productId) || {}).name || l.productName)}</b></div></td><td role="cell" data-label="Licence"><div class="adm-v">${esc(typeLabel(l.licenseType))}</div></td><td role="cell" data-label="Statut"><div class="adm-v">${licBadge(l)}</div></td><td role="cell" class="adm-d" data-label="Activation"><div class="adm-v">${esc(fdate(l.activatedAt))}</div></td><td role="cell" class="adm-d" data-label="Expiration"><div class="adm-v">${l.expiresAt ? esc(fdate(l.expiresAt)) : '—'}</div></td></tr>`).join('') + '</tbody></table></div>';
     if (sum) sum.innerHTML = `<ul class="acc-sumul">${sorted.map((l) => `<li><b>${esc((prods.get(l.productId) || {}).name || l.productName)}</b> — ${esc(typeLabel(l.licenseType))} ${licBadge(l)}</li>`).join('')}</ul>`;
@@ -809,7 +819,7 @@
 
   /* Un produit est enregistré UNE fois ; publié, il apparaît seul dans « Produits », sur la page de son pôle et (mis en avant) dans
      « Réalisations ». Aucune formule, aucun prix, aucun abonnement n'est nécessaire pour créer ou publier un produit. */
-  const CT = { prods: null, plans: null, built: true, pole: '', status: '', error: '' };
+  const CT = { prods: null, plans: null, built: true, pole: '', status: '', error: '', ranges: [], rangesSeeded: false, rangesErr: '', seedTried: false };
   const STATUS_CLS = { published: 'bd-ok', draft: 'bd-off', unavailable: 'bd-warn', archived: 'bd-off' };
   const STATUS_FILTERS = [['', 'Tous les statuts'], ['published', 'Publiés'], ['draft', 'Brouillons'], ['unavailable', 'Indisponibles'], ['archived', 'Archivés']];
   const nProducts = () => CATLG.BUILTIN.length;
@@ -818,6 +828,7 @@
     CT.prods = null; CT.error = '';
     V(shell(`${lede('Catalogue central des produits. Un produit publié apparaît automatiquement dans « Produits », sur la page de son pôle (Prism App, Prism Game, Prism 3D) et, s’il est mis en avant, dans « Réalisations ». Aucune offre n’est obligatoire.')}` +
       `<div id="cat-ban" aria-live="polite"></div>` +
+      `<div id="cat-ranges" aria-live="polite"></div>` +
       `<div class="adm-tools"><div id="cat-fil"></div><button type="button" class="btn b1" data-a="cat-add">+ Ajouter un produit</button></div><div id="cat-list" aria-live="polite"><p class="mut">Chargement du catalogue…</p></div>`));
     loadCatalogueAdmin();
   }
@@ -829,13 +840,133 @@
       CT.prods = prods.map((x) => Object.assign(CATLG.normProduct(x), { source: 'firestore' }));
       CT.plans = CATLG.buildPlans(offers, prices);
       CT.built = settings.builtinImported;
+      CT.rangesSeeded = settings.rangesSeeded;
       CT.error = '';
+      await loadRanges(d);
     } catch (e) {
       console.error('[Studio Prism] Catalogue :', e);
       CT.error = errMsg(e);
     }
     renderCatalogue();
   }
+
+  /* ---------------------------------------------------------------- GAMMES (productRanges)
+     Première ouverture : les gammes de départ (js/catalog.js) sont enregistrées dans Firestore ; ensuite tout se gère ici.
+     Supprimer une gamme ne supprime aucun produit : ses produits s'affichent dans « Autres » jusqu'à leur rangement ailleurs. */
+  async function loadRanges(d) {
+    CT.rangesErr = '';
+    try {
+      if (!CT.rangesSeeded && !CT.seedTried) {
+        CT.seedTried = true;
+        await d.seedProductRanges(CATLG.RANGES_DEFAULT, CT.built);
+        CT.rangesSeeded = true;
+      }
+      CT.ranges = (await d.listProductRanges()).map(CATLG.normRange).sort(CATLG.byRangeOrder);
+    } catch (e) {
+      console.warn('[Studio Prism] Gammes :', e);
+      CT.rangesErr = e && e.code === 'permission-denied'
+        ? 'Les gammes ne peuvent pas encore être enregistrées : publiez les règles Firestore (fichier complet firebase/firestore.publier.rules). En attendant, le site affiche les gammes de départ ci-dessous.'
+        : errMsg(e);
+      CT.ranges = CATLG.RANGES_DEFAULT.map(CATLG.normRange).sort(CATLG.byRangeOrder);
+    }
+    CATLG.setRanges(CT.ranges);
+  }
+
+  const rangeOfAdmin = (id) => CT.ranges.find((r) => r.productIds.includes(id)) || null;
+
+  function renderRanges() {
+    const box = document.getElementById('cat-ranges');
+    if (!box) return;
+    const names = new Map(catalogueRows().map((x) => [x.id, x.name]));
+    const ro = !!CT.rangesErr;
+    const list = (pole) => CT.ranges.filter((r) => r.pole === pole);
+    box.innerHTML = `<section class="panel rg-box" aria-labelledby="rg-t"><div class="fiche-h"><h3 id="rg-t">Gammes</h3>${ro ? '' : '<button type="button" class="btn b1" data-a="rg-add">+ Nouvelle gamme</button>'}</div>` +
+      `<p class="mut" style="margin:6px 0 4px">Les gammes rangent les produits dans « Produits », sur les pages Prism App, Prism Game, Prism 3D et dans « Mon compte » › Mes applications. Un produit appartient à une seule gamme ; sans gamme, il s’affiche dans « Autres produits ». <b>Supprimer une gamme ne supprime aucun produit.</b></p>` +
+      (ro ? `<p class="fe" style="display:block">${esc(CT.rangesErr)}</p>` : '') +
+      CATLG.POLE_ORDER.map((pole) => {
+        const rs = list(pole);
+        const loose = catalogueRows().filter((x) => x.pole === pole && !rangeOfAdmin(x.id));
+        return `<div class="rg-pole"><h4>${esc(POLES[pole])} <span class="mut">${rs.length} gamme${rs.length > 1 ? 's' : ''}</span></h4>` +
+          (rs.length ? `<ul class="rg-list">${rs.map((r) => {
+            const prods = r.productIds.filter((id) => names.has(id)).map((id) => names.get(id));
+            return `<li><div class="rg-n"><b>${esc(r.name)}</b>${r.description ? ` <small class="mut">· ${esc(r.description)}</small>` : ''}` +
+              `<span class="rg-p">${prods.length ? `${prods.length} produit${prods.length > 1 ? 's' : ''} : ${esc(prods.join(', '))}` : 'Aucun produit'}</span></div>` +
+              (ro ? '' : `<div class="rg-act"><button type="button" class="btn b4" data-a="rg-edit" data-id="${esc(r.id)}">Modifier</button> <button type="button" class="btn b4" data-a="rg-del" data-id="${esc(r.id)}">Supprimer</button></div>`) + '</li>';
+          }).join('')}</ul>` : '<p class="mut">Aucune gamme.</p>') +
+          (loose.length ? `<p class="mut rg-loose">Sans gamme (« Autres produits ») : ${esc(loose.map((x) => x.name).join(', '))}</p>` : '') + '</div>';
+      }).join('') + '</section>';
+  }
+
+  function rangeForm(id) {
+    const r = id ? CT.ranges.find((x) => x.id === id) : null;
+    if (id && !r) { toast('Gamme introuvable.'); return; }
+    const rows = catalogueRows(), mine = new Set(r ? r.productIds : []);
+    const nextOrder = CT.ranges.reduce((m, x) => Math.max(m, x.displayOrder), 0) + 1;
+    pmodal(`<h3>${r ? 'Modifier la gamme' : 'Nouvelle gamme'}</h3><form data-f="rg-form" data-id="${esc(r ? r.id : '')}" novalidate>` +
+      fld('rg-name', 'Nom de la gamme', inp('rg-name', 'text', r && r.name, 'maxlength="60" autocomplete="off" placeholder="Gamme Archi"')) +
+      `<div class="row">${fld('rg-pole', 'Pôle', sel('rg-pole', CATLG.POLE_ORDER.map((k) => [k, POLES[k]]), r ? r.pole : (CT.pole || 'app')), 'La gamme s’affiche dans ce pôle.')}` +
+      fld('rg-order', 'Ordre d’affichage', inp('rg-order', 'number', r ? r.displayOrder : nextOrder, 'min="0" max="9999" step="1"'), 'Les gammes d’un pôle s’affichent de la plus petite valeur à la plus grande.') + '</div>' +
+      fld('rg-desc', 'Description <span class="mut">(facultatif)</span>', inp('rg-desc', 'text', r && r.description, 'maxlength="300" autocomplete="off" placeholder="Architecture, BIM et chantier"')) +
+      `<fieldset class="pf-offers rg-pick"><legend>Produits de la gamme</legend><p class="acc-h">Un produit déjà rangé ailleurs est déplacé dans cette gamme.</p>` +
+      CATLG.POLE_ORDER.map((pole) => {
+        const ps = rows.filter((x) => x.pole === pole);
+        return ps.length ? `<div class="rg-pg"><h5>${esc(POLES[pole])}</h5>${ps.map((x) => {
+          const other = rangeOfAdmin(x.id), elsewhere = other && (!r || other.id !== r.id);
+          return `<label class="opt"><input type="checkbox" name="rg-p" value="${esc(x.id)}"${mine.has(x.id) ? ' checked' : ''}> ${esc(x.name)}${elsewhere ? ` <small class="mut">(dans « ${esc(other.name)} »)</small>` : ''}</label>`;
+        }).join('')}</div>` : '';
+      }).join('') + '</fieldset>' +
+      `<p class="fe" id="rg-err" role="alert"></p><p style="margin-top:14px"><button class="btn b1" type="submit">${r ? 'Enregistrer' : 'Créer la gamme'}</button></p></form>`, true);
+    const n = document.getElementById('rg-name'); if (n) n.focus();
+  }
+
+  async function submitRange(fm) {
+    clearErrors();
+    const id0 = fm.dataset.id, g = (n) => fm.elements[n].value.trim(), er = {};
+    const name = g('rg-name'), order = Number(g('rg-order'));
+    if (!name) er['rg-name'] = 'Donnez un nom à la gamme.';
+    if (!Number.isInteger(order) || order < 0 || order > 9999) er['rg-order'] = 'Nombre entier entre 0 et 9999.';
+    if (showErrors(fm, er)) return;
+    let id = id0;
+    if (!id) {
+      const base = slugify(name) || 'gamme';
+      id = /^[a-z0-9]/.test(base) && base.length >= 2 ? base : 'gamme-' + base;
+      let k = 2; while (CT.ranges.some((r) => r.id === id)) id = (base + '-' + k++).slice(0, 60);
+    }
+    const productIds = Array.from(fm.querySelectorAll('input[name="rg-p"]:checked')).map((i) => i.value);
+    setBusy(fm, true, 'Enregistrement…');
+    try {
+      await (await D()).saveProductRange({ id, name, description: g('rg-desc'), pole: g('rg-pole'), displayOrder: order, productIds }, !id0, CT.ranges);
+      resetCatalogue();
+      A.x();
+      toast(id0 ? 'Gamme enregistrée.' : `Gamme « ${name} » créée.`);
+      loadCatalogueAdmin();
+    } catch (e) {
+      const el = document.getElementById('rg-err'); if (el) el.textContent = errMsg(e);
+      setBusy(fm, false);
+    }
+  }
+
+  A['rg-add'] = () => rangeForm('');
+  A['rg-edit'] = (btn) => rangeForm(btn.dataset.id);
+  A['rg-del'] = (btn) => {
+    const r = CT.ranges.find((x) => x.id === btn.dataset.id); if (!r) return;
+    pmodal(`<h3>Supprimer la gamme</h3><p><b>Supprimer la gamme « ${esc(r.name)} » ?</b></p>` +
+      `<p class="mut" style="margin-top:6px">Ses ${r.productIds.length} produit${r.productIds.length > 1 ? 's ne sont pas supprimés' : ' n’est pas supprimé'} : ${r.productIds.length > 1 ? 'ils s’afficheront' : 'il s’affichera'} dans « Autres produits » jusqu’à ce que vous les rangiez dans une autre gamme.</p>` +
+      `<p class="fe" id="rgd-err" role="alert"></p><p style="margin-top:12px"><button class="btn btn-danger" data-a="rg-del-ok" data-id="${esc(r.id)}">Supprimer la gamme</button></p>`);
+  };
+  A['rg-del-ok'] = async (btn) => {
+    btn.disabled = true;
+    try {
+      await (await D()).deleteProductRange(btn.dataset.id);
+      resetCatalogue();
+      A.x();
+      toast('Gamme supprimée. Aucun produit n’a été supprimé.');
+      loadCatalogueAdmin();
+    } catch (e) {
+      const el = document.getElementById('rgd-err'); if (el) el.textContent = errMsg(e);
+      btn.disabled = false;
+    }
+  };
 
   /* Lignes affichées : produits Firestore + (tant que le catalogue du site n'est pas importé) les produits intégrés pas encore en base. */
   function catalogueRows() {
@@ -855,6 +986,7 @@
       return;
     }
     const all = catalogueRows();
+    renderRanges();
     if (ban) {
       const missing = CATLG.BUILTIN.filter((b) => !CT.prods.some((x) => x.id === b.id)).length;
       ban.innerHTML = CT.built ? '' : `<div class="panel cat-ban"><h3>Catalogue intégré au site</h3><p class="mut" style="margin:6px 0 12px">Les ${nProducts()} produits de départ (ArchiVision, concepts Prism Game, créations Prism 3D) sont affichés depuis le site${missing < nProducts() ? ` (${missing} pas encore dans Firestore)` : ''}. Importez-les dans Firestore pour pouvoir les modifier, les masquer, les mettre en avant ou les supprimer ici. Aucun produit existant n’est écrasé.</p>` +
@@ -872,7 +1004,7 @@
     if (!rows.length) { box.innerHTML = '<div class="panel"><p>Aucun produit ne correspond à ces filtres.</p></div>'; return; }
     const cell = (label, html, cls) => `<td role="cell"${cls ? ` class="${cls}"` : ''} data-label="${label}"><div class="adm-v">${html}</div></td>`;
     box.innerHTML = `<div class="adm-tw"><table class="adm-t cat-t" role="table"><caption class="sr">Produits</caption><thead><tr role="row">` +
-      ['Produit', 'Pôle', 'Type', 'Statut', 'Mis en avant', 'Offres'].map((h) => `<th scope="col" role="columnheader">${h}</th>`).join('') + '<th scope="col" role="columnheader"><span class="sr">Actions</span></th></tr></thead><tbody>' +
+      ['Produit', 'Pôle', 'Gamme', 'Type', 'Statut', 'Mis en avant', 'Offres'].map((h) => `<th scope="col" role="columnheader">${h}</th>`).join('') + '<th scope="col" role="columnheader"><span class="sr">Actions</span></th></tr></thead><tbody>' +
       rows.map((x) => {
         const plans = CT.plans.plans.filter((pl) => pl.productId === x.id), act = plans.filter((pl) => pl.status === 'active').length;
         const site = x.source === 'site', pub = x.status === 'published';
@@ -882,7 +1014,7 @@
           ? '<span class="mut">Intégré au site</span>'
           : `<button class="btn b4" data-a="cat-edit" data-id="${esc(x.id)}">Modifier</button> <button class="btn b4" data-a="cat-toggle" data-id="${esc(x.id)}">${pub ? 'Dépublier' : x.status === 'unavailable' ? 'Rendre disponible' : x.status === 'archived' ? 'Republier' : 'Publier'}</button> <button class="btn b4" data-a="cat-del" data-id="${esc(x.id)}">Supprimer</button>`;
         return `<tr role="row">${cell('Produit', `<span class="cat-n">${logoImg(x, 'cat-logo')}<span><b>${esc(x.name)}</b><small>${esc(x.id)}${x.tagline ? ' · ' + esc(x.tagline) : ''}</small></span></span>`)}` +
-          cell('Pôle', esc(POLES[x.pole]), 'adm-d') + cell('Type', esc(TYPES[x.category]), 'adm-d') +
+          cell('Pôle', esc(POLES[x.pole]), 'adm-d') + cell('Gamme', esc((rangeOfAdmin(x.id) || {}).name || '—'), 'adm-d') + cell('Type', esc(TYPES[x.category]), 'adm-d') +
           cell('Statut', badge(STATUS_CLS[x.status] || 'bd-off', STATUS[x.status] || x.status) + (site ? ' ' + badge('bd-kind', 'Site') : '')) +
           cell('Mis en avant', x.featured ? 'Oui' : 'Non', 'adm-d') +
           cell('Offres', plans.length ? `${act} active${act > 1 ? 's' : ''} / ${plans.length}` : 'Aucune', 'adm-d') +
@@ -1495,6 +1627,7 @@
     else if (f === 'adm-lic') submitLicense(e.target);
     else if (f === 'adm-newuser') submitNewUser(e.target);
     else if (f === 'cat-prod') submitProduct(e.target);
+    else if (f === 'rg-form') submitRange(e.target);
     else if (f === 'of-form') submitOffer(e.target);
   });
 

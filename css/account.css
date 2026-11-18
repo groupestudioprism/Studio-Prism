@@ -283,6 +283,32 @@
 .cat-h{display:flex;align-items:baseline;gap:10px;margin:0 0 16px;font-size:clamp(22px,2.4vw,28px)}
 .cat-h a:hover{color:var(--prism)}
 .cat-h .mut{font-size:15px;font-weight:600}
+.cat-sub{margin-top:22px}
+.cat-sub:first-of-type{margin-top:0}
+.cat-sh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);font:700 18px Inter,system-ui,sans-serif}
+.cat-sh .mut{font-size:14px;font-weight:600}
+.cat-shd{flex-basis:100%;color:var(--mut,#64748b);font-size:14px;font-weight:400}
+.cat-sh-row{grid-column:1/-1;margin-top:14px}
+.cat-sh-row:first-child{margin-top:0}
+/* « Mon compte » › Mes applications rangées par gamme */
+.acc-rgs > .acc-rg + .acc-rg{margin-top:22px}
+.acc-rgh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);font:700 17px Inter,system-ui,sans-serif}
+.acc-rgh small{font-weight:400;font-size:14px}
+.acc-rgs > .acc-noapp{margin-top:22px}
+/* administration : gammes */
+.rg-box{margin-bottom:18px}
+.rg-pole{margin-top:16px}
+.rg-pole h4{margin:0 0 8px;font:700 15px Inter,system-ui,sans-serif}
+.rg-pole h4 .mut{font-weight:500;font-size:13px}
+.rg-list{list-style:none;margin:0;padding:0}
+.rg-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:10px 0;border-top:1px solid var(--line)}
+.rg-n{min-width:0;flex:1 1 320px}
+.rg-p{display:block;margin-top:2px;font-size:13px;color:var(--mut,#64748b);overflow-wrap:anywhere}
+.rg-act{display:flex;gap:6px;flex-wrap:wrap}
+.rg-loose{margin-top:6px;font-size:13px}
+.rg-pick .rg-pg{margin-top:10px}
+.rg-pick h5{margin:0 0 4px;font:700 13px Inter,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}
+.rg-pick .opt{display:block;margin:4px 0}
 
 .prod .w{max-width:1200px}
 .prod .pimg{aspect-ratio:4/3;max-height:480px}

@@ -117,6 +117,34 @@
     highlights: ['Gran Turismo 7 (PS5 et PS4), F1 25, Forza, DiRT', 'Éditeur libre : widgets superposables, sans limite', '14 types de widgets, une centaine de données', 'Delta en direct sur le meilleur tour', 'Dashboards illimités, valables pour tous les jeux', 'Export et import en fichier', 'Modèles téléphone et tablette fournis', 'Gratuit, sans compte ni publicité']
   }];
 
+  /* ------------------------------------------------------------------ GAMMES : regroupement des produits pour l'affichage
+     Gammes de départ, enregistrées dans Firestore (productRanges) à la première ouverture de l'administration « Produits et prix » ;
+     ensuite seules celles de Firestore comptent (créées, modifiées, supprimées par l'administration). Une gamme ne contient que des
+     identifiants : la supprimer ne supprime aucun produit. Un produit sans gamme s'affiche dans « Autres » en fin de pôle. */
+  const RANGES_DEFAULT = (function () {
+    const p3 = {};
+    P.forEach((p) => { (p3[p[2]] = p3[p[2]] || []).push('3d-' + p[0]); });
+    const out = [
+      { id: 'gamme-archi', name: 'Gamme Archi', description: 'Architecture, BIM et chantier', pole: 'app', displayOrder: 1, productIds: ['archiplan', 'archivision', 'architrafic', 'architraffic'] },
+      { id: 'gamme-spectra', name: 'Gamme SPECTRA', description: 'Bureautique et création', pole: 'app', displayOrder: 2, productIds: ['spectrawriter', 'spectracalc', 'spectraslide', 'spectramotion'] },
+      { id: 'plateforme-studio-prism', name: 'Plateforme Studio Prism', description: 'Automatisations, assistant AXION et offres groupées', pole: 'app', displayOrder: 3, productIds: ['nexus', 'studio-prism-etudiant'] },
+      { id: 'prism-arcade-jeux', name: 'Jeux en ligne', description: 'Jouables gratuitement dans le navigateur', pole: 'game', displayOrder: 10, productIds: ['prism-arcade'] },
+      { id: 'outils-joueurs', name: 'Outils pour joueurs', description: 'Télémétrie et dashboards pour jeux de course', pole: 'game', displayOrder: 11, productIds: ['pitwall'] },
+      { id: 'concepts-roblox', name: 'Concepts Roblox', description: 'Concepts de jeux en exploration', pole: 'game', displayOrder: 12, productIds: G.map((g) => slug(g[0])) }
+    ];
+    Object.keys(p3).forEach((g, i) => out.push({ id: 'prism-3d-' + slug(g), name: 'Gamme ' + g, description: '', pole: 'p3d', displayOrder: 20 + i, productIds: p3[g] }));
+    return out;
+  })();
+
+  function normRange(r) {
+    return {
+      id: String(r.id || ''), name: String(r.name || '') || 'Gamme', description: typeof r.description === 'string' ? r.description : '',
+      pole: POLES[r.pole] ? r.pole : 'app', displayOrder: Number.isFinite(r.displayOrder) ? r.displayOrder : 0,
+      productIds: Array.isArray(r.productIds) ? r.productIds.filter((x) => typeof x === 'string') : []
+    };
+  }
+  const byRangeOrder = (a, b) => POLE_ORDER.indexOf(a.pole) - POLE_ORDER.indexOf(b.pole) || a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, 'fr');
+
   /* ------------------------------------------------------------------ normalisation (anciens et nouveaux documents) */
 
   function normProduct(p) {
@@ -243,7 +271,22 @@
 
   /* ------------------------------------------------------------------ données publiques (en cache) */
 
-  const C = { done: false, at: 0, p: null, products: [], fsError: null, offersError: null, builtinImported: false };
+  const C = { done: false, at: 0, p: null, products: [], fsError: null, offersError: null, builtinImported: false, ranges: [], rangeOf: new Map() };
+
+  /* Gammes affichées : celles de Firestore dès qu'elles y ont été enregistrées, sinon celles de départ. Un produit = une gamme (la première). */
+  function setRanges(list) {
+    C.ranges = list.map(normRange).sort(byRangeOrder);
+    C.rangeOf = new Map();
+    C.ranges.forEach((r) => r.productIds.forEach((id) => { if (!C.rangeOf.has(id)) C.rangeOf.set(id, r); }));
+  }
+  setRanges(RANGES_DEFAULT);
+
+  /* Regroupe une liste de produits par gamme : [{ range | null, items }], gammes dans leur ordre, « Autres » (null) à la fin. */
+  function groupByRange(list) {
+    const groups = new Map();
+    list.forEach((p) => { const r = C.rangeOf.get(p.id) || null, k = r ? r.id : ''; if (!groups.has(k)) groups.set(k, { range: r, items: [] }); groups.get(k).items.push(p); });
+    return Array.from(groups.values()).sort((a, b) => (!a.range) - (!b.range) || (a.range && b.range ? byRangeOrder(a.range, b.range) : 0));
+  }
   const TTL = 120000; // le catalogue en cache est relu au plus tard après 2 minutes (une modification faite en administration finit par apparaître sans recharger la page)
   const stale = () => !C.done || Date.now() - C.at > TTL;
   const slots = new Set();
@@ -265,9 +308,11 @@
     if (!stale() && !force) return Promise.resolve(C);
     if (C.p) return C.p;
     C.p = K.dataMod()
-      .then((d) => Promise.allSettled([d.listPublicProducts(), d.listActiveOffers(), d.listActivePrices(), d.getCatalogueSettings()]))
-      .catch((e) => [0, 1, 2, 3].map(() => ({ status: 'rejected', reason: e })))
-      .then(([pr, of, px, se]) => {
+      .then((d) => Promise.allSettled([d.listPublicProducts(), d.listActiveOffers(), d.listActivePrices(), d.getCatalogueSettings(), d.listProductRanges()]))
+      .catch((e) => [0, 1, 2, 3, 4].map(() => ({ status: 'rejected', reason: e })))
+      .then(([pr, of, px, se, rg]) => {
+        // gammes : celles de Firestore une fois enregistrées (même si elles ont toutes été supprimées), sinon celles de départ
+        if (settled(se) && settled(se).rangesSeeded && settled(rg)) setRanges(settled(rg)); else setRanges(RANGES_DEFAULT);
         C.fsError = pr.status === 'rejected' ? pr.reason : null;
         C.offersError = of.status === 'rejected' ? of.reason : px.status === 'rejected' ? px.reason : null;
         C.builtinImported = !!(settled(se) && settled(se).builtinImported);
@@ -327,12 +372,29 @@
     return l;
   }
 
+  /* En-tête d'une gamme (nom, description, nombre) ; « Autres produits » pour les produits sans gamme. */
+  function rangeHead(g, tag, cls, id) {
+    const r = g.range, n = g.items.length;
+    return `<${tag} class="${cls}"${id ? ` id="${id}"` : ''}><span class="cat-shn">${esc(r ? r.name : 'Autres produits')}</span> <span class="mut">${n}</span>` +
+      (r && r.description ? `<small class="cat-shd">${esc(r.description)}</small>` : '') + `</${tag}>`;
+  }
+  /* Grille d'un pôle rangée par gammes (une seule grille si aucun produit n'a de gamme). */
+  function rangedGrid(items, pre) {
+    const gr = groupByRange(items);
+    if (!gr.some((g) => g.range)) return `<div class="g">${items.map(pcard).join('')}</div>`;
+    return gr.map((g, i) => `<div class="cat-sub" role="group" aria-labelledby="${pre}-${i}">${rangeHead(g, 'h3', 'cat-sh', pre + '-' + i)}<div class="g">${g.items.map(pcard).join('')}</div></div>`).join('');
+  }
+
   function paint(el) {
     const o = el._o || {};
     if (o.catalogue) return paintCatalogue(el);
     const l = select(o);
     const note = o.note && l.length ? `<p class="pc-note mut">${esc(l.every((p) => p.stage === 'concept') ? o.note[0] : o.note[1])}</p>` : '';
-    el.innerHTML = l.length ? note + l.map(pcard).join('') : `<p class="mut">${esc(o.empty || 'Aucun produit publié pour le moment.')}</p>`;
+    const gr = o.pole && !o.featured ? groupByRange(l) : null;
+    const cards = gr && gr.some((g) => g.range)
+      ? gr.map((g) => rangeHead(g, 'div', 'cat-sh cat-sh-row') + g.items.map(pcard).join('')).join('')
+      : l.map(pcard).join('');
+    el.innerHTML = l.length ? note + cards : `<p class="mut">${esc(o.empty || 'Aucun produit publié pour le moment.')}</p>`;
     const sec = o.hideIfEmpty && el.closest(o.hideIfEmpty);   // hideIfEmpty = sélecteur du bloc à masquer quand il n'y a rien à montrer
     if (sec) sec.hidden = !l.length;
   }
@@ -377,7 +439,7 @@
     }
     grid.innerHTML = POLE_ORDER.filter((k) => l.some((p) => p.pole === k)).map((k) => {
       const items = l.filter((p) => p.pole === k);
-      return `<div class="cat-grp" role="group" aria-labelledby="cg-${k}"><h2 id="cg-${k}" class="cat-h"><a href="${POLE_PAGE[k]}">${esc(POLES[k])}</a> <span class="mut">${items.length}</span></h2><div class="g">${items.map(pcard).join('')}</div></div>`;
+      return `<div class="cat-grp" role="group" aria-labelledby="cg-${k}"><h2 id="cg-${k}" class="cat-h"><a href="${POLE_PAGE[k]}">${esc(POLES[k])}</a> <span class="mut">${items.length}</span></h2>${rangedGrid(items, 'cg-' + k)}</div>`;
     }).join('');
   }
 
@@ -624,6 +686,7 @@
   window.SP.catalog = {
     POLES, POLE_ORDER, POLE_PAGE, TYPES, STATUS, STAGES, MODES, PERIODS, PER, PERIOD_ORDER,
     BUILTIN, LATEST, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
+    RANGES_DEFAULT, normRange, byRangeOrder, ranges: () => C.ranges, rangeOf: (id) => C.rangeOf.get(id) || null, groupByRange, setRanges,
     load, reset, find, featured, all: () => C.products, state: C, mount, pcard, commercial, repaintAll, productHref, hooks, refresh: refreshSlots, picUrl
   };
 })();

@@ -22,7 +22,7 @@ PUB = ROOT / 'firebase' / 'firestore.publier.rules'   # même contenu sans comme
 STORAGE = ROOT / 'firebase' / 'storage.rules'
 STORAGE_REQUIRED = {'médiathèque du site': 'media', 'ARCHIVISION': 'archivision', 'SPECTRA Motion': 'spectramotion'}
 REQUIRED = {
-    'site':            ['users', 'companies', 'products', 'productFolders', 'subscriptions', 'prices', 'licenses', 'licenseKeys', 'licenseRequests', 'organizations', 'settings', 'pages', 'pageDrafts', 'projects', 'media', 'deletedAccounts'],
+    'site':            ['users', 'companies', 'products', 'productFolders', 'productRanges', 'subscriptions', 'prices', 'licenses', 'licenseKeys', 'licenseRequests', 'organizations', 'settings', 'pages', 'pageDrafts', 'projects', 'media', 'deletedAccounts'],
     'ARCHIPLAN':       ['clientProfiles', 'apProjects', 'apUsage', 'apFolders', 'apShares', 'apGrants', 'apLibrary'],
     'ARCHIVISION':     ['avModels', 'avPhotos', 'arLive'],
     'ARCHITRAFIC':     ['atProjects', 'atUsage', 'atFolders', 'atShares', 'atGrants', 'atLibrary'],

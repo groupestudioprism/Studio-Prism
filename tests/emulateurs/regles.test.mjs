@@ -1,5 +1,5 @@
 // npm test (dans ce dossier) : tests sur émulateurs des règles Firestore + Storage de Studio Prism (source unique), pour les parties sans autre suite :
-// ARCHIVISION (avModels, avPhotos, arLive + Storage archivision/), dossiers produits (productFolders),
+// ARCHIVISION (avModels, avPhotos, arLive + Storage archivision/), dossiers produits (productFolders), gammes (productRanges, settings/catalogue),
 // médiathèque du site (Storage media/), PRISM ARCADE (classements), règle finale « tout refusé ».
 import {initializeTestEnvironment, assertSucceeds, assertFails} from '@firebase/rules-unit-testing';
 import firebase from 'firebase/compat/app'; import 'firebase/compat/firestore';
@@ -75,6 +75,29 @@ await t('un utilisateur ne supprime pas de dossier', fa.doc('productFolders/arch
 await t('identifiant invalide refusé', fadm.doc('productFolders/Pas Bon').set({updatedAt: TS()}), false);
 await t('champ en trop refusé', fadm.doc('productFolders/spectrawriter').set({updatedAt: TS(), x: 1}), false);
 await t('l\'administrateur supprime le dossier', fadm.doc('productFolders/archiplan').delete());
+
+console.log('Gammes de produits (productRanges)');
+const range = {name: 'Gamme Archi', description: 'Architecture, BIM et chantier', pole: 'app', displayOrder: 1, productIds: ['archiplan', 'archivision'], createdAt: TS(), updatedAt: TS()};
+await t('l\'administrateur crée une gamme', fadm.doc('productRanges/gamme-archi').set(range));
+await t('lecture publique d\'une gamme (visiteur)', fv.doc('productRanges/gamme-archi').get());
+await t('liste publique des gammes (visiteur)', fv.collection('productRanges').get());
+await t('l\'administrateur modifie la gamme (fusion)', fadm.doc('productRanges/gamme-archi').set({name: 'Archi', pole: 'app', displayOrder: 2, productIds: ['archiplan'], updatedAt: TS()}, {merge: true}));
+await t('l\'administrateur retire un produit (update)', fadm.doc('productRanges/gamme-archi').update({productIds: [], updatedAt: TS()}));
+await t('un utilisateur ne crée pas de gamme', fa.doc('productRanges/pirate').set(range), false);
+await t('un utilisateur ne modifie pas une gamme', fa.doc('productRanges/gamme-archi').update({name: 'X', updatedAt: TS()}), false);
+await t('un utilisateur ne supprime pas une gamme', fa.doc('productRanges/gamme-archi').delete(), false);
+await t('gamme : champ en trop refusé', fadm.doc('productRanges/g2').set({...range, couleur: 'rouge'}), false);
+await t('gamme : pôle inconnu refusé', fadm.doc('productRanges/g3').set({...range, pole: 'autre'}), false);
+await t('gamme : nom vide refusé', fadm.doc('productRanges/g4').set({...range, name: ''}), false);
+await t('gamme : plus de 80 produits refusé', fadm.doc('productRanges/g5').set({...range, productIds: Array.from({length: 81}, (_, i) => 'p' + i)}), false);
+await t('gamme : ordre non entier refusé', fadm.doc('productRanges/g6').set({...range, displayOrder: 1.5}), false);
+await t('gamme : identifiant invalide refusé', fadm.doc('productRanges/Pas Bon').set(range), false);
+await t('l\'administrateur supprime la gamme', fadm.doc('productRanges/gamme-archi').delete());
+await t('settings/catalogue : gammes enregistrées (admin)', fadm.doc('settings/catalogue').set({builtinImported: false, rangesSeeded: true, updatedAt: TS()}));
+await t('settings/catalogue : import du catalogue garde rangesSeeded (fusion)', fadm.doc('settings/catalogue').set({builtinImported: true, updatedAt: TS()}, {merge: true}));
+await t('settings/catalogue : rangesSeeded non booléen refusé', fadm.doc('settings/catalogue').set({builtinImported: true, rangesSeeded: 'oui', updatedAt: TS()}), false);
+await t('settings/catalogue : un utilisateur ne l\'écrit pas', fa.doc('settings/catalogue').set({builtinImported: true, rangesSeeded: false, updatedAt: TS()}), false);
+await t('settings/catalogue : lecture publique', fv.doc('settings/catalogue').get());
 
 console.log('Médiathèque du site (Storage media/)');
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);

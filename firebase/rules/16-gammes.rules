@@ -1,0 +1,18 @@
+    // ---- Gammes de produits (productRanges) ----
+    // Une gamme regroupe des produits pour l'affichage (catalogue « Produits », pages des pôles, « Mon compte » › Mes applications).
+    // Elle ne contient que des IDENTIFIANTS de produits : la supprimer ne touche à aucun produit (ils s'affichent alors dans « Autres »).
+    // Lisible par tous (catalogue public, visiteurs compris) ; créée, modifiée et supprimée par les seuls administrateurs.
+    match /productRanges/{rid} {
+      allow get, list: if true;
+      allow create, update: if isAdmin() && isId(rid)
+                            && request.resource.data.keys().hasAll(['name', 'pole', 'displayOrder', 'productIds', 'updatedAt'])
+                            && request.resource.data.keys().hasOnly(['name', 'description', 'pole', 'displayOrder', 'productIds', 'createdAt', 'updatedAt'])
+                            && isString(request.resource.data.name, 1, 60)
+                            && isString(request.resource.data.get('description', ''), 0, 300)
+                            && request.resource.data.pole in ['app', 'game', 'p3d']
+                            && request.resource.data.displayOrder is int
+                            && request.resource.data.displayOrder >= 0 && request.resource.data.displayOrder <= 9999
+                            && request.resource.data.productIds is list && request.resource.data.productIds.size() <= 80
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
