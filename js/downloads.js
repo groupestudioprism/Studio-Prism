@@ -79,6 +79,12 @@
     needs: 'Android 7.0 ou plus récent. Téléphone et console (ou PC) sur le même réseau Wi-Fi.'
   },
   {
+    id: 'wake-windows', name: 'WAKE', asset: 'WAKE-Setup.exe', branch: 'prism-game', gamme: 'mods', logo: 'assets/img/apps/wake.svg',
+    info: 'telechargements/wake.json', version: '1.0.0', date: '19/11/2026', size: '≈ 0,8 Mo', label: 'Télécharger pour Windows',
+    desc: 'Extension (mod) gratuite pour le jeu PC Design it, Drive it : Speedboats : circuits, monde entier, bots, livrée sponsor, nouveaux menus. Aussi téléchargeable par tous depuis sa fiche produit.',
+    needs: 'Windows 10 ou 11 et le jeu Design it, Drive it : Speedboats (Steam). L’installateur trouve le jeu tout seul et demande les droits administrateur.'
+  },
+  {
     id: 'spectramotion-android', name: 'SPECTRA Motion', asset: 'SPECTRA-Motion.apk', branch: 'prism-app', gamme: 'spectra', logo: 'assets/img/apps/motion.svg',
     version: '1.1.0', date: '12/11/2026', size: '≈ 0,3 Mo',
     desc: 'Le studio de création : design, photo, vidéo, animation et audio.',
@@ -110,7 +116,7 @@
   const isAdmin = () => st.auth.status === 'in' && !!st.auth.profile && st.auth.profile.role === 'admin';
   const how = '<p class="mut dl-how">Le fichier se télécharge directement sur l’appareil, après confirmation. ' +
     'Sur un téléphone Android : ouvrir le fichier .apk depuis les téléchargements, puis autoriser « Installer des applis inconnues » si Android le demande.</p>';
-  const btn = (f) => `<button type="button" class="btn b1" data-a="dl-ask" data-id="${esc(f.id)}">Télécharger l’APK</button>`;
+  const btn = (f) => `<button type="button" class="btn b1" data-a="dl-ask" data-id="${esc(f.id)}">${esc(f.label || 'Télécharger l’APK')}</button>`;
 
   /* Clic → fenêtre de confirmation → téléchargement direct. */
   A['dl-ask'] = (b) => {
@@ -119,7 +125,7 @@
     refresh(f).then(() => modal(`<h3>Télécharger ${esc(f.name)} ?</h3>
       <p class="mut" data-dl-meta="${esc(f.id)}">${esc(meta(f))}</p>
       <p>Le fichier <b>${esc(f.file || f.asset)}</b> va être enregistré sur cet appareil.</p>
-      <p class="mut dl-how">Android : une fois téléchargé, ouvrez-le et autorisez l’installation si le téléphone le demande. Sur ordinateur, transférez-le ensuite sur le téléphone.</p>
+      <p class="mut dl-how">${/\.exe$/i.test(f.file || f.asset) ? 'Windows : ouvrez le fichier téléchargé ; si SmartScreen s’affiche, cliquez sur « Informations complémentaires » puis « Exécuter quand même ».' : 'Android : une fois téléchargé, ouvrez-le et autorisez l’installation si le téléphone le demande. Sur ordinateur, transférez-le ensuite sur le téléphone.'}</p>
       <p class="dl-act"><button type="button" class="btn b1" data-a="dl-go" data-id="${esc(f.id)}">Autoriser le téléchargement</button></p>`));
   };
   A['dl-go'] = (b) => {
@@ -144,7 +150,8 @@
       { id: 'archi', name: 'Gamme Archi', note: 'Architecture, BIM et chantier' },
       { id: 'spectra', name: 'Gamme SPECTRA', note: 'Bureautique et création' }] },
     { id: 'prism-game', name: 'Prism Game', note: 'Jeux et outils pour joueurs', gammes: [
-      { id: 'outils', name: 'Outils pour joueurs', note: 'Télémétrie et dashboards' }] },
+      { id: 'outils', name: 'Outils pour joueurs', note: 'Télémétrie et dashboards' },
+      { id: 'mods', name: 'Mods et extensions', note: 'Extensions gratuites pour des jeux PC' }] },
     { id: 'studio', name: 'Studio Prism', note: 'Gestion du site', gammes: [
       { id: 'admin', name: 'Administration', note: 'Réservé aux administrateurs' }] }
   ];
