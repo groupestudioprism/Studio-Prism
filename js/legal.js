@@ -97,7 +97,7 @@
       'Votre session de connexion (Firebase Authentication, dans le stockage du navigateur) : nécessaire pour rester connecté.',
       'Vos préférences (thème, affichage), le panier, l’identifiant de l’appareil autorisé et les projets non encore enregistrés dans le cloud.']) +
       '<p>Ces données sont strictement nécessaires au service que vous demandez : elles sont exemptées de consentement (art. 82 de la loi Informatique et Libertés). Elles ne servent pas à vous suivre et restent sur votre appareil.</p>'],
-    ['Ressources externes', 'Les polices de caractères et la bibliothèque 3D sont hébergées par Studio Prism. Seules les bibliothèques Firebase sont chargées depuis les serveurs de Google, qui reçoivent alors votre adresse IP, pour la connexion et l’enregistrement des données.'],
+    ['Ressources externes', 'Les polices de l’interface et la bibliothèque 3D sont hébergées par Studio Prism. Les bibliothèques Firebase sont chargées depuis les serveurs de Google, qui reçoivent alors votre adresse IP, pour la connexion et l’enregistrement des données. Dans les applications SPECTRA, une police de document que vous choisissez dans la liste des polices est téléchargée depuis Google Fonts au moment où vous la choisissez.'],
     ['Gérer vos choix', 'Vous pouvez effacer ces données à tout moment depuis les réglages de votre navigateur (vous serez alors déconnecté). Si un outil soumis à consentement était ajouté un jour, votre accord serait demandé au préalable, avec un bouton « Tout refuser » aussi visible que « Tout accepter ».'],
     ['Contact', `Une question ? ${MAIL} ou le ${link('#/contact', 'formulaire de contact')}.`]
   ];
