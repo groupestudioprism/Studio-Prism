@@ -224,7 +224,21 @@
     "file": "02-accueil.webp",
     "caption": "Accueil : « Que voulez-vous écrire ? » et les modèles"
    }
+  ],
+  "wake": [
+   {
+    "file": "01-wake.webp",
+    "caption": "WAKE, l'extension gratuite de Prism Game pour Design it, Drive it : Speedboats"
+   },
+   {
+    "file": "02-garage-livree.webp",
+    "caption": "Le garage : autocollants sponsors collés sur la coque, aperçu du bateau en direct"
+   },
+   {
+    "file": "03-course-contre-les-bots.webp",
+    "caption": "Course officielle contre 3 bots : classement en direct, mini-carte et compteur de vitesse"
+   }
   ]
  },
- "generated": "2026-11-18T13:47:54+00:00"
+ "generated": "2026-11-19T06:03:31+00:00"
 }
