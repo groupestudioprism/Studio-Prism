@@ -480,7 +480,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
     'todo-reload': () => { T.at = 0; loadTodo(); },
     'todo-approve': (b) => quickApprove(b),
     'todo-member': (b) => quickMember(b),
-    'todo-users': () => { window.SP_ADM_Q = T.q.trim(); location.hash = '#/admin/comptes'; },
+    'todo-users': () => { window.SP_ADM_Q = T.q.trim(); SPR.go('#/admin/comptes'); },
     'org-pending': () => { O.showPending = !O.showPending; renderPending(); },
     'org-approve': (b) => approveForm(b.dataset.uid),
     'org-req-ok': (b) => memberForm(b.dataset.id),
@@ -649,7 +649,7 @@ ${seg === 'ent' ? '<div id="org-pending"></div>' : ''}
       <div id="kr-peek" class="mt2"></div><p class="fe" id="kr-err" role="alert"></p><p style="margin-top:12px"><button class="btn b1" type="submit">Activer</button> <a class="btn b4" href="#/compte">Mon compte</a></p></form>`));
     if (pre) peek(pre);
   }
-  A['key-remember'] = (b) => { try { const v = document.getElementById('kr-key')?.value.trim(); if (v) sessionStorage.setItem(PENDING, v); } catch (e) { /* stockage indisponible */ } location.hash = b.getAttribute('href'); };
+  A['key-remember'] = (b) => { try { const v = document.getElementById('kr-key')?.value.trim(); if (v) sessionStorage.setItem(PENDING, v); } catch (e) { /* stockage indisponible */ } SPR.go(SPR.href(b)); };
   let peekT = 0;
   async function peek(v) {
     const box = document.getElementById('kr-peek'); if (!box) return;

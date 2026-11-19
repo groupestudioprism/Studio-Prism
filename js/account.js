@@ -118,7 +118,7 @@
   function redirect(h) {
     const k = h.replace(/^#\/?/, '');
     if (k === CUR) return;
-    try { history.replaceState(null, '', '#/' + k); } catch (e) { /* ignore */ }
+    try { history.replaceState(null, '', SPR.url(k)); } catch (e) { /* ignore */ }
     const prev = CUR;
     CUR = k;
     navTo({ from: prev });
@@ -728,7 +728,7 @@ ${sel('adm-seen', 'Activité', [['', 'Toutes'], ['30', 'Connecté ces 30 jours']
 
   A['adm-more'] = () => loadAdmin(true);
   /* Validation manuelle d'un compte Entreprise : pending → active. Refus : la demande est supprimée (même suppression que « Supprimer »). */
-  A['adm-go-pending'] = (b) => { window.SP_OPEN_PENDING = true; location.hash = b.getAttribute('href'); };
+  A['adm-go-pending'] = (b) => { window.SP_OPEN_PENDING = true; SPR.go(SPR.href(b)); };
   A['adm-approve'] = async (btn) => {
     const u = AD.users.find((x) => x.uid === btn.dataset.uid); if (!u) return;
     btn.disabled = true;

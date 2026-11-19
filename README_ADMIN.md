@@ -250,3 +250,15 @@ Administration → **Téléchargements** (et l'encart « Version Android » de l
 - Le fichier est hébergé par le site lui-même : dossier `telechargements/` de ce dépôt.
 - **Publier une nouvelle version** : remplacer `telechargements/ArchiVision.apk` (garder exactement ce nom) et mettre à jour `version`, `date` (AAAA-MM-JJ) et `size` (taille en octets) dans `telechargements/archivision.json`. Le site affiche tout seul la nouvelle version.
 - ⚠ Un fichier publié sur le site est téléchargeable par quiconque a le lien. Le bouton n'est montré qu'aux administrateurs ; l'app reste protégée par la connexion Studio Prism et la licence ARCHIVISION.
+
+## Pages légales et référencement (19/11/2026)
+
+- **Identité affichée dans Mentions légales, CGV et Confidentialité** : Administration › Infos légales (raison sociale, forme, capital,
+  adresse, SIRET, RCS, TVA, e-mail, téléphone, **directeur de la publication**, **médiateur de la consommation**). Une copie publique
+  sans IBAN est écrite dans `settings/legal`. Tant qu'un champ est vide, la page affiche « [À COMPLÉTER] ». Textes : `js/legal.js`.
+- **Rétractation** : un client peut se rétracter 14 jours après l'acceptation d'un devis (bouton dans Mon compte). Le devis passe en
+  « Rétracté » : remboursez-le sous 14 jours et désactivez ses clés.
+- **Adresses** : le site utilise de vraies adresses (`/produits/archiphase`) ; les anciennes en `#/` sont converties (`js/spr.js`).
+- **Publication** : l'action « Publication du site » (`.github/workflows/pages.yml`) écrit une page pré-rendue par adresse,
+  `sitemap.xml` et `robots.txt` (`tools/build_pages.py`). Réglage nécessaire une fois : Settings › Pages › Source = GitHub Actions.
+- **Google Search Console** : ajouter la propriété `studio-prism.com` (validation DNS) puis envoyer `https://studio-prism.com/sitemap.xml`.

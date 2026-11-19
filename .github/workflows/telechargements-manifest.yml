@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
 jobs:
   manifest:
     runs-on: ubuntu-latest
@@ -14,8 +15,13 @@ jobs:
       - name: Générer telechargements/manifest.json
         run: python3 tools/build_downloads_manifest.py
       - name: Publier le manifeste
+        id: pub
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
           git add telechargements/manifest.json
-          git diff --cached --quiet || (git commit -m "Manifeste des téléchargements (automatique)" && git push)
+          git diff --cached --quiet || (git commit -m "Manifeste des téléchargements (automatique)" && git push && echo "pushed=1" >> "$GITHUB_OUTPUT")
+      - name: Republier le site (un commit de l'action ne déclenche pas la publication)
+        if: steps.pub.outputs.pushed == '1'
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh workflow run pages.yml --ref main || true

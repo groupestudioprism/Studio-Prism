@@ -561,7 +561,7 @@
     try { await navigator.clipboard.writeText(el ? el.value : ''); toast('Adresse copiée.'); } catch (e) { if (el) { el.focus(); el.select(); } toast('Sélectionnez l’adresse puis copiez-la (Ctrl+C).'); }
     if (btn) btn.blur();
   };
-  const regUrl = () => location.href.split('#')[0] + '#/compte/inscription';
+  const regUrl = () => location.origin + '/compte/inscription';
   A['adm-add-user'] = () => {
     if (false) {
       pmodal(`<h3>Ajouter un utilisateur</h3><p>Créer un compte à la place d’un utilisateur exige un accès privilégié (serveur), indisponible avec le forfait gratuit Firebase Spark. Le site n’en a pas besoin pour fonctionner.</p>` +

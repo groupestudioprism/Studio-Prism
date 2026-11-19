@@ -417,8 +417,18 @@ service cloud.firestore {
       allow create, update: if isAdmin()
                             && request.resource.data.keys().hasOnly(['legalName', 'tradeName', 'legalForm', 'capital', 'address', 'siret', 'rcs', 'vatMode',
                                                                      'vatNumber', 'vatRate', 'email', 'phone', 'website', 'iban', 'bic', 'bank', 'paymentTerms',
-                                                                     'latePenalty', 'validDays', 'footer', 'updatedAt'])
+                                                                     'latePenalty', 'validDays', 'footer', 'director', 'mediatorName', 'mediatorUrl', 'updatedAt'])
                             && request.resource.data.get('vatMode', 'tva') in ['tva', 'franchise']
+                            && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // informations légales publiques (mentions légales, CGV, confidentialité) : lues par tous les visiteurs, recopiées de settings/company
+    match /settings/legal {
+      allow get: if true;
+      allow create, update: if isAdmin()
+                            && request.resource.data.keys().hasOnly(['legalName', 'tradeName', 'legalForm', 'capital', 'address', 'siret', 'rcs', 'vatMode',
+                                                                     'vatNumber', 'email', 'phone', 'director', 'mediatorName', 'mediatorUrl', 'updatedAt'])
                             && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }

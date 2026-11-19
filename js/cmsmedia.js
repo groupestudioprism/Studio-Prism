@@ -403,5 +403,5 @@
     pick({ kind: 'image', onPick: (ref) => { const el = document.getElementById(id); if (el) { el.value = ref; el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); } } });
   };
 
-  Object.assign(R, { 'admin/medias': () => { location.replace('#/admin'); } });   // onglet Médiathèque retiré de l'administration (le sélecteur d'images des pages reste disponible)
+  Object.assign(R, { 'admin/medias': () => { history.replaceState(null, '', '/admin'); CUR = 'admin'; route(); } });   // onglet Médiathèque retiré de l'administration (le sélecteur d'images des pages reste disponible)
 })();

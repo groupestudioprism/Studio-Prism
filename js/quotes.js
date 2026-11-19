@@ -32,7 +32,7 @@
   const pmodal = (h, wide) => { A.x(); modal(h); const m = document.querySelector('.mod'); if (m && wide) m.classList.add('mod-w', 'mod-q'); return m; };
   const ms = (t) => (t && t.toMillis ? t.toMillis() : 0);
   const SITE = () => location.origin + location.pathname;
-  const hashId = (n) => decodeURIComponent((location.hash.split('?')[0].split('/')[n] || ''));
+  const hashId = (n) => decodeURIComponent((SPR.hash().split('?')[0].split('/')[n] || ''));
 
   const Q = { list: null, err: '', at: 0, company: undefined, plans: null, f: '', q: '', paidKeys: {}, mod: null };
   let MODS = null; const mods = async () => (MODS = MODS || await QD());
@@ -327,7 +327,7 @@
     a.href = URL.createObjectURL(blob); a.download = `registre-devis-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
   A['q-del'] = (b) => pmodal(`<h3>Supprimer ce brouillon ?</h3><p>Un brouillon n’a pas encore de numéro : le supprimer ne crée pas de trou dans la numérotation.</p><p><button class="btn btn-danger" data-a="q-del-ok" data-id="${esc(b.dataset.id)}">Supprimer</button></p>`);
-  A['q-del-ok'] = async (b) => { try { await MODS.deleteDraft(b.dataset.id); A.x(); await load(true); toast('Brouillon supprimé.'); location.hash = '#/admin/devis'; } catch (e) { toast(errMsg(e)); } };
+  A['q-del-ok'] = async (b) => { try { await MODS.deleteDraft(b.dataset.id); A.x(); await load(true); toast('Brouillon supprimé.'); SPR.go('#/admin/devis'); } catch (e) { toast(errMsg(e)); } };
   A['q-cancel'] = (b) => pmodal(`<h3>Annuler ce devis ?</h3><p>Il reste dans le registre avec la mention « Annulé » (un devis émis ne se supprime pas) et le client ne peut plus l’accepter.</p><form data-f="q-cancel" data-id="${esc(b.dataset.id)}">${fld('qc-r', 'Motif <span class="mut">(facultatif)</span>', inp('qc-r', 'text', '', 'maxlength="300"'))}<p class="fe" id="qc-err" role="alert"></p><p><button class="btn btn-danger" type="submit">Annuler le devis</button></p></form>`);
   A['q-acc-admin'] = (b) => pmodal(`<h3>Accord du client reçu</h3><p>À utiliser quand le client a renvoyé le devis signé « Bon pour accord » (papier, PDF signé, e-mail). Conservez ce document.</p><form data-f="q-acc-admin" data-id="${esc(b.dataset.id)}">${fld('qa-n', 'Nom du signataire', inp('qa-n', 'text', '', 'maxlength="160" required'))}<p class="fe" id="qa-err" role="alert"></p><p><button class="btn b1" type="submit">Enregistrer l’accord</button></p></form>`);
   /* Paiement reçu : clés générées d'après les lignes « licence » du devis (quantité, application, durée de la période), au nom de l'entreprise. */
@@ -349,7 +349,7 @@
       if (!made) { made = []; for (const l of (q.lines || []).filter((x) => x.productId && x.qty > 0)) (await ok.genKeys(od, org, { productId: l.productId, productName: pname(l.productId), licenseType: l.licenseType || 'pro_entreprise' }, l.qty, days, `Devis ${q.number}`)).forEach((k) => made.push({ ...k, app: pname(l.productId) })); Q.paidKeys[id] = made; }
       await qd.adminMarkPaid(id, fm.elements['qp-ref'].value, made.map((k) => k.id)); delete Q.paidKeys[id];
       await Promise.all([load(true), ok.reload()]); afterChange();
-      if (location.hash.indexOf('#/admin/devis/') === 0) R['admin/devis']();
+      if (SPR.hash().indexOf('#/admin/devis/') === 0) R['admin/devis']();
       if (made.length) ok.keysResult(`${made.length} clé${made.length > 1 ? 's' : ''} générée${made.length > 1 ? 's' : ''} · ${q.number}`, org || { id: '', name: q.client?.name || '' }, made.map((k) => `${k.key}  ·  ${k.app}`));
       else { A.x(); toast('Paiement enregistré.'); }
     } catch (e) { console.error('[Studio Prism] Paiement :', e); err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Réessayer'; }
@@ -380,6 +380,10 @@
       ${f('paymentTerms', 'Conditions de paiement par défaut', area('lg-paymentTerms', v('paymentTerms', qd.DEFAULT_TERMS), 'rows="3" maxlength="2000"'))}
       ${f('latePenalty', 'Pénalités de retard (mention obligatoire entre professionnels)', area('lg-latePenalty', v('latePenalty', qd.DEFAULT_PENALTY), 'rows="3" maxlength="600"'))}
       ${f('footer', 'Mentions complémentaires <span class="mut">(facultatif)</span>', area('lg-footer', v('footer'), 'rows="2" maxlength="400"'))}
+      <h3 class="lh">Site internet (mentions légales, CGV)</h3>
+      <p class="acc-h">Affichées aux visiteurs dans <a class="more" href="#/mentions-legales">Mentions légales</a>, <a class="more" href="#/cgv">CGV</a> et <a class="more" href="#/confidentialite">Confidentialité</a>, avec l’identité, l’adresse, l’e-mail et le téléphone ci-dessus (jamais l’IBAN).</p>
+      ${f('director', 'Directeur de la publication', inp('lg-director', 'text', v('director'), 'maxlength="120" placeholder="Prénom Nom, qualité"'), 'Le représentant légal, en général le gérant ou le président.')}
+      <div class="row">${f('mediatorName', 'Médiateur de la consommation', inp('lg-mediatorName', 'text', v('mediatorName'), 'maxlength="160"'), 'Obligatoire dès que vous vendez à des particuliers (art. L612-1 du Code de la consommation).')}${f('mediatorUrl', 'Site du médiateur', inp('lg-mediatorUrl', 'url', v('mediatorUrl'), 'maxlength="200" placeholder="https://…"'))}</div>
       <p class="fe" id="lg-err" role="alert"></p><p><button class="btn b1" type="submit">Enregistrer</button></p></form>`;
   }
   async function submitLegal(fm) {
@@ -390,6 +394,7 @@
     c.iban = c.iban.replace(/\s/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim(); c.vatNumber = c.vatNumber.replace(/\s/g, '').toUpperCase();
     if (c.siret && !K.siretOk(c.siret)) er['lg-siret'] = 'SIRET invalide (14 chiffres).';
     if (c.email && !K.EMAIL_RE.test(c.email)) er['lg-email'] = 'E-mail invalide.';
+    if (c.mediatorUrl && !/^https:\/\/[^\s<>"']+$/.test(c.mediatorUrl)) er['lg-mediatorUrl'] = 'Adresse en https://… attendue.';
     if (K.showErrors(fm, er)) return;
     btn.disabled = true; btn.textContent = 'Enregistrement…';
     try { await qd.saveCompany(c); Q.company = { ...c }; Q.companyErr = ''; const miss = qd.companyMissing(c);
@@ -424,7 +429,8 @@
         <label class="opt"><input type="checkbox" id="qx-ok"><span>J’ai lu ce devis et je l’accepte sans réserve : <b>bon pour accord</b>, valant engagement de commande de ${esc(eur(q.totalTTC))}.</span></label><p class="fe" id="e-qx-ok" role="alert"></p>
         <p class="fe" id="qx-err" role="alert"></p><p class="q-btns"><button class="btn b1" type="submit">Accepter le devis</button> <button class="btn b4" type="button" data-a="q-print">Télécharger en PDF</button> <button class="btn btn-danger" type="button" data-a="q-refuse" data-id="${esc(q.id)}">Refuser</button></p></form>
         <p class="mut">Valable jusqu’au ${esc(fdate(q.validUntil))}. Une question ? Écrivez à ${esc(I.email || 'Studio Prism')}.</p></div>`
-      : `<div class="panel q-side q-act"><p>${stBadge(qd, q)} ${s === 'accepted' ? 'Merci, votre accord est enregistré.' : s === 'paid' ? `Payé le ${esc(fdate(q.paidAt))}. Vos clés sont dans <a class="more" href="#/compte">Mon compte › Mon entreprise</a>.` : s === 'expired' ? 'La date de validité de ce devis est dépassée : contactez Studio Prism pour un nouveau devis.' : s === 'refused' ? 'Vous avez refusé ce devis.' : s === 'cancelled' ? 'Ce devis a été annulé par Studio Prism.' : ''}</p>${s === 'accepted' ? pay : ''}<p class="q-btns"><button class="btn b4" data-a="q-print">Télécharger en PDF</button></p></div>`;
+      : `<div class="panel q-side q-act"><p>${stBadge(qd, q)} ${s === 'accepted' ? 'Merci, votre accord est enregistré.' : s === 'paid' ? `Payé le ${esc(fdate(q.paidAt))}. Vos clés sont dans <a class="more" href="#/compte">Mon compte › Mon entreprise</a>.` : s === 'expired' ? 'La date de validité de ce devis est dépassée : contactez Studio Prism pour un nouveau devis.' : s === 'refused' ? 'Vous avez refusé ce devis.' : s === 'cancelled' ? 'Ce devis a été annulé par Studio Prism.' : s === 'withdrawn' ? `Vous vous êtes rétracté le ${esc(fdt(q.withdrawnAt))}.` : ''}</p>${s === 'accepted' ? pay : ''}${s === 'withdrawn' ? `<p>Studio Prism vous rembourse les sommes versées au plus tard 14 jours après cette date, par le moyen de paiement utilisé ; les clés de licence liées à ce devis sont désactivées.</p><p class="q-btns"><button class="btn b4" data-a="q-wd-receipt" data-id="${esc(q.id)}">Télécharger l’accusé de réception</button></p>` : ''}${qd.canWithdraw(q) ? `<div class="q-wd"><h3 class="lh" style="font-size:17px">Droit de rétractation</h3><p class="mut">Vous pouvez vous rétracter jusqu’au ${esc(fdt(qd.withdrawUntil(q)))}, sans motif (<a class="more" href="#/cgv">CGV, article 7</a>).</p><p><button class="btn b4" data-a="q-wd" data-id="${esc(q.id)}">Se rétracter du contrat</button></p></div>` : ''}<p class="q-btns"><button class="btn b4" data-a="q-print">Télécharger en PDF</button></p></div>`;
+    Q.cur = q;
     box.innerHTML = panel + docHtml(q, qd.PERIODS);
   }
   async function submitAccept(fm) {
@@ -437,6 +443,27 @@
     try { await (await mods()).acceptQuote(fm.dataset.id, st.auth.user, name); toast('Devis accepté. Merci !'); clientPage(); }
     catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Accepter le devis'; }
   }
+  const fdt = (t) => { const m = t && t.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0; return m ? new Date(m).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : '—'; };
+  A['q-wd'] = (b) => pmodal(`<h3>Se rétracter du contrat</h3><p>Vous allez annuler votre commande liée à ce devis. Les sommes déjà versées vous seront remboursées (au prorata du service déjà fourni si vous aviez demandé à l’utiliser pendant le délai de rétractation) et les clés de licence seront désactivées.</p>
+    <form data-f="q-wd" data-id="${esc(b.dataset.id)}" novalidate>${fld('qw-n', 'Votre nom', inp('qw-n', 'text', fullName(st.auth.profile) !== '—' ? fullName(st.auth.profile) : '', 'maxlength="160" autocomplete="name"'))}<p class="fe" id="qw-err" role="alert"></p>
+    <p><button class="btn btn-danger" type="submit">Confirmer la rétractation</button> <button class="btn b4" type="button" data-a="x">Annuler</button></p></form>`);
+  async function submitWithdraw(fm) {
+    const err = fm.querySelector('#qw-err'), btn = fm.querySelector('button[type=submit]'), name = fm.elements['qw-n'].value.trim();
+    K.clearErrors(); err.textContent = '';
+    if (name.length < 2) { K.showErrors(fm, { 'qw-n': 'Indiquez votre nom.' }); return; }
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try { await (await mods()).withdrawQuote(fm.dataset.id, st.auth.user, name); A.x(); toast('Rétractation enregistrée. Téléchargez votre accusé de réception.'); clientPage(); }
+    catch (e) { err.textContent = errMsg(e); btn.disabled = false; btn.textContent = 'Confirmer la rétractation'; }
+  }
+  A['q-wd-receipt'] = () => {
+    const q = Q.cur; if (!q) return; const I = q.issuer || {};
+    const txt = `ACCUSÉ DE RÉCEPTION — RÉTRACTATION\n\nVendeur : ${I.legalName || I.tradeName || 'Studio Prism'}${I.address ? '\n' + I.address : ''}${I.email ? '\n' + I.email : ''}\n\n` +
+      `Contrat : devis ${q.number} du ${fdt(q.issuedAt)}, accepté le ${fdt(q.acceptedAt)}, montant ${eur(q.totalTTC)}.\n` +
+      `Rétractation notifiée en ligne le ${fdt(q.withdrawnAt)} par ${(q.withdrawal && q.withdrawal.name) || ''} (${(q.withdrawal && q.withdrawal.email) || ''}).\n\n` +
+      `Studio Prism accuse réception de cette rétractation. Les sommes versées sont remboursées au plus tard 14 jours après cette date (art. L221-24 du Code de la consommation).\n`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' })); a.download = `retractation-${q.number}.txt`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  };
   A['q-refuse'] = (b) => pmodal(`<h3>Refuser ce devis ?</h3><p>Studio Prism en sera informé. Pour une modification, vous pouvez aussi lui écrire avant de refuser.</p><p><button class="btn btn-danger" data-a="q-refuse-ok" data-id="${esc(b.dataset.id)}">Refuser le devis</button></p>`);
   A['q-refuse-ok'] = async (b) => { try { await (await mods()).refuseQuote(b.dataset.id); A.x(); toast('Devis refusé.'); clientPage(); } catch (e) { toast(errMsg(e)); } };
 
@@ -448,6 +475,7 @@
     if (f === 'q-legal') return submitLegal(fm);
     if (f === 'q-paid') return submitPaid(fm);
     if (f === 'q-accept') return submitAccept(fm);
+    if (f === 'q-wd') return submitWithdraw(fm);
     const btn = fm.querySelector('button[type=submit]'), err = fm.querySelector('.fe[id$="-err"]'); btn.disabled = true;
     const done = async (msg) => { A.x(); toast(msg); await load(true); afterChange(); R['admin/devis'](); };
     (f === 'q-cancel' ? MODS.adminCancel(id, fm.elements['qc-r'].value).then(() => done('Devis annulé.'))

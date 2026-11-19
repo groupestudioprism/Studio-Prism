@@ -49,7 +49,7 @@
     const w = typeof p.website === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.website) && p.website.length <= 300 ? p.website : '';
     if (w) return w;
     if (typeof p.url === 'string' && /^https:\/\/[^\s<>"]+$/.test(p.url) && p.url.length <= 300) return p.url;
-    try { return SUITE_APPS[p.id] ? new URL(SUITE_APPS[p.id], location.href.split('#')[0]).href : ''; } catch (e) { return ''; }
+    try { return SUITE_APPS[p.id] ? new URL(SUITE_APPS[p.id], location.origin + '/').href : ''; } catch (e) { return ''; }
   };
 
   function money(n, cur) {
@@ -500,7 +500,7 @@
   const perks = () => `<ul class="perks" aria-label="Nos engagements">${PERKS.map((x) => `<li><span class="pk-i" aria-hidden="true"></span><b>${x[1]}</b><small>${x[2]}</small></li>`).join('')}</ul>`;
   document.addEventListener('click', (e) => { const q = e.target.closest && e.target.closest('[data-quote]'); if (q) { try { sessionStorage.setItem('spQuote', q.dataset.quote); } catch (x) { /* ignoré */ } } });
   window.addEventListener('hashchange', () => {
-    if (location.hash !== '#/contact') return;
+    if (SPR.hash() !== '#/contact') return;
     setTimeout(() => { let v = ''; try { v = sessionStorage.getItem('spQuote') || ''; sessionStorage.removeItem('spQuote'); } catch (x) { /* ignoré */ } const t = v && document.querySelector('form[data-f="ct"] textarea'); if (t && !t.value) t.value = 'Bonjour, je souhaite recevoir un devis pour : ' + v + '.\n'; }, 120);
   });
 
@@ -720,6 +720,7 @@
       const p = find(id);
       if (!p) return nf();
       V(CUR.split('/')[2] === 'presentation' ? presentationHtml(p) : productHtml(p));
+      { const pres = CUR.split('/')[2] === 'presentation', nm = String(p.name || '').trim(); if (nm) document.title = nm + (pres ? ' — présentation' : '') + ' — Studio Prism'; }
       galMount(p.id);
       if (K.st.auth.status === 'in') hooks.loadMine().then(() => { if (CUR === key) repaintAll(); }).catch(() => {});
     };

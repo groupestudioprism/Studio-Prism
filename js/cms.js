@@ -72,6 +72,8 @@
     { id: 'confidentialite', label: 'Confidentialité', group: 6, routes: ['confidentialite'] },
     { id: 'conditions-utilisation', label: 'Conditions d’utilisation', group: 6, routes: ['conditions-utilisation'] },
     { id: 'cookies', label: 'Cookies et données', group: 6, routes: ['cookies'] },
+    { id: 'cgv', label: 'Conditions générales de vente', group: 6, routes: ['cgv'] },
+    { id: 'accessibilite', label: 'Accessibilité', group: 6, routes: ['accessibilite'] },
     { id: 'fiche-produit', label: 'Fiche produit (toutes les fiches)', group: 7, routes: [], prefix: 'produits/', tpl: true, sample: 'produits' },
     { id: 'fiche-offre', label: 'Fiche d’offre (toutes les fiches)', group: 7, routes: [], prefix: 'abonnements/', tpl: true, sample: 'abonnements' },
     { id: 'fiche-jeu', label: 'Fiche concept Prism Game', group: 7, routes: [], prefix: 'prism-game/', tpl: true, sample: 'prism-game' },
@@ -261,7 +263,7 @@
         `${prod ? `<h2 class="cms-h2">Produit associé</h2><div class="g cms-g">${window.SP.catalog.pcard(prod)}</div>` : ''}` +
         `<p class="cms-act">${link ? `<a class="btn b1" href="${esc(link)}"${extAttr(link)}>En savoir plus</a>` : ''}<a class="btn b4" href="#/projets">Toutes les réalisations</a></p></div></section>`);
       ST.curProject = p;
-      document.title = p.title + ' — Studio Prism — Creative & Technical Solutions';
+      document.title = p.title + ' — Studio Prism';
       after();
     };
     if (ST.projects) return draw();
@@ -687,7 +689,7 @@
         else changed();
         seo();
       } else if (d.type === 'goto' && typeof d.route === 'string' && /^[a-z0-9/-]*$/.test(d.route)) {
-        location.hash = '#/' + d.route;
+        SPR.go(d.route);
       } else if (d.type === 'scroll' && d.to === 'footer') {
         const f = $q('footer'); if (f) f.scrollIntoView({ behavior: 'instant', block: 'start' });
       }

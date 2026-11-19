@@ -425,3 +425,6 @@ td,th{padding:8px 4px;font-size:14px}}
 @media(max-width:640px){.hero2 .hv{max-width:none;width:min(100%,380px);margin-inline:auto}}
 /* iPhone : le défilement du menu mobile, du panier ou d'une fenêtre ne fait plus glisser la page derrière */
 #mn,.mc,[role="dialog"]{overscroll-behavior:contain}
+/* pages légales (js/legal.js) */
+.lg-page .lg-ul{margin:8px 0 0 20px;display:grid;gap:6px}.lg-page .lg-form{padding:16px 18px;border:1px dashed currentColor;border-radius:10px;opacity:.9;line-height:1.8}
+.lg-page [data-lg]:not(.lg-ok){background:#fff4d6;color:#7a5200;padding:0 4px;border-radius:4px}

@@ -50,7 +50,7 @@
   const key = (uid) => 'sp.unlocked.' + uid;
   const unlocked = (uid) => { try { return sessionStorage.getItem(key(uid)) === '1'; } catch (e) { return true; } };
   const markUnlocked = (uid) => { try { sessionStorage.setItem(key(uid), '1'); } catch (e) { /* stockage indisponible */ } };
-  const lockedRoute = () => { const c = (location.hash || '').replace(/^#\/?/, ''); return c === 'compte' || /^admin(\/|$)/.test(c) || c === 'activer'; };
+  const lockedRoute = () => { const c = SPR.hash().replace(/^#\/?/, ''); return c === 'compte' || /^admin(\/|$)/.test(c) || c === 'activer'; };
   const say = (m) => { try { toast(m); } catch (e) { /* pas de zone de messages */ } };
   let rec = null, recUid = '', tries = 0, busy = false;
 
@@ -99,7 +99,7 @@
   async function signOutToLogin(msg) {
     hide();
     try { await (await K.loadAuth()).signOutUser(); } catch (e) { /* rien */ }
-    location.hash = '#/compte/connexion';
+    SPR.go('#/compte/connexion');
     if (typeof msg === 'string') setTimeout(() => say(msg), 300);
   }
   K.pinGate = gate;

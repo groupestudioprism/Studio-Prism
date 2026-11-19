@@ -16,14 +16,14 @@
     LV.onChange(onLive);
     LV.start();
   }
-  window.addEventListener('hashchange', () => { if (/^#\/admin/.test(location.hash)) ensureLive(); });
-  if (/^#\/admin/.test(location.hash)) setTimeout(ensureLive, 0);
+  window.addEventListener('hashchange', () => { if (/^#\/admin/.test(SPR.hash())) ensureLive(); });
+  if (/^#\/admin/.test(SPR.hash())) setTimeout(ensureLive, 0);
   K.ensureLive = ensureLive;
 
   const later = (k, fn, wait) => { clearTimeout(timer[k]); timer[k] = setTimeout(fn, wait || 600); };
   /* Un changement Firestore → mise à jour de l'écran ouvert (sans toucher aux formulaires en cours de saisie). */
   function onLive(name) {
-    const h = location.hash.split('?')[0].replace(/\/$/, '');
+    const h = SPR.hash().split('?')[0].replace(/\/$/, '');
     if (h === '#/admin' || h === '#/admin/tableau') return name === 'presence' || name === 'sessions' ? later('d', () => renderDash(false), 1500) : later('d', renderDash, 250);
     if (h === '#/admin/activite') return later('ac', () => window.SP.dashboard && window.SP.dashboard.activity(), 1200);
     if (h === '#/admin/comptes' && (name === 'users' || name === 'licenses')) return later('u', () => K.applyLive && K.applyLive(LV.store), 300);

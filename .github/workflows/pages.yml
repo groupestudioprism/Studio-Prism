@@ -1,0 +1,36 @@
+name: Publication du site
+# Publie studio-prism.com avec une page pré-rendue par adresse (référencement Google), sitemap.xml et robots.txt.
+# Voir tools/build_pages.py. Prérequis (une fois) : Settings › Pages › Source = « GitHub Actions ».
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 3 * * *'   # chaque nuit : reprend les produits et pages modifiés dans l'administration
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Chrome sans écran
+        run: pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
+      - name: Pages pré-rendues, sitemap, robots
+        run: python3 tools/build_pages.py --out _site
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4

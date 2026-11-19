@@ -19,8 +19,8 @@
         && d.keys().hasOnly(['number', 'year', 'seq', 'status', 'clientUid', 'forUid', 'clientEmail', 'orgId', 'orgName', 'requestId', 'client', 'issuer',
                              'lines', 'period', 'durationDays', 'vatMode', 'vatRate', 'totalHT', 'totalVAT', 'totalTTC', 'currency', 'validDays',
                              'validUntil', 'issuedAt', 'paymentTerms', 'notes', 'acceptedAt', 'acceptedBy', 'refusedAt', 'paidAt', 'paymentRef',
-                             'keyIds', 'cancelledAt', 'cancelReason', 'createdAt', 'updatedAt'])
-        && d.status in ['draft', 'sent', 'accepted', 'refused', 'paid', 'cancelled']
+                             'keyIds', 'cancelledAt', 'cancelReason', 'withdrawnAt', 'withdrawal', 'createdAt', 'updatedAt'])
+        && d.status in ['draft', 'sent', 'accepted', 'refused', 'paid', 'cancelled', 'withdrawn']
         && d.client is map && d.lines is list && d.lines.size() >= 1 && d.lines.size() <= 30
         && d.currency == 'EUR' && d.totalHT is number && d.totalVAT is number && d.totalTTC is number
         && isString(d.get('clientUid', ''), 0, 128) && isString(d.get('forUid', ''), 0, 128)
@@ -68,6 +68,14 @@
                              && request.resource.data.acceptedAt == request.time && request.resource.data.acceptedBy is map
                              && request.resource.data.acceptedBy.uid == request.auth.uid && isString(request.resource.data.acceptedBy.get('name', ''), 2, 160))
                             || (request.resource.data.status == 'refused' && quoteTrack(['status', 'refusedAt', 'updatedAt'])
-                                && request.resource.data.refusedAt == request.time)));
+                                && request.resource.data.refusedAt == request.time)))
+                    // droit de rétractation (art. L221-18 du Code de la consommation) : 14 jours après l'acceptation, depuis Mon compte
+                    || (isSignedIn() && resource.data.get('clientUid', '') == request.auth.uid && resource.data.status in ['accepted', 'paid']
+                        && resource.data.acceptedAt is timestamp && request.time < resource.data.acceptedAt + duration.value(14, 'd')
+                        && request.resource.data.status == 'withdrawn' && quoteTrack(['status', 'withdrawnAt', 'withdrawal', 'updatedAt'])
+                        && request.resource.data.withdrawnAt == request.time && request.resource.data.updatedAt == request.time
+                        && request.resource.data.withdrawal is map && request.resource.data.withdrawal.keys().hasOnly(['uid', 'email', 'name'])
+                        && request.resource.data.withdrawal.uid == request.auth.uid && isString(request.resource.data.withdrawal.get('name', ''), 2, 160)
+                        && isString(request.resource.data.withdrawal.get('email', ''), 0, 160));
       allow delete: if isAdmin() && resource.data.status == 'draft';
     }

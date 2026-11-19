@@ -26,14 +26,17 @@ export const PERIODS = {
 };
 export const STATUS = {
   draft: ["bd-free", "Brouillon"], sent: ["bd-pend", "Envoyé"], accepted: ["bd-pro", "Accepté · à payer"], refused: ["bd-off", "Refusé"],
-  paid: ["bd-ok", "Payé"], cancelled: ["bd-off", "Annulé"], expired: ["bd-off", "Expiré"]
+  paid: ["bd-ok", "Payé"], cancelled: ["bd-off", "Annulé"], expired: ["bd-off", "Expiré"], withdrawn: ["bd-off", "Rétracté"]
 };
 /* Statut affiché : un devis envoyé dont la date de validité est passée est « expiré » (il ne peut plus être accepté en ligne). */
 export const shownStatus = (q) => (q.status === "sent" && ms(q.validUntil) && ms(q.validUntil) < Date.now() ? "expired" : q.status);
 
 /* ------------------------------------------------------------------ émetteur */
 export const COMPANY_FIELDS = ["legalName", "tradeName", "legalForm", "capital", "address", "siret", "rcs", "vatMode", "vatNumber", "vatRate", "email",
-  "phone", "website", "iban", "bic", "bank", "paymentTerms", "latePenalty", "validDays", "footer"];
+  "phone", "website", "iban", "bic", "bank", "paymentTerms", "latePenalty", "validDays", "footer", "director", "mediatorName", "mediatorUrl"];
+/* Partie publique (sans IBAN ni conditions) recopiée dans settings/legal : les pages Mentions légales, CGV et Confidentialité l'affichent. */
+export const LEGAL_PUBLIC = ["legalName", "tradeName", "legalForm", "capital", "address", "siret", "rcs", "vatMode", "vatNumber", "email", "phone",
+  "director", "mediatorName", "mediatorUrl"];
 export const DEFAULT_TERMS = "Paiement à réception du devis signé, par virement bancaire, en indiquant le numéro du devis en référence. Les clés de licence sont délivrées dès réception du paiement.";
 export const DEFAULT_PENALTY = "En cas de retard de paiement : pénalités au taux annuel de 3 fois le taux d’intérêt légal et indemnité forfaitaire pour frais de recouvrement de 40 € (art. L441-10 et D441-5 du Code de commerce). Pas d’escompte pour paiement anticipé.";
 export async function getCompany() {
@@ -44,6 +47,10 @@ export async function saveCompany(c) {
   const data = { updatedAt: serverTimestamp() };
   COMPANY_FIELDS.forEach((k) => { if (c[k] !== undefined) data[k] = c[k]; });
   await setDoc(doc(db, "settings", "company"), data);
+  const pub = { updatedAt: serverTimestamp() };
+  LEGAL_PUBLIC.forEach((k) => { pub[k] = String(c[k] == null ? "" : c[k]).slice(0, 300); });
+  try { await setDoc(doc(db, "settings", "legal"), pub); }
+  catch (e) { console.warn("[Studio Prism] Mentions légales publiques non enregistrées (règles Firestore à publier ?) :", e); }
 }
 /* Ce qui manque pour émettre un devis conforme (mentions obligatoires de l'émetteur). Liste vide = prêt. */
 export function companyMissing(c) {
@@ -145,6 +152,14 @@ export async function myQuotes(uid) {
 export async function acceptQuote(id, user, name) {
   await updateDoc(doc(db, "quotes", id), { status: "accepted", acceptedAt: serverTimestamp(),
     acceptedBy: { uid: user.uid, email: String(user.email || "").toLowerCase(), name: String(name || "").trim().slice(0, 160), via: "online" }, updatedAt: serverTimestamp() });
+}
+/* Rétractation du client (14 jours après l'acceptation) : enregistrée sur le devis, visible par Studio Prism qui rembourse et révoque les clés. */
+export const WITHDRAW_DAYS = 14;
+export const withdrawUntil = (q) => (ms(q.acceptedAt) ? ms(q.acceptedAt) + WITHDRAW_DAYS * 864e5 : 0);
+export const canWithdraw = (q) => (q.status === "accepted" || q.status === "paid") && withdrawUntil(q) > Date.now();
+export async function withdrawQuote(id, user, name) {
+  await updateDoc(doc(db, "quotes", id), { status: "withdrawn", withdrawnAt: serverTimestamp(),
+    withdrawal: { uid: user.uid, email: String(user.email || "").toLowerCase().slice(0, 160), name: String(name || "").trim().slice(0, 160) }, updatedAt: serverTimestamp() });
 }
 export async function refuseQuote(id) {
   await updateDoc(doc(db, "quotes", id), { status: "refused", refusedAt: serverTimestamp(), updatedAt: serverTimestamp() });
