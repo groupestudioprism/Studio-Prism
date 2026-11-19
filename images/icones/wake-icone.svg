@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="WAKE">
+  <defs>
+    <linearGradient id="wk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#35D0FF"/><stop offset=".38" stop-color="#8B5CF6"/><stop offset=".7" stop-color="#EC4899"/><stop offset="1" stop-color="#FF9F1C"/>
+    </linearGradient>
+    <radialGradient id="wg" cx=".35" cy=".85" r=".7"><stop offset="0" stop-color="#35D0FF" stop-opacity=".35"/><stop offset="1" stop-color="#35D0FF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#080E1C"/>
+  <rect width="64" height="64" rx="14" fill="url(#wg)"/>
+  <path d="M11.5 19.2 21.8 44.8 32 26.9 42.2 44.8 52.5 19.2" fill="none" stroke="url(#wk)" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10.2 52.5c5.4-2.2 10.9-2.2 16.3 0s10.9 2.2 16.3 0 7.4-2.2 11 0" fill="none" stroke="url(#wk)" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

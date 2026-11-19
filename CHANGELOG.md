@@ -1,4 +1,15 @@
 # Changelog
+## Nouveau produit « WAKE » (Prism Game) — 2026-11-19
+
+Ajout de **WAKE**, extension (mod) gratuite pour le jeu PC **Design it, Drive it : Speedboats** (Steam) : créateur de circuits sur carte satellite avec obstacles, mode « Partout dans le monde » (relief et photos satellite réels), bots de course, HUD, livrée par zone et autocollants sponsors, menus entièrement repensés, touches modifiables et pilotage au clavier. Aucune règle Firestore à republier.
+
+- **Fiche produit** (`js/catalog.js`, tableau `LATEST`) : pôle Prism Game, type Application, avancement Disponible, gratuit, mis en avant, présentation complète et 8 points forts. Affichée dès la mise en ligne dans Produits, sur la page Prism Game et dans Réalisations.
+- **Nouvelle gamme « Mods et extensions »** dans Prism Game (`RANGES_DEFAULT`), entre « Outils pour joueurs » et « Concepts Roblox ». Les gammes étant déjà enregistrées dans Firestore, une liste `RANGES_LATE` affiche les gammes de départ ajoutées après coup tant qu'elles n'existent pas dans Firestore et qu'aucun de leurs produits n'est rangé ailleurs ; à la prochaine ouverture d'Administration › Produits et prix, la gamme est enregistrée dans Firestore (`platform.js`).
+- **Téléchargement public** : bouton « Télécharger pour Windows » sur la fiche (`DIRECT_DL`), fichier `telechargements/WAKE-Setup.exe` (version 1.0.0, 0,8 Mo, installateur Windows : détection du jeu via Steam, installation de BepInEx et du mod, désinstallation depuis les paramètres de Windows), informations dans `telechargements/wake.json`.
+- **Administration → Téléchargements** (`js/downloads.js`) : gamme « Mods et extensions » dans la branche Prism Game, avec la fiche WAKE. Le bouton affiche le libellé propre au fichier (champ `label`) et l'aide adaptée à Windows pour un `.exe`.
+- **Visuels** : logo `assets/img/apps/wake.svg` (+ `images/icones/wake-icone.svg|png`), couverture `assets/img/wake.webp|jpg`, galerie `Produits/wake/` (couverture, garage et autocollants, course contre les bots).
+- **Page Prism Game** : la note sous la grille mentionne WAKE. Versions de `app.js`, `catalog.js` et `downloads.js` montées dans `index.html`.
+
 ## Gammes de produits — 2026-11-18
 
 Les produits se rangent maintenant par **gammes** (Gamme Archi, Gamme SPECTRA, Outils pour joueurs…) au lieu d'être mélangés.

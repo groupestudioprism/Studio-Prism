@@ -39,7 +39,10 @@
   const safeUrl = (u) => (typeof u === 'string' && (/^https:\/\/[^\s<>"]+$/.test(u) || /^#\/[^\s<>"]*$/.test(u) || /^assets\/[^\s<>"]+$/.test(u)) && u.length <= 300 ? u : '');
   /* Applications à télécharger directement depuis le site (APK publics du dossier telechargements/). Rangé par identifiant, comme
      SUITE_APPS : le bouton reste même après « Ajouter au catalogue » (Firestore ne garde pas ce champ). */
-  const DIRECT_DL = { pitwall: { url: 'telechargements/PitWall.apk', file: 'PitWall.apk', label: 'Télécharger l’APK' } };
+  const DIRECT_DL = {
+    pitwall: { url: 'telechargements/PitWall.apk', file: 'PitWall.apk', label: 'Télécharger l’APK' },
+    wake: { url: 'telechargements/WAKE-Setup.exe', file: 'WAKE-Setup.exe', label: 'Télécharger pour Windows' }
+  };
   const dlOf = (p) => DIRECT_DL[p.id] || null;
   const SUITE_APPS = { archiplan: 'https://archiplan.studio-prism.com/', architrafic: 'https://architraffic.studio-prism.com/', architraffic: 'https://architraffic.studio-prism.com/', archiphase: 'https://archiphase.studio-prism.com/' };
   const webOf = (p) => {
@@ -129,6 +132,22 @@
       'On crée autant de dashboards que l’on veut, chacun utilisable avec tous les jeux, sur plusieurs pages. Ils s’exportent et s’importent en fichier pour être partagés. Quatre modèles sont fournis : GT7 et F1 25, sur téléphone et sur tablette.\n\n' +
       'Si rien ne s’affiche, le diagnostic intégré indique exactement ce qui bloque : réseau, console, réglages du jeu.',
     highlights: ['Gran Turismo 7 (PS5 et PS4), F1 25, Forza, DiRT', 'Éditeur libre : widgets superposables, sans limite', '14 types de widgets, une centaine de données', 'Delta en direct sur le meilleur tour', 'Dashboards illimités, valables pour tous les jeux', 'Export et import en fichier', 'Modèles téléphone et tablette fournis', 'Gratuit, sans compte ni publicité']
+  }, {
+    id: 'wake', name: 'WAKE', category: 'application', pole: 'game', stage: 'released', status: 'published',
+    tagline: 'L’extension ultime pour le jeu PC Design it, Drive it : Speedboats',
+    description: 'Un mod gratuit qui transforme Design it, Drive it : Speedboats : circuits sur carte satellite, navigation partout dans le monde (relief et photos réels), bots de course, obstacles, livrée sponsor et menus entièrement repensés.',
+    availability: 'Gratuit — installateur Windows (le jeu Steam est nécessaire)',
+    info: 'Type : mod (extension) pour un jeu PC\nJeu nécessaire : Design it, Drive it : Speedboats (Steam)\nSystème : Windows 10 ou 11\nInstallation : WAKE-Setup.exe, détection automatique du jeu, désinstallation en un clic\nAccès : gratuit, sans compte ni publicité\nInternet : seulement pour le mode « Partout dans le monde »',
+    platforms: ['Windows'], logo: 'assets/img/apps/wake.svg', image: 'assets/img/wake.webp', url: '', website: '',
+    featured: true, displayOrder: 92,
+    details: 'WAKE garde la physique et les bateaux du jeu, et ajoute tout le reste.\n\n' +
+      'Le créateur de circuits s’ouvre sur une carte satellite du lac (touche F7) : on pose les bouées à la souris (bouées jaunes, rouges, portes de départ), on choisit boucle ou point à point et le nombre de tours, on ajoute des obstacles (rampes de saut, pontons, troncs, barges, grosses bouées, lignes de bouées), puis on lance la course. Les records personnels sont enregistrés.\n\n' +
+      'Le mode « Partout dans le monde » permet de choisir n’importe quel lac, baie ou côte sur une carte satellite de la Terre, ou de chercher un lieu par son nom : WAKE télécharge le relief réel et les photos satellite et génère un plan d’eau navigable de 2 à 8 km (rade de Cherbourg, lac d’Annecy, Monaco, Lake Havasu…).\n\n' +
+      'Jusqu’à 7 bots s’affrontent sur les courses officielles comme sur les circuits perso, avec quatre niveaux, un compte à rebours, un classement en direct et un écran de résultats. Le HUD ajoute un compteur de vitesse et un compte-tours, une mini-carte et le chrono.\n\n' +
+      'Dans le garage, chaque zone du bateau se peint (coque, pont, sièges, moteur…) avec une finition mate, satinée, brillante ou métallisée, et on colle ses autocollants sponsors et son numéro de course directement sur la coque, avec un aperçu à 360°.\n\n' +
+      'Toute l’interface est repensée dans le style Studio Prism : menu principal, menu pause, écran de chargement, écran des commandes et réglages complets (résolution, images par seconde, volume, champ de vision, moment de la journée, brume, touches modifiables, pilotage au clavier).\n\n' +
+      'Mod non officiel, sans lien avec Performance Simulations. Les temps des circuits perso ne sont jamais envoyés aux classements Steam.',
+    highlights: ['Créateur de circuits sur carte satellite', 'Partout dans le monde : relief et photos réels', 'Jusqu’à 7 bots, 4 niveaux, classement en direct', 'Rampes de saut et obstacles', 'Livrée par zone et autocollants sponsors', 'HUD : compteur, mini-carte, chrono', 'Touches modifiables et pilotage au clavier', 'Gratuit, installateur Windows en un clic']
   }];
 
   /* ------------------------------------------------------------------ GAMMES : regroupement des produits pour l'affichage
@@ -144,7 +163,8 @@
       { id: 'plateforme-studio-prism', name: 'Plateforme Studio Prism', description: 'Automatisations, assistant AXION et offres groupées', pole: 'app', displayOrder: 3, productIds: ['nexus', 'studio-prism-etudiant'] },
       { id: 'prism-arcade-jeux', name: 'Jeux en ligne', description: 'Jouables gratuitement dans le navigateur', pole: 'game', displayOrder: 10, productIds: ['prism-arcade'] },
       { id: 'outils-joueurs', name: 'Outils pour joueurs', description: 'Télémétrie et dashboards pour jeux de course', pole: 'game', displayOrder: 11, productIds: ['pitwall'] },
-      { id: 'concepts-roblox', name: 'Concepts Roblox', description: 'Concepts de jeux en exploration', pole: 'game', displayOrder: 12, productIds: G.map((g) => slug(g[0])) }
+      { id: 'mods-extensions', name: 'Mods et extensions', description: 'Extensions gratuites pour des jeux PC', pole: 'game', displayOrder: 12, productIds: ['wake'] },
+      { id: 'concepts-roblox', name: 'Concepts Roblox', description: 'Concepts de jeux en exploration', pole: 'game', displayOrder: 13, productIds: G.map((g) => slug(g[0])) }
     ];
     Object.keys(p3).forEach((g, i) => out.push({ id: 'prism-3d-' + slug(g), name: 'Gamme ' + g, description: '', pole: 'p3d', displayOrder: 20 + i, productIds: p3[g] }));
     return out;
@@ -288,8 +308,17 @@
   const C = { done: false, at: 0, p: null, products: [], fsError: null, offersError: null, builtinImported: false, ranges: [], rangeOf: new Map() };
 
   /* Gammes affichées : celles de Firestore dès qu'elles y ont été enregistrées, sinon celles de départ. Un produit = une gamme (la première). */
+  /* Gammes de départ ajoutées après le premier enregistrement dans Firestore (ex. « Mods et extensions » pour WAKE) :
+     affichées tant qu'elles n'existent pas dans Firestore et qu'aucun de leurs produits n'est rangé ailleurs. */
+  const RANGES_LATE = ['mods-extensions'];
+  function withLateRanges(list) {
+    const ids = new Set(list.map((r) => r.id)), used = new Set();
+    list.forEach((r) => (r.productIds || []).forEach((x) => used.add(x)));
+    const extra = RANGES_DEFAULT.filter((r) => RANGES_LATE.includes(r.id) && !ids.has(r.id) && !r.productIds.some((x) => used.has(x)));
+    return list.concat(extra);
+  }
   function setRanges(list) {
-    C.ranges = list.map(normRange).sort(byRangeOrder);
+    C.ranges = withLateRanges(list).map(normRange).sort(byRangeOrder);
     C.rangeOf = new Map();
     C.ranges.forEach((r) => r.productIds.forEach((id) => { if (!C.rangeOf.has(id)) C.rangeOf.set(id, r); }));
   }
@@ -709,7 +738,7 @@
   window.SP.catalog = {
     POLES, POLE_ORDER, POLE_PAGE, TYPES, STATUS, STAGES, MODES, PERIODS, PER, PERIOD_ORDER,
     BUILTIN, LATEST, fillFromLatest, perks, safeUrl, money, byOrder, byPole, normProduct, buildPlans, legacyPlanId, planPrice, priceText, planChips, periodsOf, livePrices,
-    RANGES_DEFAULT, normRange, byRangeOrder, ranges: () => C.ranges, rangeOf: (id) => C.rangeOf.get(id) || null, groupByRange, setRanges,
+    RANGES_DEFAULT, withLateRanges, normRange, byRangeOrder, ranges: () => C.ranges, rangeOf: (id) => C.rangeOf.get(id) || null, groupByRange, setRanges,
     load, reset, find, featured, all: () => C.products, state: C, mount, pcard, commercial, repaintAll, productHref, hooks, refresh: refreshSlots, picUrl
   };
 })();

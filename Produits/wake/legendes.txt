@@ -1,0 +1,3 @@
+01-wake.webp : WAKE, l'extension gratuite de Prism Game pour Design it, Drive it : Speedboats
+02-garage-livree.webp : Le garage : autocollants sponsors collés sur la coque, aperçu du bateau en direct
+03-course-contre-les-bots.webp : Course officielle contre 3 bots : classement en direct, mini-carte et compteur de vitesse

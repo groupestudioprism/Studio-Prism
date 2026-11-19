@@ -861,7 +861,11 @@
         await d.seedProductRanges(CATLG.RANGES_DEFAULT, CT.built);
         CT.rangesSeeded = true;
       }
-      CT.ranges = (await d.listProductRanges()).map(CATLG.normRange).sort(CATLG.byRangeOrder);
+      const fsRanges = await d.listProductRanges();
+      // gammes de départ ajoutées après coup (ex. « Mods et extensions ») : enregistrées une fois si absentes et sans conflit
+      const late = CATLG.withLateRanges(fsRanges).filter((r) => !fsRanges.some((x) => x.id === r.id));
+      for (const r of late) { try { await d.saveProductRange(r, true, []); fsRanges.push(r); } catch (e) { console.warn('[Studio Prism] Gamme ' + r.id + ' :', e); } }
+      CT.ranges = fsRanges.map(CATLG.normRange).sort(CATLG.byRangeOrder);
     } catch (e) {
       console.warn('[Studio Prism] Gammes :', e);
       CT.rangesErr = e && e.code === 'permission-denied'
