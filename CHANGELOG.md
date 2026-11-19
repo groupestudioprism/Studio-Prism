@@ -1,4 +1,10 @@
 # Changelog
+## WAKE 1.1.0 — multijoueur en ligne, codes de partage et fantômes — 2026-11-19
+
+- **Téléchargement** : `telechargements/WAKE-Setup.exe` remplacé par la version 1.1.0 (0,8 Mo), `telechargements/wake.json` mis à jour. Les joueurs déjà équipés relancent simplement l'installateur (mise à jour sur place, circuits et livrées conservés).
+- **Fiche produit** (`js/catalog.js`) : accroche, description, informations (version, multijoueur 2 à 8 joueurs via Steam) et points forts mis à jour (multijoueur, codes de partage, fantômes).
+- **Administration › Téléchargements** (`js/downloads.js`) : version 1.1.0 et description.
+
 ## Nouveau produit « WAKE » (Prism Game) — 2026-11-19
 
 Ajout de **WAKE**, extension (mod) gratuite pour le jeu PC **Design it, Drive it : Speedboats** (Steam) : créateur de circuits sur carte satellite avec obstacles, mode « Partout dans le monde » (relief et photos satellite réels), bots de course, HUD, livrée par zone et autocollants sponsors, menus entièrement repensés, touches modifiables et pilotage au clavier. Aucune règle Firestore à republier.
