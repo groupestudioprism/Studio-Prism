@@ -231,14 +231,42 @@
     "caption": "WAKE, l'extension gratuite de Prism Game pour Design it, Drive it : Speedboats"
    },
    {
-    "file": "02-garage-livree.webp",
-    "caption": "Le garage : autocollants sponsors collés sur la coque, aperçu du bateau en direct"
+    "file": "02-multijoueur.webp",
+    "caption": "Nouveau en 1.1 : le salon multijoueur. L'hôte choisit le lac, le mode et le circuit, ses amis Steam suivent"
    },
    {
-    "file": "03-course-contre-les-bots.webp",
-    "caption": "Course officielle contre 3 bots : classement en direct, mini-carte et compteur de vitesse"
+    "file": "03-piloter.webp",
+    "caption": "Piloter : lac, course officielle ou circuit perso, et jusqu'à 7 bots adversaires"
+   },
+   {
+    "file": "04-partout-dans-le-monde.webp",
+    "caption": "Partout dans le monde : choisis n'importe quel plan d'eau sur la carte satellite (ici la rade de Cherbourg)"
+   },
+   {
+    "file": "05-garage-livree.webp",
+    "caption": "Le garage : peinture par zone, autocollants sponsors collés sur la coque, aperçu à 360°"
+   },
+   {
+    "file": "06-createur-de-circuits.webp",
+    "caption": "Le créateur de circuits : bouées, portes de départ et rampes de saut posées sur la vue satellite du lac"
+   },
+   {
+    "file": "07-mes-circuits.webp",
+    "caption": "Mes circuits : records, parties en un clic et codes de partage pour tes amis"
+   },
+   {
+    "file": "08-reglages-commandes.webp",
+    "caption": "Réglages complets : touches modifiables, pilotage au clavier, volant et manette"
+   },
+   {
+    "file": "09-menu-pause.webp",
+    "caption": "Le menu pause, au style Studio Prism"
+   },
+   {
+    "file": "10-pret-a-piloter.webp",
+    "caption": "Au démarrage : jouer au clavier tout de suite ou configurer sa manette"
    }
   ]
  },
- "generated": "2026-11-19T16:27:05+00:00"
+ "generated": "2026-11-20T07:51:07+00:00"
 }

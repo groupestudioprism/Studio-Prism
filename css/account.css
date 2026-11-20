@@ -536,7 +536,7 @@ a.dash-k:hover{border-color:var(--pt,#0877B9)}
 .pgal-b:hover img{transform:scale(1.02)}
 .pgal-b:focus-visible{outline:2px solid var(--prism);outline-offset:3px}
 .pgal figcaption{font-size:13.5px;line-height:1.45;color:var(--mut);margin-top:8px}
-.pgal-dlg{border:0;padding:0;background:transparent;max-width:min(1400px,94vw);max-height:92vh;overflow:visible}
+.pgal-dlg{border:0;padding:0;margin:auto;inset:0;background:transparent;max-width:min(1400px,94vw);max-height:92vh;overflow:visible}
 .pgal-dlg::backdrop{background:rgba(7,27,85,.82)}
 .pgal-dlg figure{margin:0;display:flex;flex-direction:column;align-items:center}
 .pgal-dlg img{display:block;max-width:100%;max-height:82vh;border-radius:8px;background:#fff}

@@ -1,3 +1,10 @@
 01-wake.webp : WAKE, l'extension gratuite de Prism Game pour Design it, Drive it : Speedboats
-02-garage-livree.webp : Le garage : autocollants sponsors collés sur la coque, aperçu du bateau en direct
-03-course-contre-les-bots.webp : Course officielle contre 3 bots : classement en direct, mini-carte et compteur de vitesse
+02-multijoueur.webp : Nouveau en 1.1 : le salon multijoueur. L'hôte choisit le lac, le mode et le circuit, ses amis Steam suivent
+03-piloter.webp : Piloter : lac, course officielle ou circuit perso, et jusqu'à 7 bots adversaires
+04-partout-dans-le-monde.webp : Partout dans le monde : choisis n'importe quel plan d'eau sur la carte satellite (ici la rade de Cherbourg)
+05-garage-livree.webp : Le garage : peinture par zone, autocollants sponsors collés sur la coque, aperçu à 360°
+06-createur-de-circuits.webp : Le créateur de circuits : bouées, portes de départ et rampes de saut posées sur la vue satellite du lac
+07-mes-circuits.webp : Mes circuits : records, parties en un clic et codes de partage pour tes amis
+08-reglages-commandes.webp : Réglages complets : touches modifiables, pilotage au clavier, volant et manette
+09-menu-pause.webp : Le menu pause, au style Studio Prism
+10-pret-a-piloter.webp : Au démarrage : jouer au clavier tout de suite ou configurer sa manette
