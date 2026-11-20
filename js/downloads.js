@@ -80,8 +80,8 @@
   },
   {
     id: 'wake-windows', name: 'WAKE', asset: 'WAKE-Setup.exe', branch: 'prism-game', gamme: 'mods', logo: 'assets/img/apps/wake.svg',
-    info: 'telechargements/wake.json', version: '1.0.0', date: '19/11/2026', size: '≈ 0,8 Mo', label: 'Télécharger pour Windows',
-    desc: 'Extension (mod) gratuite pour le jeu PC Design it, Drive it : Speedboats : circuits, monde entier, bots, livrée sponsor, nouveaux menus. Aussi téléchargeable par tous depuis sa fiche produit.',
+    info: 'telechargements/wake.json', version: '1.1.0', date: '19/11/2026', size: '≈ 0,8 Mo', label: 'Télécharger pour Windows',
+    desc: 'Extension (mod) gratuite pour le jeu PC Design it, Drive it : Speedboats : multijoueur Steam, circuits à partager, fantômes, monde entier, bots, livrée sponsor, nouveaux menus. Aussi téléchargeable par tous depuis sa fiche produit.',
     needs: 'Windows 10 ou 11 et le jeu Design it, Drive it : Speedboats (Steam). L’installateur trouve le jeu tout seul et demande les droits administrateur.'
   },
   {
