@@ -134,7 +134,7 @@
     highlights: ['Gran Turismo 7 (PS5 et PS4), F1 25, Forza, DiRT', 'Éditeur libre : widgets superposables, sans limite', '14 types de widgets, une centaine de données', 'Delta en direct sur le meilleur tour', 'Dashboards illimités, valables pour tous les jeux', 'Export et import en fichier', 'Modèles téléphone et tablette fournis', 'Gratuit, sans compte ni publicité']
   }, {
     id: 'wake', name: 'WAKE', category: 'application', pole: 'game', stage: 'released', status: 'published',
-    tagline: 'L’extension ultime pour le jeu PC Design it, Drive it : Speedboats, désormais en multijoueur',
+    tagline: 'L’extension ultime pour Design it, Drive it : Speedboats, en multijoueur',
     description: 'Un mod gratuit qui transforme Design it, Drive it : Speedboats : multijoueur en ligne avec tes amis Steam, circuits sur carte satellite à partager, fantômes, navigation partout dans le monde (relief et photos réels), bots de course, livrée sponsor et menus entièrement repensés.',
     availability: 'Gratuit — installateur Windows (le jeu Steam est nécessaire)',
     info: 'Type : mod (extension) pour un jeu PC\nJeu nécessaire : Design it, Drive it : Speedboats (Steam)\nSystème : Windows 10 ou 11\nInstallation : WAKE-Setup.exe, détection automatique du jeu, désinstallation en un clic\nAccès : gratuit, sans compte ni publicité\nVersion : 1.1.0 (19/11/2026)\nMultijoueur : 2 à 8 joueurs via Steam (chacun a le jeu et WAKE)\nInternet : pour le multijoueur et le mode « Partout dans le monde »',
